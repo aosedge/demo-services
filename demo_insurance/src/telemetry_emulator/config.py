@@ -30,7 +30,7 @@ TELEMETRY_REST_URL = "http://{host}/api/v1/telemetry/data/".format(
 DRIVER_UUID = os.environ.get("DRIVER_UUID", "NoDriverUUID")
 VEHICLE_VIN = os.environ.get("VEHICLE_VIN")
 
-VIS_URL = os.environ.get("VIS_URL", "wss://wwwivi:443/")
+VIS_URL = os.environ.get("VIS_URL", "wss://wwwivi:8088/")
 
 VIS_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("VIS_REQUEST_TIMEOUT_SECONDS", 3))
 
