@@ -21,8 +21,6 @@ from telemetry_emulator.services.http_client import HTTPClient, HTTPClientType
 
 # logging setup
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.DEBUG)
 
 
 class TelemetrySendException(Exception):
@@ -34,7 +32,7 @@ class SenderREST:
     def __init__(self):
 
         self._serve = True
-        self._vp = VertexPool(os.path.join(os.path.dirname(__file__), "map.json"))
+        self._vp = VertexPool(os.path.join(os.path.dirname(__file__), "m'ap.json"))
         self._emulator = Emulator(self._vp)
 
         self._control_server = ControlApiSever(CONTROL_API_ADDRESS, self._emulator)

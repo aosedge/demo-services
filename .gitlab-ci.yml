@@ -8,8 +8,8 @@ before_script:
 
 after_script:  
    - cd $CI_PROJECT_DIR
-   - rm  demo_insurance/meta/private_key.pem
-   - rm  demo_insurance/service.tar.gz
+   - rm demo_insurance/meta/private_key.pem
+   - rm demo_insurance/service.tar.gz
 
 demo_insurance:
   only:

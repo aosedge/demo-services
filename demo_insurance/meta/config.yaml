@@ -1,57 +1,27 @@
 # Commented sections are optional. Uncomment them if you want to include them in config
 
-#publisher: # General publisher info section
-#    author: # Author info
-#    company: # Company info
-
 # How to build and sign package
 build:
     os: linux
     arch: x86
-    sign_key: private_key.pem
-    sign_certificate: sp-client.pem
+    sign_pkcs12: aos-user-sp.p12
     symlinks: copy
-    # context: string, optional
 
 # Information about publishing process (URI, cert, etc)
 publish:
     url: aoscloud.io
     service_uid:
-    tls_key: private_key.pem
-    tls_certificate: sp-client.pem
+    tls_pkcs12: aos-user-sp.p12
 
 # Service configuration
 configuration:
-    #state:
-    #    filename: state.dat
-    #    required: False
-
     # Startup command
     cmd: python3 /telemetry_emulator/sender_vis_genivi.py
-
     # Service working dir
     workingDir: /
-
-    #devices:
-    #    - name : string (camera0, mic0, audio0, etc)
-    #      mode  : rwm
-
     resources:
         - vis
-    #    - bluetooth
-
-    #hostname: my-container
-
-    #exposedPorts:
-    #    - 8089-8090/tcp
-    #    - 1515/udp
-    #    - 9000
-
-    #allowedConnections:
-    #    - 9931560c-be75-4f60-9abf-08297d905332/8087-8088/tcp
-    #    - 9931560c-be75-4f60-9abf-08297d905332/1515/udp
-
-    #    Quotas assigned to service
+    #Quotas assigned to service
     quotas:
         cpu: 50
         mem: 100M
@@ -62,26 +32,3 @@ configuration:
         #upload: 1GB
         #download: 1GB
         temp: 32KB
-
-    #  Resource alerts
-    #alerts:
-    #    ram:
-    #        minTime: string
-    #        minThreshold: 10,
-    #        maxThreshold: 150
-    #    cpu:
-    #        minTime: string
-    #        minThreshold: 40,
-    #        maxThreshold: 45
-    #    storage:
-    #        minTime: string
-    #        minThreshold: 10,
-    #        maxThreshold: 150
-    #    upload:
-    #        minTime: string
-    #        minThreshold: 10,
-    #        maxThreshold: 150
-    #    download:
-    #        minTime: string
-    #        minThreshold: 10,
-    #        maxThreshold: 150

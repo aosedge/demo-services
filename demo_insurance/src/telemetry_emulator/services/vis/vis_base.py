@@ -15,8 +15,6 @@ from telemetry_emulator.config import VIS_REQUEST_TIMEOUT_SECONDS
 
 # logging setup
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.DEBUG)
 
 RequestInfo = namedtuple("RequestInfo", ["id", "timeout"])
 

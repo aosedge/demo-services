@@ -23,8 +23,6 @@ from telemetry_emulator.genivi.converter import GeniviCloudConverter
 
 # logging setup
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.DEBUG)
 
 
 class VISConnection:
@@ -187,7 +185,11 @@ class VISConnection:
             if handler.path == "Signal.*":
                 vin = VEHICLE_VIN or self._vin.value
                 try:
-                    self._current_sample.update(GeniviCloudConverter(src_data=handler.value).get_converted_values())
+                    converted_value = GeniviCloudConverter(src_data=handler.value).get_converted_values()
+                    if handler.path == 'Signal.Drivetrain.Transmission.Gear':
+                        print("!!!!!!!!!GEAR NOT CONVERTED:" + str(handler.value))
+                        print("!!!!!!!!!GEAR CONVERTED:" + str(converted_value))
+                    self._current_sample.update(converted_value)
                     if not self._current_sample.get('engcooltemp'):
                         self._current_sample['engcooltemp'] = 26
                     telemetry = copy(self._current_sample)
@@ -241,6 +243,7 @@ if __name__ == "__main__":
             break
         except Exception as exc:
             logger.error("Received unexpected exception: %s", str(exc))
+            logger.exception(exc)
             vis.disconnect()
 
     vis.shutdown()

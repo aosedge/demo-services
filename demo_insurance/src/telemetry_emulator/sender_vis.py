@@ -21,8 +21,6 @@ from telemetry_emulator.services.vis import VISData, VISSubscription, VISClientN
 
 # logging setup
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.DEBUG)
 
 
 class VISConnection:

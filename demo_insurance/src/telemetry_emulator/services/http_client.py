@@ -4,6 +4,7 @@
 #
 
 import json
+import sys
 import time
 import logging
 
@@ -17,10 +18,8 @@ from telemetry_emulator.config import TELEMETRY_REST_URL, SENDING_TIMEOUT_SECOND
 from telemetry_emulator.services.emulator_updaters import RESTUpdater, VISUpdater
 
 # logging setup
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.DEBUG)
-
 
 class HTTPClientType(Enum):
     VIS = VISUpdater

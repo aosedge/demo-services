@@ -15,8 +15,6 @@ from telemetry_emulator.services.emulator_updaters.base import EmulatorUpdaterBa
 
 # logging setup
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.DEBUG)
 
 
 class VISUpdater(EmulatorUpdaterBase):

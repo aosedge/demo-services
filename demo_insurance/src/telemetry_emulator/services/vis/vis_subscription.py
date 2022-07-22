@@ -13,8 +13,6 @@ from telemetry_emulator.services.vis.vis_base import VISBase, RequestInfo, VISCl
 
 # logging setup
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.DEBUG)
 
 
 class VISSubscription(VISBase):
