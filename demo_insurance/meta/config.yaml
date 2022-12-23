@@ -8,17 +8,15 @@
 build:
     os: linux
     arch: x86
-    sign_key: private_key.pem
-    sign_certificate: sp-client.pem
+    sign_pkcs12: aos-user-sp.p12
     symlinks: copy
     # context: string, optional
 
 # Information about publishing process (URI, cert, etc)
 publish:
     url: aoscloud.io
-    service_uid:
-    tls_key: private_key.pem
-    tls_certificate: sp-client.pem
+    service_uid: 
+    tls_pkcs12: aos-user-sp.p12
 
 # Service configuration
 configuration:
