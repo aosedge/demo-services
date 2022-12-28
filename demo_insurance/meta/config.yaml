@@ -15,7 +15,7 @@ build:
 # Information about publishing process (URI, cert, etc)
 publish:
     url: aoscloud.io
-    service_uid: 
+    service_uid: d75bf5cd-cef0-40f7-9e74-73ce49df2bcb
     tls_pkcs12: aos-user-sp.p12
 
 # Service configuration
@@ -83,3 +83,5 @@ configuration:
     #        minTime: string
     #        minThreshold: 10,
     #        maxThreshold: 150
+    #layers:
+    #   - py-libs-layer
