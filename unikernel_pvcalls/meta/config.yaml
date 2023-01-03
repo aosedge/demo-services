@@ -15,44 +15,24 @@ build:
 # Information about publishing process (URI, cert, etc)
 publish:
     url: stage.epmp-aos.projects.epam.com
-    service_uid: 
+    service_uid: d81e4eea-4712-4785-b268-fa2c1f01531f
     tls_pkcs12: aos-user-sp.p12
 
 # Service configuration
 configuration:
     # Startup command
-    #cmd: python3 -u /hello_world.py
-#    instances:
-#        minInstances: 1        # indicates minimal number of service's instances that should be run on Unit
-#        priority: 0            # Priority of service instance (0-1000000000, 0 is the lowest priority), default value is 0
-#        labels:                # Labels where service instance should be run
-#             - string
-#    runParameters:
-#        startInterval: 'PT10S'   # indicates maximum time (ISO 8601 duration) required by service to start
-#        startBurst: 3            # indicates number of attempt to start
-#        restartInterval: 'PT1S'  # indicates in which time (ISO 8601 duration) the service will be restarted after exit
+    cmd: /
+    instances:
+        minInstances: 1        # indicates minimal number of service's instances that should be run on Unit
+        priority: 20            # Priority of service instance (0-1000000000, 0 is the lowest priority), default value is 0
+        #labels:                # Labels where service instance should be run
+        #    - runxSupport_gen3
     runner: runx
     # Service working dir
     workingDir:  / #service working directory
 
-#    devices:
-#        - name : string (camera0, mic0, audio0, etc)
-#          mode  : rwm
-
 #    resources:
-#        - system-dbus
-#        - bluetooth
-
-#    hostname: my-container
-
-#    exposedPorts:
-#        - 8089-8090/tcp
-#        - 1515/udp
-#        - 9000
-
-#    allowedConnections:
-#        - 9931560c-be75-4f60-9abf-08297d905332/8087-8088/tcp
-#        - 9931560c-be75-4f60-9abf-08297d905332/1515/udp
+#        - gen3-dom0-resource
 
     quotas:
 #        cpu: 50
@@ -65,39 +45,7 @@ configuration:
 #        download: 1GB
 #        temp: 32KB
 
-#    alerts:
-#        ram:
-#            minTime: 'PT5S'   # ISO 8601 duration
-#            minThreshold: 10,
-#            maxThreshold: 150
-#        cpu:
-#            minTime: 'PT5S'   # ISO 8601 duration
-#            minThreshold: 40,
-#            maxThreshold: 45
-#        storage:
-#            minTime: 'PT5S'   # ISO 8601 duration
-#            minThreshold: 10,
-#            maxThreshold: 150
-#        upload:
-#            minTime: 'PT5S'   # ISO 8601 duration
-#            minThreshold: 10,
-#            maxThreshold: 150
-#        download:
-#            minTime: 'PT5S'   # ISO 8601 duration
-#            minThreshold: 10,
-#            maxThreshold: 150
-#
-
-#    permissions:
-         # functional server
-#        vis:
-             # functionality name: access mode
-#            Attribute.Body.Vehicle.VIN: "r"
-#            Signal.Doors.* : "rw"
     env:
        - RUNX_KERNEL=pvcalls_xen-arm64
        - RUNX_RAMDISK=
        - PVCALLS_BACKEND=0
-#    layers:
-#       - 'layer_uid'
-#

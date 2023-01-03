@@ -14,15 +14,12 @@ build:
 
 # Information about publishing process (URI, cert, etc)
 publish:
-    url: aoscloud.io
-    service_uid: 
+    url: stage.epmp-aos.projects.epam.com
+    service_uid: 37d098d3-dd05-4979-927d-e0194ccc43ce
     tls_pkcs12: aos-user-sp.p12
 
 # Service configuration
 configuration:
-    #state:
-    #    filename: state.dat
-    #    required: False
 
     # Startup command
     cmd: python3 -u /ramservice/ram_service.py -m 180 -host fakehost
@@ -30,32 +27,13 @@ configuration:
         minInstances: 1        # indicates minimal number of service's instances that should be run on Unit
         priority: 10            # Priority of service instance (0-1000000000, 0 is the lowest priority), default value is 0
         #labels:                # Labels where service instance should be run
-        #    - node1Label
-#    runParameters:
-#        startInterval: 'PT10S'   # indicates maximum time (ISO 8601 duration) required by service to start
-#        startBurst: 3            # indicates number of attempt to start
-#        restartInterval: 'PT1S'  # indicates in which time (ISO 8601 duration) the service will be restarted after exit
-    # Service working dir
+        #    - gen3
     workingDir: / #service working directory
-
-#    devices:
-#        - name : string (camera0, mic0, audio0, etc)
-#          mode  : rwm
 
 #    resources:
 #        - system-dbus
 #        - bluetooth
 
-#    hostname: my-container
-
-#    exposedPorts:
-#        - 8089-8090/tcp
-#        - 1515/udp
-#        - 9000
-
-#    allowedConnections:
-#        - 9931560c-be75-4f60-9abf-08297d905332/8087-8088/tcp
-#        - 9931560c-be75-4f60-9abf-08297d905332/1515/udp
 
     quotas:
 #        cpu: 50
@@ -67,39 +45,3 @@ configuration:
 #        upload: 1GB
 #        download: 1GB
 #        temp: 32KB
-
-#    alerts:
-#        ram:
-#            minTime: 'PT5S'   # ISO 8601 duration
-#            minThreshold: 10,
-#            maxThreshold: 150
-#        cpu:
-#            minTime: 'PT5S'   # ISO 8601 duration
-#            minThreshold: 40,
-#            maxThreshold: 45
-#        storage:
-#            minTime: 'PT5S'   # ISO 8601 duration
-#            minThreshold: 10,
-#            maxThreshold: 150
-#        upload:
-#            minTime: 'PT5S'   # ISO 8601 duration
-#            minThreshold: 10,
-#            maxThreshold: 150
-#        download:
-#            minTime: 'PT5S'   # ISO 8601 duration
-#            minThreshold: 10,
-#            maxThreshold: 150
-#
-
-#    permissions:
-         # functional server
-#        vis:
-             # functionality name: access mode
-#            Attribute.Body.Vehicle.VIN: "r"
-#            Signal.Doors.* : "rw"
-#    env:
-#       - MY_ENV_VAR1=this env var will be set for the service'
-#       - MY_ENV_VAR2=this_to
-#    layers:
-#       - 'layer_uid'
-#
