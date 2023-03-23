@@ -14,8 +14,8 @@ build:
 
 # Information about publishing process (URI, cert, etc)
 publish:
-    url: stage.epmp-aos.projects.epam.com
-    service_uid: 37d098d3-dd05-4979-927d-e0194ccc43ce
+    url: aoscloud.io
+    service_uid: 4fb6e632-3b88-4f3a-9119-0336067d76c2
     tls_pkcs12: aos-user-sp.p12
 
 # Service configuration
