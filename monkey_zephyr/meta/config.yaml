@@ -1,0 +1,51 @@
+# Commented sections are optional. Uncomment them if you want to include them in config
+
+#publisher: # General publisher info section
+#    author: # Author info
+#    company: # Company info
+
+# How to build and sign package
+build:
+    os: linux
+    arch: aarch64
+    sign_pkcs12: aos-user-sp.p12
+    symlinks: copy
+    # context: string, optional
+
+# Information about publishing process (URI, cert, etc)
+publish:
+    url: aoscloud.io
+    service_uid: f78b62ac-ce02-4b9b-b72f-79fbd4eaeedb
+    tls_pkcs12: aos-user-sp.p12
+
+# Service configuration
+configuration:
+    # Startup command
+    cmd: helloworld_xen-arm64
+    instances:
+        minInstances: 1        # indicates minimal number of service's instances that should be run on Unit
+        priority: 20            # Priority of service instance (0-1000000000, 0 is the lowest priority), default value is 0
+        #labels:                # Labels where service instance should be run
+        #    - xrunSupport_gen3
+    runner: xrun
+    # Service working dir
+    workingDir:  / #service working directory
+
+#    resources:
+#        - gen3-dom0-resource
+
+    quotas:
+#        cpu: 50
+        mem: 8MB
+#        state: 64KB
+#        storage: 64KB
+#        upload_speed: 32Kb
+#        download_speed: 32Kb
+#        upload: 1GB
+#        download: 1GB
+#        temp: 32KB
+
+    env:
+       - RUNX_KERNEL=helloworld_xen-arm64
+       - RUNX_RAMDISK=
+       - PVCALLS_BACKEND=0
