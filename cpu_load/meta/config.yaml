@@ -1,0 +1,105 @@
+# Commented sections are optional. Uncomment them if you want to include them in config
+
+#publisher: # General publisher info section
+#    author: # Author info
+#    company: # Company info
+
+# How to build and sign package
+build:
+    os: linux
+    arch: x86
+    sign_pkcs12: aos-user-sp.p12
+    symlinks: copy
+    # context: string, optional
+
+# Information about publishing process (URI, cert, etc)
+publish:
+    url: stage.epmp-aos.projects.epam.com
+    service_uid: 2efd1506-564e-40de-9466-66ae7a25fac0
+    tls_pkcs12: aos-user-sp.p12
+    version: "1.0.0"
+
+# Service configuration
+configuration:
+    #state:
+    #    filename: state.dat
+    #    required: False
+
+    # Startup command
+    cmd: python3 /cpu_load/cpu_load.py
+    instances:
+        minInstances: 1 # indicates minimal number of service's instances that should be run on Unit
+        priority: 10 # Priority of service instance (0-1000000000, 0 is the lowest priority), default value is 0
+        #labels:                # Labels where service instance should be run
+        #    - node1Label
+
+    #    runParameters:
+    #        startInterval: 'PT10S'   # indicates maximum time (ISO 8601 duration) required by service to start
+    #        startBurst: 3            # indicates number of attempt to start
+    #        restartInterval: 'PT1S'  # indicates in which time (ISO 8601 duration) the service will be restarted after exit
+    # Service working dir
+    workingDir: /
+
+    #    devices:
+    #        - name : string (camera0, mic0, audio0, etc)
+    #          mode  : rwm
+
+    #    resources:
+    #        - system-dbus
+    #        - bluetooth
+
+    #    hostname: my-container
+
+    #    exposedPorts:
+    #        - 8089-8090/tcp
+    #        - 1515/udp
+    #        - 9000
+
+    #    allowedConnections:
+    #        - 9931560c-be75-4f60-9abf-08297d905332/8087-8088/tcp
+    #        - 9931560c-be75-4f60-9abf-08297d905332/1515/udp
+#    quotas:
+#        cpu: 50
+#        mem: 200MB
+#        state: 64KB
+#        storage: 64KB
+#        upload_speed: 32Kb
+#        download_speed: 32Kb
+#        upload: 1GB
+#        download: 1GB
+#        temp: 32KB
+
+#    alerts:
+#        ram:
+#            minTime: 'PT5S'   # ISO 8601 duration
+#            minThreshold: 10,
+#            maxThreshold: 150
+#        cpu:
+#            minTime: 'PT5S'   # ISO 8601 duration
+#            minThreshold: 40,
+#            maxThreshold: 45
+#        storage:
+#            minTime: 'PT5S'   # ISO 8601 duration
+#            minThreshold: 10,
+#            maxThreshold: 150
+#        upload:
+#            minTime: 'PT5S'   # ISO 8601 duration
+#            minThreshold: 10,
+#            maxThreshold: 150
+#        download:
+#            minTime: 'PT5S'   # ISO 8601 duration
+#            minThreshold: 10,
+#            maxThreshold: 150
+#
+
+#    permissions:
+#        vis:
+#            Attribute.Body.Vehicle.VIN: "r"
+#            Signal.Doors.* : "rw"
+#    env:
+#       - MY_ENV_VAR1=this env var will be set for the service'
+#       - MY_ENV_VAR2=this_to
+
+#    layers:
+#       - 'layer_uid'
+#
