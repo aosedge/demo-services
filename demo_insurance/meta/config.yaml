@@ -83,5 +83,5 @@ configuration:
     #        minTime: string
     #        minThreshold: 10,
     #        maxThreshold: 150
-    #layers:
-    #   - py-libs-layer
+    layers:
+       - aos-pylibs-layer-spider
