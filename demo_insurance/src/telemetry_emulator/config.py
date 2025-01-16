@@ -23,7 +23,7 @@ EMULATOR_UPDATE_TIME = 0.4
 CONTROL_API_ADDRESS = ("0.0.0.0", 8800)
 
 TELEMETRY_REST_HOST = os.environ.get("TELEMETRY_REST_HOST", "demo-insurance.aoscloud.io")
-TELEMETRY_REST_URL = "http://{host}/api/v1/telemetry/data/".format(
+TELEMETRY_REST_URL = "https://{host}/api/v1/telemetry/data/".format(
     host=TELEMETRY_REST_HOST
 )
 
