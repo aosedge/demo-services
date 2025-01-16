@@ -32,7 +32,7 @@ class HTTPClient(Thread):
     TIMESTAMP = "timestamp"
     IN_RECTANGLE = "in_rectangle"
 
-    SENDING_INTERVAL = 0.1
+    SENDING_INTERVAL = 2.0
 
     def __init__(self, type, emulator=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
