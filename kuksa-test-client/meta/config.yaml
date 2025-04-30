@@ -1,0 +1,120 @@
+# Commented sections are optional. Uncomment them if you want to include them in config
+
+# Documentation of AosEdge Service configuration - https://docs.aosedge.tech/docs/reference/file-formats/service-config
+
+#publisher: # General publisher info section
+#    author: # Author info
+#    company: # Company info
+
+# How to build and sign package
+build:
+    os: linux
+    arch: x86
+    sign_pkcs12: aos-user-sp.p12
+    symlinks: copy
+
+# Information about publishing process (URI, cert, etc)
+publish:
+    url: aws-stage.epmp-aos.projects.epam.com
+    service_uid: # Service UID can be found on the Cloud service details page (Required)
+    tls_pkcs12: aos-user-sp.p12
+    version: "1.0.0" # Vendor version that should be in SemVer format (Required)
+
+# Service configuration
+configuration:
+    # Startup command:
+    cmd: python3 -u kuksa_test_client.py
+
+    # Service working directory:
+    workingDir: /
+
+    # Service runtime parameters:
+    #    runner: string (runc, crun, runx, xrun)  # Runner that should be used by Aos Core for running service instance. Default: crun
+    #    instances:
+    #        minInstances: 1        # indicates minimal number of service's instances that should be run on Unit
+    #        priority: 0            # Priority of service instance (0-1000000000, 0 is the lowest priority), default value is 0
+    #        labels:                # Labels where service instance should be run
+    #             - string
+    #    runParameters:
+    #        startInterval: 'PT10S'   # indicates maximum time (ISO 8601 duration) required by service to start
+    #        startBurst: 3            # indicates number of attempt to start
+    #        restartInterval: 'PT1S'  # indicates in which time (ISO 8601 duration) the service will be restarted after exit
+    #    offlineTTL: 'PT1M'   # service TTL (ISO 8601 duration). In case of the unit is offline more than TTL time - Service should be deleted.
+    #    downloadTTL: 'PT1M'  # download service TTL (ISO 8601 duration). In case of the unit is not able to download service or related layer more than TTL time - Service should be deleted.
+
+    # Environment variables for the service. Will be applied for running instance of the service in a container:
+    #    env:
+    #       - MY_ENV_VAR1=this env var will be set for the service
+    #       - MY_ENV_VAR2=this_to
+
+    # List of permissions:
+    #    permissions:
+    #        vis:
+    #            Attribute.Body.Vehicle.VIN: "r"
+    #            Signal.Doors.* : "rw"
+
+    # Filesystem resources:
+    #    devices:
+    #        - name : string (camera0, mic0, audio0, etc)
+    #          mode  : rwm
+    resources:
+        - kuksa
+    #        - system-dbus
+    #        - bluetooth
+
+    # Network resources:
+    #    hostname: my-container
+    #    exposedPorts:
+    #        - 8089-8090/tcp
+    #        - 1515/udp
+    #        - 9000
+    #    allowedConnections:
+    #        - 9931560c-be75-4f60-9abf-08297d905332/8087-8088/tcp
+    #        - 9931560c-be75-4f60-9abf-08297d905332/1515/udp
+
+    # Runtime resources:
+    #    isResourceLimits: True  # when set as False, the service version has no resource limits and also has no resource reservations for Pre-release versions
+    #    requestedResources:
+    #        cpu: 10000
+    #        ram: 200kB
+    #        storage: 64kB
+    #        state: 32kB
+    #    quotas:
+    #        cpu: 50
+    #        mem: 2kB
+    #        state: 64kB
+    #        storage: 64kB
+    #        upload_speed: 32Kb
+    #        download_speed: 32Kb
+    #        upload: 1GB
+    #        download: 1GB
+    #        temp: 32kB
+    #    alerts:
+    #        ram:
+    #            minTime: 'PT5S'   # ISO 8601 duration
+    #            minThreshold: 10
+    #            maxThreshold: 150
+    #        cpu:
+    #            minTime: 'PT5S'   # ISO 8601 duration
+    #            minThreshold: 40
+    #            maxThreshold: 45
+    #        storage:
+    #            minTime: 'PT5S'   # ISO 8601 duration
+    #            minThreshold: 10
+    #            maxThreshold: 150
+    #        upload:
+    #            minTime: 'PT5S'   # ISO 8601 duration
+    #            minThreshold: 10
+    #            maxThreshold: 150
+    #        download:
+    #            minTime: 'PT5S'   # ISO 8601 duration
+    #            minThreshold: 10
+    #            maxThreshold: 150
+
+    # List of layers. Each layer identified by strict alias. For example, python-3.6.8, rust-x.y.z.
+    layers:
+        - "aos-pylibs-layer"
+# State configuration:
+#    state:
+#        filename: state.dat
+#        required: False
