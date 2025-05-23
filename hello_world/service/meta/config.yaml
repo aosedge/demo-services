@@ -1,0 +1,23 @@
+publisher:
+    author: "Your Name"
+    company: "Your Company"
+
+build:
+    os: linux
+    arch: x86
+    symlinks: copy
+    sign_pkcs12: aos-user-sp.p12
+
+publish:
+    url: aoscloud.io
+    service_uid: "YOUR-SERVICE-UID"
+    tls_pkcs12: aos-user-sp.p12
+    version: "1.0.0"
+
+configuration:
+    state:
+        filename: state.dat
+        required: False
+
+    cmd: ./hello_world
+    workingDir: '/'
