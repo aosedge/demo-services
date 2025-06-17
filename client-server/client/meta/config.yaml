@@ -1,0 +1,20 @@
+publisher: 
+    author: "Your Name"
+    company: "Your Company"
+
+build:
+    os: linux
+    arch: x86
+    symlinks: copy
+    sign_pkcs12: aos-user-sp.p12
+    source_folder: rootfs
+
+publish:
+    url: aoscloud.io
+    service_uid: "SERVICE_UID"
+    tls_pkcs12: aos-user-sp.p12
+    version: "1.0.0"
+
+configuration:
+    cmd: ./aos_http_client
+    workingDir: '/'
