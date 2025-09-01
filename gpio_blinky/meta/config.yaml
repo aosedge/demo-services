@@ -1,0 +1,25 @@
+# Documentation of AosEdge Service configuration - https://docs.aosedge.tech/docs/reference/file-formats/service-config
+
+# How to build and sign package
+build:
+    os: linux
+    arch: x86
+    sign_pkcs12: aos-user-sp.p12
+    symlinks: copy
+
+# Information about publishing process (URI, cert, etc)
+publish:
+    url: aws-stage.epmp-aos.projects.epam.com
+    service_uid: # paste your service UID
+    tls_pkcs12: aos-user-sp.p12
+    version: "1.0.0" # Vendor version that should be in SemVer format (Required)
+
+# Service configuration
+configuration:
+    cmd: python3 -u blinky.py
+    workingDir: /
+    layers:
+        - uid: "aos-rpilibs-layer"
+    devices:
+        - name: gpio
+          mode: rwm
