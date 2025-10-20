@@ -114,6 +114,7 @@ configuration:
     # List of layers. Each layer identified by strict alias. For example, python-3.6.8, rust-x.y.z.
     layers:
         - "aos-kuksa-client-layer"
+        - "aos-pylibs-layer"
 # State configuration:
 #    state:
 #        filename: state.dat
