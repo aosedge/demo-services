@@ -1,0 +1,20 @@
+publisher:
+    author: "Bogdan Tkach"
+    company: "Epam Systems"
+
+build:
+    os: linux
+    arch: x86
+    symlinks: copy
+    sign_pkcs12: aos-user-sp.p12
+
+publish:
+    url: aoscloud.io
+    service_uid: e6e2940f-3be0-4ea6-84b2-e04833953f59
+    tls_pkcs12: aos-user-sp.p12
+    version: "1.0.1"
+
+configuration:
+    # Use Python from the AoS venv to ensure consistent deps
+    cmd: venv/bin/python -u main.py
+    workingDir: "/my-service"
