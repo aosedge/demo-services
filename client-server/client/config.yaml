@@ -1,0 +1,25 @@
+schemaVersion: 2
+
+publisher:
+    author: "Your Name"
+    company: "Your Company"
+
+publish:
+    tlsKey: aos-user-sp.p12
+
+items:
+    - identity:
+          type: service
+          codename: <service_codename>
+      version: 0.0.1
+      sourceFolder: .
+      images:
+          - sourceFolder: build_amd64
+            archInfo:
+                architecture: amd64
+          - sourceFolder: build_arm64
+            archInfo:
+                architecture: arm64
+      configuration:
+          cmd: ./aos_http_client
+          workingDir: "/"
