@@ -1,0 +1,30 @@
+schemaVersion: 2
+publisher:
+  author: Developer Name
+  company: Company Name
+publish:
+  tlsKey: aos-user-sp.p12
+items:
+- identity:
+    type: service
+    codename: demo-video-device-service
+    title: Demo Video Device Service
+    description: Video device demo service
+  version: 2.0.0
+  sourceFolder: service
+  images:
+  - sourceFolder: arm64
+    archInfo:
+      architecture: arm64
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u device.py
+    instances:
+      minInstances: 1
+    quotas:
+      cpuLimit: 1000
+      ramLimit: 128MiB
+      storageLimit: 32MiB
+    resources:
+    - name: camera0
+      mode: rw
