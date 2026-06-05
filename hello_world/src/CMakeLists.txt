@@ -3,4 +3,4 @@ project(hello_world)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(hello_world src/main.cpp)
+add_executable(hello_world main.cpp)
