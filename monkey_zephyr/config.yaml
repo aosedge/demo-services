@@ -1,0 +1,31 @@
+schemaVersion: 2
+publisher:
+  author: Developer Name
+  company: Company Name
+publish:
+  tlsKey: aos-user-sp.p12
+items:
+- identity:
+    type: service
+    codename: demo-monkey-zephyr-service
+    title: Demo Monkey Zephyr Service
+    description: Zephyr unikernel demo service
+  version: 2.0.0
+  sourceFolder: service
+  images:
+  - sourceFolder: arm64
+    archInfo:
+      architecture: arm64
+  configuration:
+    workingDir: /
+    cmd: helloworld_xen-arm64
+    runner: xrun
+    instances:
+      minInstances: 1
+      priority: 20
+    quotas:
+      ramLimit: 8MB
+    env:
+    - RUNX_KERNEL=helloworld_xen-arm64
+    - RUNX_RAMDISK=
+    - PVCALLS_BACKEND=0
