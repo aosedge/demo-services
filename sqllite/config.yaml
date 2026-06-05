@@ -1,0 +1,27 @@
+schemaVersion: 2
+publisher:
+  author: Developer Name
+  company: Company Name
+publish:
+  tlsKey: aos-user-sp.p12
+items:
+- identity:
+    type: service
+    codename: demo-python-sqlite-service
+    title: Demo SQLite Service
+    description: Python SQLite persistence demo service
+  version: 2.0.0
+  sourceFolder: service
+  images:
+  - sourceFolder: x86
+    archInfo:
+      architecture: amd64
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u sqllite.py
+    instances:
+      minInstances: 1
+    quotas:
+      cpuLimit: 1000
+      ramLimit: 128MiB
+      storageLimit: 32MiB
