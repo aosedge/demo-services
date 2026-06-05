@@ -1,0 +1,30 @@
+schemaVersion: 2
+publisher:
+  author: Developer Name
+  company: Company Name
+publish:
+  tlsKey: aos-user-sp.p12
+items:
+- identity:
+    type: service
+    codename: demo-unikernel-pvcalls-service
+    title: Demo Unikernel PVCalls Service
+    description: PVCalls unikernel demo service
+  version: 2.0.0
+  sourceFolder: service
+  images:
+  - sourceFolder: arm64
+    archInfo:
+      architecture: arm64
+  configuration:
+    workingDir: /
+    cmd: pvcalls_xen-arm64
+    runner: xrun
+    instances:
+      minInstances: 1
+    quotas:
+      ramLimit: 8MB
+    env:
+    - RUNX_KERNEL=pvcalls_xen-arm64
+    - RUNX_RAMDISK=
+    - PVCALLS_BACKEND=0
