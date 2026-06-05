@@ -1,5 +1,5 @@
 */build/
 */batch.tar.gz
-client-server/service_client/x86/
-client-server/service_server/x86/
+client-server/service/client/x86/
+client-server/service/server/x86/
 hello_world/service/x86/
