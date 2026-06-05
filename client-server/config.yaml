@@ -1,0 +1,48 @@
+schemaVersion: 2
+publisher:
+  author: Developer Name
+  company: Company Name
+publish:
+  tlsKey: aos-user-sp.p12
+items:
+- identity:
+    type: service
+    codename: demo-http-server
+    title: Demo HTTP Server
+    description: HTTP server part of client/server demo
+  version: 2.0.0
+  sourceFolder: service/server
+  images:
+  - sourceFolder: x86
+    archInfo:
+      architecture: amd64
+  configuration:
+    workingDir: /
+    cmd: /aos_http_server
+    instances:
+      minInstances: 1
+    quotas:
+      cpuLimit: 1000
+      ramLimit: 128MiB
+      storageLimit: 32MiB
+    hostname: my-server
+- identity:
+    type: service
+    codename: demo-http-client
+    title: Demo HTTP Client
+    description: HTTP client part of client/server demo
+  version: 2.0.0
+  sourceFolder: service/client
+  images:
+  - sourceFolder: x86
+    archInfo:
+      architecture: amd64
+  configuration:
+    workingDir: /
+    cmd: /aos_http_client
+    instances:
+      minInstances: 1
+    quotas:
+      cpuLimit: 1000
+      ramLimit: 128MiB
+      storageLimit: 32MiB
