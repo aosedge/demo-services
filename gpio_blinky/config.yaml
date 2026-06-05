@@ -1,0 +1,32 @@
+schemaVersion: 2
+publisher:
+  author: Developer Name
+  company: Company Name
+publish:
+  tlsKey: aos-user-sp.p12
+items:
+- identity:
+    type: service
+    codename: demo-gpio-blinky-service
+    title: Demo GPIO Blinky Service
+    description: GPIO blinking demo service
+  version: 2.0.0
+  sourceFolder: service
+  images:
+  - sourceFolder: arm64
+    archInfo:
+      architecture: arm64
+  configuration:
+    workingDir: /
+    cmd: python3 -u blinky.py
+    instances:
+      minInstances: 1
+    quotas:
+      cpuLimit: 1000
+      ramLimit: 128MiB
+      storageLimit: 32MiB
+    resources:
+    - name: gpio
+      mode: rw
+    layers:
+    - aos-rpilibs-layer
