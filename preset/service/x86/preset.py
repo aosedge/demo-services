@@ -29,13 +29,13 @@ class DriverPreset:
                 f"  Climate Temperature: {self.climate_temp}°C")
 
 
-def save_preset_to_file(preset: DriverPreset, filename="state.dat"):
+def save_preset_to_file(preset: DriverPreset, filename="/state.dat"):
     with open(filename, "w") as file:
         print(f"\nPreset save to {filename}")
         json.dump(preset.to_dict(), file, indent=4)
     
 
-def load_preset_from_file(filename="state.dat"):
+def load_preset_from_file(filename="/state.dat"):
     try:
         with open(filename, "r") as file:
             raw_text = file.read()
@@ -46,9 +46,14 @@ def load_preset_from_file(filename="state.dat"):
     except FileNotFoundError:
         print(f"\nFile {filename} not found. Loading default preset.")
         return DriverPreset()
+    except json.JSONDecodeError:
+        print(f"\nFile {filename} is invalid JSON. Loading default preset.")
+        return DriverPreset()
 
 def main():
-    preset = load_preset_from_file("state.dat")
+    print(f"\nStarting preset service v1.0.8")
+
+    preset = load_preset_from_file("/state.dat")
     
     preset.seat_position += 10
     preset.mirror_angle += 10
