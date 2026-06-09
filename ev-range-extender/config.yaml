@@ -9,79 +9,161 @@ publish:
 
 items:
 
+  ############################
   # Seat ECU
+- identity:
+    type: service
+    codename: ev-range-extender-seat-ecu
+    title: EV Range Extender Seat ECU
+
+  sourceFolder: services/seat-ecu
+  version: 1.0.0-beta.2
+
+  images:
+  - archInfo:
+      architecture: any
+    sourceFolder: .
+
+  configuration:
+    cmd: python3 -u seat_ecu.py
+    workingDir: /
+    instances:
+      minInstances: 1
+      priority: 10
+    quotas:
+      cpuLimit: 5000             # DMIPS
+      ramLimit: 128MiB           # 128 MiB
+      storageLimit: 32MiB        # 32 GiB
+    resources:
+    - name: kuksa
+      mode: rw
+    - name: zenoh
+      mode: rw
+  dependencies:
   - identity:
-      type: service
-      codename: ev-range-extender-seat-ecu
-      title: EV Range Extender Seat ECU
-
-    sourceFolder: services/seat-ecu
-    version: 1.0.0-beta.1
-
-    images:
-      - archInfo:
-          architecture: any
-        sourceFolder: .
-
-    configuration:
-      cmd: python3 -u seat_ecu.py
-      instances:
-        minInstances: 1
-        priority: 10
-      quotas:
-        cpuLimit: 5000           # DMIPS
-        ramLimit: 128MiB         # 128 MiB
-        storageLimit: 32MiB      # 32 GiB
-      resources:
-        - name: kuksa
-          mode: rw
-        - name: zenoh
-          mode: rw
-    dependencies:
-      - identity:
-          type: layer
-          codename: pylibs
-        versions: '>=1.0.0'
-      - identity:
-          type: layer
-          codename: kuksa-client
-        versions: '>=1.0.0'
+      type: layer
+      codename: pylibs
+    versions: '>=1.0.0'
+  - identity:
+      type: layer
+      codename: kuksa-client
+    versions: '>=1.0.0'
 
   # Hvac ECU
+- identity:
+    type: service
+    codename: ev-range-extender-hvac-ecu
+    title: EV Range Extender HVAC ECU
+
+  sourceFolder: services/hvac-ecu
+  version: 1.0.0-beta.2
+
+  images:
+  - archInfo:
+      architecture: any
+    sourceFolder: .
+
+  configuration:
+    cmd: python3 -u hvac_ecu.py
+    workingDir: /
+    instances:
+      minInstances: 1
+      priority: 10
+    quotas:
+      cpuLimit: 5000             # DMIPS
+      ramLimit: 128MiB           # 128 MiB
+      storageLimit: 32MiB        # 32 GiB
+    resources:
+    - name: kuksa
+      mode: rw
+    - name: zenoh
+      mode: rw
+  dependencies:
   - identity:
-      type: service
-      codename: ev-range-extender-hvac-ecu
-      title: EV Range Extender HVAC ECU
+      type: layer
+      codename: pylibs
+    versions: '>=1.0.0'
+  - identity:
+      type: layer
+      codename: kuksa-client
+    versions: '>=1.0.0'
 
-    sourceFolder: services/hvac-ecu
-    version: 1.0.0-beta.1
+  ############################
+  # bms
+- identity:
+    type: service
+    codename: ev-range-extender-bms
+    title: EV Range Extender BMS
 
-    images:
-      - archInfo:
-          architecture: any
-        sourceFolder: .
+  sourceFolder: services/bms
+  version: 1.0.0-beta.2
 
-    configuration:
-      cmd: python3 -u hvac_ecu.py
-      instances:
-        minInstances: 1
-        priority: 10
-      quotas:
-        cpuLimit: 5000           # DMIPS
-        ramLimit: 128MiB         # 128 MiB
-        storageLimit: 32MiB      # 32 GiB
-      resources:
-        - name: kuksa
-          mode: rw
-        - name: zenoh
-          mode: rw
-    dependencies:
-      - identity:
-          type: layer
-          codename: pylibs
-        versions: '>=1.0.0'
-      - identity:
-          type: layer
-          codename: kuksa-client
-        versions: '>=1.0.0'
+  images:
+  - archInfo:
+      architecture: any
+    sourceFolder: .
 
+  configuration:
+    cmd: python3 -u bms.py
+    workingDir: /
+    instances:
+      minInstances: 1
+      priority: 10
+    quotas:
+      cpuLimit: 5000             # DMIPS
+      ramLimit: 128MiB           # 128 MiB
+      storageLimit: 32MiB        # 32 GiB
+    resources:
+    - name: kuksa
+      mode: rw
+    - name: zenoh
+      mode: rw
+  dependencies:
+  - identity:
+      type: layer
+      codename: pylibs
+    versions: '>=1.0.0'
+  - identity:
+      type: layer
+      codename: kuksa-client
+    versions: '>=1.0.0'
+
+  ############################
+  # range-ai
+- identity:
+    type: service
+    codename: ev-range-extender-range-ai
+    title: EV Range Extender Range AI
+
+  sourceFolder: services/range-ai
+  version: 1.0.0-beta.2
+
+  images:
+  - archInfo:
+      architecture: any
+    sourceFolder: .
+
+  configuration:
+    cmd: python3 -u range_ai.py
+    workingDir: /
+    instances:
+      minInstances: 1
+      priority: 10
+    quotas:
+      cpuLimit: 5000             # DMIPS
+      ramLimit: 128MiB           # 128 MiB
+      storageLimit: 32MiB        # 32 GiB
+    resources:
+    - name: kuksa
+      mode: rw
+    - name: zenoh
+      mode: rw
+  dependencies:
+  - identity:
+      type: layer
+      codename: pylibs
+    versions: '>=1.0.0'
+  - identity:
+      type: layer
+      codename: kuksa-client
+    versions: '>=1.0.0'
