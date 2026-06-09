@@ -364,7 +364,9 @@ def main() -> int:
         log("Stopping.")
         return 0
     except Exception as exc:
-        log(f"FATAL: {exc}")
+        import traceback
+        traceback.print_exc()
+        log(f"FATAL: {exc} type={type(exc)}")
         return 1
     return 0
 
