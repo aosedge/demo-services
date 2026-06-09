@@ -29,7 +29,7 @@ from kuksa_client.grpc import Datapoint
 from kuksa_client.grpc.aio import VSSClient
 
 DEFAULT_ROUTER = "tcp/zenoh:7447"  # zenoh router (resolves to primary node)
-DEFAULT_KUKSA_HOST = "Server"
+DEFAULT_KUKSA_HOST = "kuksa"
 DEFAULT_KUKSA_PORT = 55555
 
 

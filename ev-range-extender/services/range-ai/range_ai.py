@@ -270,8 +270,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--host",
-        default="kuksa.node.unit",
-        help="Kuksa Databroker host (default: kuksa.node.unit)",
+        default="kuksa",
+        help="Kuksa Databroker host (default: kuksa)",
     )
     parser.add_argument(
         "--port",

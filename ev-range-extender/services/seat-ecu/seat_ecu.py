@@ -42,14 +42,13 @@ import zenoh
 from kuksa_client.grpc import Datapoint
 from kuksa_client.grpc.aio import VSSClient
 
-
 DEFAULT_ROUTER = "tcp/zenoh:7447"  # zenoh router (resolves to primary node)
-DEFAULT_KUKSA_HOST = "Server"
+DEFAULT_KUKSA_HOST = "kuksa"
 DEFAULT_KUKSA_PORT = 55555
 SEAT_HEAT_VSS_PATH = "Vehicle.Cabin.Seat.Row1.DriverSide.Heating"
 SEAT_HC_VSS_PATH = "Vehicle.Cabin.Seat.Row1.DriverSide.HeatingCooling"
 
-SOURCE_LABEL = "vm2"           # embedded in every outgoing envelope
+SOURCE_LABEL = "vm2"  # embedded in every outgoing envelope
 DASH_STATUS_KEY = "dash/status/seat"  # reverse channel to dashboard
 
 
@@ -177,7 +176,9 @@ async def _consumer(
             try:
                 coerced = cast(raw_value)
             except (TypeError, ValueError) as exc:
-                log(f"WARN cannot cast {raw_value!r} -> {cast.__name__} for {path}: {exc}")
+                log(
+                    f"WARN cannot cast {raw_value!r} -> {cast.__name__} for {path}: {exc}"
+                )
                 continue
             if last_sent.get(path) == coerced:
                 continue
@@ -215,14 +216,19 @@ async def _dashboard_forwarder(
             if dash_key is None:
                 continue
             status = _seat_status(path, dp.value)
-            payload = json.dumps({
-                "key": dash_key,
-                "value": int(dp.value) if isinstance(dp.value, (int, float))
-                                       else dp.value,
-                "status": status,
-                "source": SOURCE_LABEL,
-                "ts": datetime.now(timezone.utc).isoformat(),
-            }).encode("utf-8")
+            payload = json.dumps(
+                {
+                    "key": dash_key,
+                    "value": (
+                        int(dp.value)
+                        if isinstance(dp.value, (int, float))
+                        else dp.value
+                    ),
+                    "status": status,
+                    "source": SOURCE_LABEL,
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                }
+            ).encode("utf-8")
             try:
                 dash_pub.put(payload)
             except Exception as exc:
@@ -250,7 +256,9 @@ async def _run_with_kuksa(router: str, kuksa_host: str, kuksa_port: int) -> None
 
         loop = asyncio.get_running_loop()
         queue = _LatestValueQueue(loop)
-        log(f"Opening Zenoh session (client mode) -> router {router}, subscribed to '{KEY_PREFIX}'")
+        log(
+            f"Opening Zenoh session (client mode) -> router {router}, subscribed to '{KEY_PREFIX}'"
+        )
         with zenoh.open(build_zenoh_config(router)) as session:
 
             def listener(sample: zenoh.Sample) -> None:
@@ -283,18 +291,22 @@ async def _run_with_kuksa(router: str, kuksa_host: str, kuksa_port: int) -> None
             # Zenoh session so it shares the ECU's single client connection
             # to the router (command and status ride the one outbound link).
             dash_pub = session.declare_publisher(DASH_STATUS_KEY)
-            log(f"Reverse channel publisher on '{DASH_STATUS_KEY}' ready "
-                f"({len(subscribers)} subscriber active).")
+            log(
+                f"Reverse channel publisher on '{DASH_STATUS_KEY}' ready "
+                f"({len(subscribers)} subscriber active)."
+            )
 
             consumer_task = asyncio.create_task(_consumer(queue, kuksa))
 
-            forwarder_task = asyncio.create_task(
-                _dashboard_forwarder(kuksa, dash_pub)
+            forwarder_task = asyncio.create_task(_dashboard_forwarder(kuksa, dash_pub))
+            log(
+                f"Kuksa->dashboard forwarder subscribed to: "
+                f"{', '.join(VSS_TO_DASH_KEY.keys())}"
             )
-            log(f"Kuksa->dashboard forwarder subscribed to: "
-                f"{', '.join(VSS_TO_DASH_KEY.keys())}")
 
-            log("Seat ECU running. Drive values from the host PyTk dashboard. Ctrl+C to stop.")
+            log(
+                "Seat ECU running. Drive values from the host PyTk dashboard. Ctrl+C to stop."
+            )
             tasks = {consumer_task, forwarder_task}
             try:
                 # Fail fast: if either task exits — almost always because
@@ -303,9 +315,7 @@ async def _run_with_kuksa(router: str, kuksa_host: str, kuksa_port: int) -> None
                 # supervisor to restart. A dead task must never be left
                 # running unobserved (which would be a half-working ECU
                 # with no crash and no restart).
-                done, _ = await asyncio.wait(
-                    tasks, return_when=asyncio.FIRST_COMPLETED
-                )
+                done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             except asyncio.CancelledError:
                 done = set()
             finally:
@@ -321,18 +331,28 @@ async def _run_with_kuksa(router: str, kuksa_host: str, kuksa_port: int) -> None
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Seat Control Module. Connects (Zenoh client mode) to "
-                    "the router on the primary node for sim/cabin/seat/* "
-                    "samples driven by the host PyTk dashboard, and writes "
-                    "the values into the shared Kuksa Databroker. Opens no "
-                    "inbound listener."
+        "the router on the primary node for sim/cabin/seat/* "
+        "samples driven by the host PyTk dashboard, and writes "
+        "the values into the shared Kuksa Databroker. Opens no "
+        "inbound listener."
     )
-    p.add_argument("--router", default=DEFAULT_ROUTER,
-                   help=f"Zenoh router endpoint on the primary node "
-                        f"(default: {DEFAULT_ROUTER})")
-    p.add_argument("--kuksa-host", default=DEFAULT_KUKSA_HOST,
-                   help=f"Kuksa Databroker host (default: {DEFAULT_KUKSA_HOST})")
-    p.add_argument("--kuksa-port", type=int, default=DEFAULT_KUKSA_PORT,
-                   help=f"Kuksa Databroker port (default: {DEFAULT_KUKSA_PORT})")
+    p.add_argument(
+        "--router",
+        default=DEFAULT_ROUTER,
+        help=f"Zenoh router endpoint on the primary node "
+        f"(default: {DEFAULT_ROUTER})",
+    )
+    p.add_argument(
+        "--kuksa-host",
+        default=DEFAULT_KUKSA_HOST,
+        help=f"Kuksa Databroker host (default: {DEFAULT_KUKSA_HOST})",
+    )
+    p.add_argument(
+        "--kuksa-port",
+        type=int,
+        default=DEFAULT_KUKSA_PORT,
+        help=f"Kuksa Databroker port (default: {DEFAULT_KUKSA_PORT})",
+    )
     return p.parse_args()
 
 
