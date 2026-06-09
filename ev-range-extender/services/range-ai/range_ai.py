@@ -5,21 +5,21 @@
 # https://opensource.org/licenses/MIT.
 #
 # SPDX-License-Identifier: MIT
-"""Range Compute AI service — runs on VM1.
+"""Range Compute AI service.
 
-Subscribes to battery and cabin VSS signals from the local Kuksa Databroker
-(sdv-runtime, 127.0.0.1:55555), computes estimated driving range, and writes
+Subscribes to battery and cabin VSS signals from the shared Kuksa
+Databroker (sdv-runtime), computes estimated driving range, and writes
 the result back as Vehicle.Powertrain.Range.
 
 Signal flow
 -----------
-  VM1 Kuksa Databroker
+  Kuksa Databroker (shared, on the primary node)
     ├─ Vehicle.Powertrain.TractionBattery.CurrentVoltage      (written by bms.py)
     ├─ Vehicle.Powertrain.TractionBattery.CurrentCurrent      (written by bms.py)
     ├─ Vehicle.Powertrain.TractionBattery.StateOfCharge.Current  (written by bms.py)
-    ├─ Vehicle.Cabin.HVAC.AmbientAirTemperature               (mirrored from VM2 via kuksa-bridge)
-    ├─ Vehicle.Cabin.Seat.Row1.DriverSide.Heating             (mirrored from VM2 via kuksa-bridge)
-    └─ Vehicle.Cabin.Seat.Row1.DriverSide.HeatingCooling      (mirrored from VM2 via kuksa-bridge)
+    ├─ Vehicle.Cabin.HVAC.AmbientAirTemperature               (written by hvac_ecu.py)
+    ├─ Vehicle.Cabin.Seat.Row1.DriverSide.Heating             (written by seat_ecu.py)
+    └─ Vehicle.Cabin.Seat.Row1.DriverSide.HeatingCooling      (written by seat_ecu.py)
           │
           ▼
       range_ai.py  computes  range_km = available_kWh / effective_consumption
@@ -45,7 +45,7 @@ SIGNAL_CURRENT = "Vehicle.Powertrain.TractionBattery.CurrentCurrent"
 SIGNAL_VOLTAGE = "Vehicle.Powertrain.TractionBattery.CurrentVoltage"
 SIGNAL_SOC     = "Vehicle.Powertrain.TractionBattery.StateOfCharge.Current"
 
-# Cabin signals (mirrored from VM2 via kuksa-bridge; fan speed uses AmbientAirTemperature)
+# Cabin signals (written to Kuksa directly by the cabin ECUs; fan speed uses AmbientAirTemperature)
 SIGNAL_HVAC_FAN  = "Vehicle.Cabin.HVAC.AmbientAirTemperature"
 SIGNAL_SEAT_HEAT = "Vehicle.Cabin.Seat.Row1.DriverSide.Heating"
 SIGNAL_SEAT_HC   = "Vehicle.Cabin.Seat.Row1.DriverSide.HeatingCooling"
@@ -98,10 +98,10 @@ class VehicleState:
         self.current = None          # battery current (A)
         self.voltage = None          # battery voltage (V)
         self.state_of_charge = None  # SoC (%)
-        self.hvac_fan = None         # HVAC fan speed (%, 0..100) - from VM2
+        self.hvac_fan = None         # HVAC fan speed (%, 0..100), by hvac_ecu.py
                                      # (carried on AmbientAirTemperature; see docstring)
-        self.seat_heat = None        # seat heating (%, 0..100) - from VM2
-        self.seat_hc = None          # seat HeatingCooling (%, -100..100) - from VM2
+        self.seat_heat = None        # seat heating (%, 0..100), by seat_ecu.py
+        self.seat_hc = None          # seat HeatingCooling (%, -100..100), by seat_ecu.py
 
     def update(self, path: str, value) -> None:
         if path == SIGNAL_CURRENT:
@@ -211,9 +211,9 @@ async def run(host: str, port: int) -> None:
         log("Connected.")
         log(f"  Subscribing to {len(SUBSCRIBED_SIGNALS)} signal(s):")
         for s in BATTERY_SIGNALS:
-            log(f"    - {s}                     (battery, written by bms.py on VM1)")
+            log(f"    - {s}                     (battery, written by bms.py)")
         for s in CABIN_SIGNALS:
-            log(f"    - {s}     (cabin, bridged from VM2 via zenoh_client.py)")
+            log(f"    - {s}     (cabin, written by the cabin ECUs)")
         log("  Will publish to:")
         log(f"    - {RANGE_SIGNAL}")
         log(
@@ -266,12 +266,12 @@ async def run(host: str, port: int) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="EV Range Extender - Range Compute AI (VM1)"
+        description="EV Range Extender - Range Compute AI"
     )
     parser.add_argument(
         "--host",
-        default="127.0.0.1",
-        help="Kuksa Databroker host (default: 127.0.0.1)",
+        default="kuksa.node.unit",
+        help="Kuksa Databroker host (default: kuksa.node.unit)",
     )
     parser.add_argument(
         "--port",
