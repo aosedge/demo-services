@@ -1,0 +1,48 @@
+# Configuration for AosEdge Update Bundle (schemaVersion: 2)
+# Documentation: https://docs.aosedge.tech/docs/reference/file-formats/service-config
+
+# Schema version (required, must be 2)
+schemaVersion: 2
+
+# Publisher information (optional)
+publisher:
+  author: "Developer Name"
+  company: "Company Name"
+
+# Publishing information (required: tlsKey; optional: domain, signKey)
+publish:
+  tlsKey: "aos-user-sp.p12"
+  # signKey: "/path/to/sign-key.pem"  # Optional: separate signing key
+  # domain: "aoscloud.io"             # Optional: if not specified, will be extracted from tlsKey certificate
+
+# List of deployable items (like services) to include in the deployment bundle
+items:
+  # First service item
+  - identity:
+      type: "service"
+      codename: "hello-world-python"
+      title: "Hello World Service (Python)"
+      description: "Simple demo service in Python"
+    version: "1.0.0"
+    sourceFolder: "hello-world-python"
+
+    # Images for different architectures
+    images:
+      # x86 architecture image under service source folder
+      - sourceFolder: "src_any"
+        archInfo:
+          architecture: "any"
+
+    # Service configuration
+    configuration:
+      workingDir: "/"
+      cmd: /usr/bin/python3 -u webhook_example.py
+      instances:
+        minInstances: 1
+        priority: 10
+      quotas:
+        cpuLimit: 5000           # DMIPS
+        ramLimit: 512MiB         # 256 MiB
+        storageLimit: 32MiB       # 32 MiB
+        stateLimit: 1MiB         # 100 MiB
+        tmpLimit: 256MiB         # 256 MiB
