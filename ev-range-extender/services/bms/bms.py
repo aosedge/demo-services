@@ -1,20 +1,19 @@
-"""BMS (Battery Monitoring System) service — runs on VM1.
+"""BMS (Battery Monitoring System) service.
 
 Receives raw battery telemetry from the host dashboard over Zenoh and
-writes it to the local Kuksa Databroker (sdv-runtime, 127.0.0.1:55555).
+writes it to the shared Kuksa Databroker (sdv-runtime).
 
 Signal flow
 -----------
   pytk_dashboard.py (host)
-    ├─ sim/battery/voltage  ──Zenoh (tcp/:7460)──►
-    ├─ sim/battery/current  ──────────────────────►  bms.py (this)
-    └─ sim/battery/soc      ──────────────────────►      │
-                                                         ▼
-                                              VM1 Kuksa Databroker
-                                              Vehicle.Powertrain.TractionBattery.*
-                                                         │
-                                                         ▼
-                                              range_ai.py  ──►  Vehicle.Powertrain.Range
+    ├─ sim/battery/voltage  ─┐
+    ├─ sim/battery/current  ─┼─Zenoh─►  bms.py (this)
+    └─ sim/battery/soc      ─┘              │
+                                write VSS over gRPC ▼
+                             Kuksa: Vehicle.Powertrain.TractionBattery.*
+                                            │
+                                            ▼
+                             range_ai.py ─► Vehicle.Powertrain.Range
 
 Zenoh wire format: {"value": <number>, "source": "host", "ts": "<iso>"}
 """
@@ -29,9 +28,8 @@ import zenoh
 from kuksa_client.grpc import Datapoint
 from kuksa_client.grpc.aio import VSSClient
 
-
-DEFAULT_LISTEN = "tcp/0.0.0.0:7460"
-DEFAULT_KUKSA_HOST = "127.0.0.1"
+DEFAULT_ROUTER = "tcp/zenoh:7447"  # zenoh router (resolves to primary node)
+DEFAULT_KUKSA_HOST = "Server"
 DEFAULT_KUKSA_PORT = 55555
 
 
@@ -59,9 +57,21 @@ def log(msg: str) -> None:
     print(f"[{ts}] [bms] {msg}", flush=True)
 
 
-def build_zenoh_config(listen_endpoint: str) -> zenoh.Config:
+def build_zenoh_config(router_endpoint: str) -> zenoh.Config:
+    # Client mode: dial the router on the primary node and open NO
+    # inbound listener. Pub/sub still flows both ways over the outbound
+    # link, so no inbound port is exposed and the service stays
+    # reachable no matter which node it migrates to.
+    #
+    # Scouting is disabled so the client connects ONLY to the configured
+    # router and never auto-discovers or meshes with other peers/routers
+    # (deterministic connectivity; no rogue-router vector). Verify these
+    # key names against the Zenoh version in the runtime image.
     config = zenoh.Config()
-    config.insert_json5("listen/endpoints", f'["{listen_endpoint}"]')
+    config.insert_json5("mode", '"client"')
+    config.insert_json5("connect/endpoints", f'["{router_endpoint}"]')
+    config.insert_json5("scouting/multicast/enabled", "false")
+    config.insert_json5("scouting/gossip/enabled", "false")
     return config
 
 
@@ -79,7 +89,7 @@ async def push_to_kuksa(client: VSSClient, path: str, value, cast, src: str) -> 
     log(f"OK   {path} = {coerced} (from {src})")
 
 
-async def run(listen: str, kuksa_host: str, kuksa_port: int) -> None:
+async def run(router: str, kuksa_host: str, kuksa_port: int) -> None:
     log(f"Connecting to Kuksa Databroker at {kuksa_host}:{kuksa_port}...")
     async with VSSClient(kuksa_host, kuksa_port) as kuksa:
         log("Connected to Kuksa.")
@@ -88,8 +98,8 @@ async def run(listen: str, kuksa_host: str, kuksa_port: int) -> None:
             log(f"    {k}  ->  {vss}  ({cast.__name__})")
 
         loop = asyncio.get_running_loop()
-        log(f"Opening Zenoh session, listen={listen}, subscribed to '{KEY_PREFIX}'")
-        with zenoh.open(build_zenoh_config(listen)) as session:
+        log(f"Opening Zenoh session (client mode) -> router {router}, subscribed to '{KEY_PREFIX}'")
+        with zenoh.open(build_zenoh_config(router)) as session:
             stop_event = asyncio.Event()
 
             def listener(sample: zenoh.Sample) -> None:
@@ -114,8 +124,13 @@ async def run(listen: str, kuksa_host: str, kuksa_port: int) -> None:
                     push_to_kuksa(kuksa, vss_path, value, cast, src), loop
                 )
 
-            _sub = session.declare_subscriber(KEY_PREFIX, listener)
-            log("BMS running. Drive values from the host PyTk dashboard. Ctrl+C to stop.")
+            # Retain the subscriber handle for the session's lifetime. If
+            # this reference is dropped, Zenoh garbage-collects the
+            # subscription and ingest stops with no error. Kept in a list
+            # (and referenced below) so it survives lint/autoflake passes.
+            subscribers = [session.declare_subscriber(KEY_PREFIX, listener)]
+            log(f"BMS running ({len(subscribers)} subscriber). Drive values "
+                f"from the host PyTk dashboard. Ctrl+C to stop.")
             try:
                 await stop_event.wait()
             except asyncio.CancelledError:
@@ -124,13 +139,15 @@ async def run(listen: str, kuksa_host: str, kuksa_port: int) -> None:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Battery Monitoring System (BMS) on VM1. Listens on a "
-                    "Zenoh endpoint for sim/battery/* keys driven by the "
-                    "host PyTk dashboard, and writes the values into the "
-                    "local ev-range Kuksa Databroker."
+        description="Battery Monitoring System (BMS). Connects (Zenoh "
+                    "client mode) to the router on the primary node for "
+                    "sim/battery/* keys driven by the host PyTk dashboard, "
+                    "and writes the values into the ev-range Kuksa "
+                    "Databroker. Opens no inbound listener."
     )
-    p.add_argument("--listen", default=DEFAULT_LISTEN,
-                   help=f"Zenoh listen endpoint (default: {DEFAULT_LISTEN})")
+    p.add_argument("--router", default=DEFAULT_ROUTER,
+                   help=f"Zenoh router endpoint on the primary node "
+                        f"(default: {DEFAULT_ROUTER})")
     p.add_argument("--kuksa-host", default=DEFAULT_KUKSA_HOST,
                    help=f"Kuksa Databroker host (default: {DEFAULT_KUKSA_HOST})")
     p.add_argument("--kuksa-port", type=int, default=DEFAULT_KUKSA_PORT,
@@ -141,7 +158,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
-        asyncio.run(run(args.listen, args.kuksa_host, args.kuksa_port))
+        asyncio.run(run(args.router, args.kuksa_host, args.kuksa_port))
     except KeyboardInterrupt:
         log("Stopping.")
         return 0
