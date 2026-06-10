@@ -465,12 +465,20 @@ class IndicatorPanel:
             "source": "local-default",
         })
 
-        self._seat_values["seat.heating"] = 100 if seat_heating_on else 0
-        self._seat_values["seat.heating_cooling"] = -100 if seat_cooling_on else 0
-        self._apply_seat({
-            "key": "seat.heating",
-            "value": self._seat_values["seat.heating"],
-        })
+        ## Move from 2 signals to 1 signal
+        # self._seat_values["seat.heating"] = 100 if seat_heating_on else 0
+        # self._seat_values["seat.heating_cooling"] = -100 if seat_cooling_on else 0
+        if seat_heating_on:
+            self._seat_values["seat.heating_cooling"] = 100   # Heating is ON
+        elif seat_cooling_on:
+            self._seat_values["seat.heating_cooling"] = -100  # Cooling is ON
+        else:
+            self._seat_values["seat.heating_cooling"] = 0     # Neither is ON
+
+        # self._apply_seat({
+        #     "key": "seat.heating",
+        #     "value": self._seat_values["seat.heating"],
+        # })
         self._apply_seat({
             "key": "seat.heating_cooling",
             "value": self._seat_values["seat.heating_cooling"],
@@ -513,11 +521,11 @@ class IndicatorPanel:
             val = 0
         self._seat_values[key] = val
 
-        heating = self._seat_values.get("seat.heating", 0)
+        # heating = self._seat_values.get("seat.heating", 0)
         hc = self._seat_values.get("seat.heating_cooling", 0)
 
-        heat_on = (heating != 0) or (hc > 0)
-        cool_on = (hc < 0)
+        heat_on = hc > 0
+        cool_on = hc < 0
 
         self._render(
             "seat_heat",
@@ -525,7 +533,7 @@ class IndicatorPanel:
             self._seat_heat_circle,
             self._seat_heat_text,
             "red" if heat_on else "grey",
-            f"heating={heating} hc={hc}",
+            f"hc={hc}",
         )
         self._render(
             "seat_cool",
