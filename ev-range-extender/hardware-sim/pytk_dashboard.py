@@ -37,8 +37,8 @@ formatter = logging.Formatter('%(asctime)s.%(msecs)03d [%(name)s] %(levelname)s:
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-
-DEFAULT_VM1_IP = "10.0.0.100"
+DEFAULT_VM1_IP = "127.0.0.1"
+# DEFAULT_VM1_IP = "10.0.0.100"
 DEFAULT_VM2_IP = DEFAULT_VM1_IP
 # DEFAULT_VM2_IP = "192.168.100.11"
 # DEFAULT_BMS_PORT = 7460

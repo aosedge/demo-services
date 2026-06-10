@@ -68,7 +68,7 @@ KEY_PREFIX = "sim/cabin/seat/**"
 
 # VSS path -> dashboard indicator key used by IndicatorPanel.
 VSS_TO_DASH_KEY = {
-#    SEAT_HEAT_VSS_PATH: "seat.heating",   # SEAT_HEAT_VSS_PATH is broken (absent in VSS spec)
+   # SEAT_HEAT_VSS_PATH: "seat.heating",   # SEAT_HEAT_VSS_PATH is broken (absent in VSS spec)
     SEAT_HC_VSS_PATH: "seat.heating_cooling",
 }
 
