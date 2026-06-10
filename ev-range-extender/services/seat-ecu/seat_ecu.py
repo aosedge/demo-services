@@ -68,7 +68,7 @@ KEY_PREFIX = "sim/cabin/seat/**"
 
 # VSS path -> dashboard indicator key used by IndicatorPanel.
 VSS_TO_DASH_KEY = {
-    SEAT_HEAT_VSS_PATH: "seat.heating",
+#    SEAT_HEAT_VSS_PATH: "seat.heating",   # SEAT_HEAT_VSS_PATH is broken (absent in VSS spec)
     SEAT_HC_VSS_PATH: "seat.heating_cooling",
 }
 
@@ -207,7 +207,7 @@ async def _dashboard_forwarder(
     renderer that just maps `status` to a color.
     """
     last_status: dict[str, str] = {}
-    paths = list(VSS_TO_DASH_KEY.keys())
+    paths = list(VSS_TO_DASH_KEY.keys())  # Vehicle.Cabin.Seat.Row1.DriverSide.Heating is absent
     async for updates in kuksa.subscribe_current_values(paths):
         for path, dp in updates.items():
             if dp is None or dp.value is None:
