@@ -13,11 +13,11 @@ items:
   # Seat ECU
 - identity:
     type: service
-    codename: ev-range-extender-seat-ecu
-    title: EV Range Extender Seat ECU
+    codename: demo-ev-range-extender-seat-ecu
+    title: Demo EV Range Extender Seat ECU
 
   sourceFolder: services/seat-ecu
-  version: 1.0.0
+  version: 2.0.0
 
   images:
   - archInfo:
@@ -54,11 +54,11 @@ items:
   # Hvac ECU
 - identity:
     type: service
-    codename: ev-range-extender-hvac-ecu
-    title: EV Range Extender HVAC ECU
+    codename: demo-ev-range-extender-hvac-ecu
+    title: Demo EV Range Extender HVAC ECU
 
   sourceFolder: services/hvac-ecu
-  version: 1.0.0
+  version: 2.0.0
 
   images:
   - archInfo:
@@ -96,11 +96,11 @@ items:
   # bms
 - identity:
     type: service
-    codename: ev-range-extender-bms
-    title: EV Range Extender BMS
+    codename: demo-ev-range-extender-bms
+    title: Demo EV Range Extender BMS
 
   sourceFolder: services/bms
-  version: 1.0.0
+  version: 2.0.0
 
   images:
   - archInfo:
@@ -138,11 +138,11 @@ items:
   # range-ai
 - identity:
     type: service
-    codename: ev-range-extender-range-ai
-    title: EV Range Extender Range AI
+    codename: demo-ev-range-extender-range-ai
+    title: Demo EV Range Extender Range AI
 
   sourceFolder: services/range-ai
-  version: 1.0.0
+  version: 2.0.0
 
   images:
   - archInfo:
