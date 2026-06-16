@@ -20,10 +20,10 @@ items:
   # First service item
   - identity:
       type: "service"
-      codename: "hello-world-python"
-      title: "Hello World Service (Python)"
+      codename: "demo-hello-world-python"
+      title: "Demo Hello World (Python)"
       description: "Simple demo service in Python"
-    version: "1.0.0"
+    version: "2.0.0"
     sourceFolder: "hello-world-python"
 
     # Images for different architectures
