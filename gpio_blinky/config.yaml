@@ -24,7 +24,6 @@ items:
     quotas:
       cpuLimit: 1000
       ramLimit: 128MiB
-      storageLimit: 32MiB
     resources:
     - name: gpio
       mode: rw

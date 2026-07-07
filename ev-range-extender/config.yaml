@@ -35,7 +35,6 @@ items:
     quotas:
       cpuLimit: 1000             # DMIPS
       ramLimit: 128MiB           # 128 MiB
-      storageLimit: 32MiB        # 32 GiB
     resources:
     - name: kuksa
       mode: rw
@@ -76,7 +75,6 @@ items:
     quotas:
       cpuLimit: 1000             # DMIPS
       ramLimit: 128MiB           # 128 MiB
-      storageLimit: 32MiB        # 32 GiB
     resources:
     - name: kuksa
       mode: rw
@@ -118,7 +116,6 @@ items:
     quotas:
       cpuLimit: 1000             # DMIPS
       ramLimit: 128MiB           # 128 MiB
-      storageLimit: 32MiB        # 32 GiB
     resources:
     - name: kuksa
       mode: rw
@@ -160,7 +157,6 @@ items:
     quotas:
       cpuLimit: 1000             # DMIPS
       ramLimit: 128MiB           # 128 MiB
-      storageLimit: 32MiB        # 32 GiB
     resources:
     - name: kuksa
       mode: rw

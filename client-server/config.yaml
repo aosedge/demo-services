@@ -24,7 +24,6 @@ items:
     quotas:
       cpuLimit: 1000
       ramLimit: 128MiB
-      storageLimit: 32MiB
     hostname: my-server
 - identity:
     type: service
@@ -45,4 +44,3 @@ items:
     quotas:
       cpuLimit: 1000
       ramLimit: 128MiB
-      storageLimit: 32MiB
