@@ -24,4 +24,3 @@ items:
     quotas:
       cpuLimit: 1000
       ramLimit: 256MiB
-      storageLimit: 32MiB

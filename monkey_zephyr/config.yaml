@@ -24,6 +24,7 @@ items:
       minInstances: 1
       priority: 20
     quotas:
+      cpuLimit: 1000
       ramLimit: 8MB
     env:
     - RUNX_KERNEL=helloworld_xen-arm64
