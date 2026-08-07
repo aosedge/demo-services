@@ -1,0 +1,36 @@
+schemaVersion: 2
+
+publisher:
+  author: Developer Name
+  company: Company Name
+
+publish:
+  tlsKey: aos-user-sp.p12
+
+items:
+- identity:
+    type: service
+    codename: benchmark-template-py-service
+    title: Demo benchmark template service (Python)
+    description: Demo template service for benchmarking (Python)
+
+  version: 1.0.0-beta.1
+  images:
+  - sourceFolder: src
+    archInfo:
+      architecture: any
+
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u benchmark_template.py
+    instances:
+      minInstances: 1
+
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 32MiB
+
+    resources:
+    - name: victoria-metrics
+      mode: rw
