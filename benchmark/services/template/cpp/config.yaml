@@ -1,0 +1,37 @@
+schemaVersion: 2
+
+publisher:
+  author: Developer Name
+  company: Company Name
+
+publish:
+  tlsKey: aos-user-sp.p12
+
+items:
+- identity:
+    type: service
+    codename: benchmark-template-cpp-service
+    title: Demo benchmark template service (C++)
+    description: Demo template service for benchmarking (C++)
+
+  version: 1.0.0-beta.2
+  sourceFolder: output
+  images:
+  - sourceFolder: x86
+    archInfo:
+      architecture: amd64
+
+  configuration:
+    workingDir: /
+    cmd: ./benchmark_template
+    instances:
+      minInstances: 1
+
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 32MiB
+
+    resources:
+    - name: victoria-metrics
+      mode: rw

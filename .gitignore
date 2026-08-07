@@ -1,6 +1,6 @@
-*/build/
-*/output/
-*/batch.tar.gz
+**/build
+**/output
+**/batch.tar.gz
 client-server/service/client/x86/
 client-server/service/server/x86/
 hello_world/service/x86/
