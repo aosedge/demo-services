@@ -22,27 +22,28 @@ this flag only takes effect for a preinstalled version, which is why every item 
 
 ## Build
 
-The service binary must be built before deploying. It can be built for a specific Yocto image or built natively:
+The service binary must be built before deploying, using the shared `build.sh` at the repo root. It can be built for
+a specific Yocto image or built natively:
 
 - For a Yocto image, point `--toolchain` at that image's Yocto SDK environment-setup script:
 
   ```console
-  ./build.sh --toolchain=/path/to/environment-setup-core2-64-aos-linux
+  ../build.sh . --toolchain=/path/to/environment-setup-core2-64-aos-linux
   ```
 
 - For a native build, omit `--toolchain` and the toolchain already available in the current environment is used:
 
   ```console
-  ./build.sh
+  ../build.sh .
   ```
 
-- `--arch=<name>` is optional (defaults to `x86`).
+- `--arch=<name>` is optional (defaults to `amd64`, matching `config.yaml`'s `sourceFolder: amd64`).
 
 Build output: `output/<arch>`.
 
 ## Deploy
 
-1. Build the binary for every architecture referenced in `config.yaml` (`x86` by default) — all 16 service items
+1. Build the binary for every architecture referenced in `config.yaml` (`amd64` by default) — all 16 service items
    reuse the same `output/<arch>` build.
 2. Publish the bundle described by `config.yaml` to AosCloud:
 
