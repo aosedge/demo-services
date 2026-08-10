@@ -11,9 +11,9 @@ items:
     title: Demo HTTP Server
     description: HTTP server part of client/server demo
   version: 2.0.0
-  sourceFolder: service/server
+  sourceFolder: server/output
   images:
-  - sourceFolder: x86
+  - sourceFolder: amd64
     archInfo:
       architecture: amd64
   configuration:
@@ -31,9 +31,9 @@ items:
     title: Demo HTTP Client
     description: HTTP client part of client/server demo
   version: 2.0.0
-  sourceFolder: service/client
+  sourceFolder: client/output
   images:
-  - sourceFolder: x86
+  - sourceFolder: amd64
     archInfo:
       architecture: amd64
   configuration:

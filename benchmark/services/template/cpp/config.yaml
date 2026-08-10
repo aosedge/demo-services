@@ -17,7 +17,7 @@ items:
   version: 1.0.0-beta.2
   sourceFolder: output
   images:
-  - sourceFolder: x86
+  - sourceFolder: amd64
     archInfo:
       architecture: amd64
 

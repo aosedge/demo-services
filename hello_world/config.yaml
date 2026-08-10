@@ -11,9 +11,9 @@ items:
     title: Demo Hello World C++
     description: Simple C++ Hello World service
   version: 2.0.0
-  sourceFolder: service
+  sourceFolder: output
   images:
-  - sourceFolder: x86
+  - sourceFolder: amd64
     archInfo:
       architecture: amd64
   configuration:
