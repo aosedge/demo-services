@@ -206,7 +206,7 @@ int main(int argc, char **argv)
     Poco::URI victoriaURI(ParseVictoriaURL(argc, argv));
 
     const char *instanceID = std::getenv("AOS_INSTANCE_ID");
-    std::string source = instanceID ? instanceID : "";
+    std::string source = "Instance: " + std::string(instanceID ? instanceID : "");
 
     PushEvent(victoriaURI, cNode, source, "Start");
 

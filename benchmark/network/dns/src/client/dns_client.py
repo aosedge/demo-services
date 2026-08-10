@@ -325,7 +325,7 @@ def run_benchmark(resolver):
 def main():
     """Push a start event, run the benchmark, push its results, then push a stop event."""
     args = parse_args()
-    source = os.environ["AOS_INSTANCE_ID"]
+    source = f"Instance: {os.environ['AOS_INSTANCE_ID']}"
 
     if not NAME:
         print("NAME environment variable is required", file=sys.stderr)
