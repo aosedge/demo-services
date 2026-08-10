@@ -141,7 +141,7 @@ def run_benchmark():
 def main():
     """Push a start event, run the benchmark, push its results, then push a stop event."""
     args = parse_args()
-    source = os.environ["AOS_INSTANCE_ID"]
+    source = f"Instance: {os.environ['AOS_INSTANCE_ID']}"
 
     push_event(args.victoria_url, NODE, source, "Start")
 
