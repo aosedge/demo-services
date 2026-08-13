@@ -9,14 +9,18 @@ Results go two ways. Every test's full result, iperf3's own JSON document
 included, is printed to the service log, which is what makes a failed run
 diagnosable afterwards. Only the few numbers worth charting are pushed to
 VictoriaMetrics as benchmark_result samples, bracketed by checkpoint_event
-Start/Stop, exactly as services/template/py does.
+Start/Stop, exactly as services/template/py does. Each test additionally
+pushes its own checkpoint_event (event=<test name>) the moment it begins, so
+Grafana can mark where each test started within the run.
 
 Configuration comes from the environment, so one image serves every scenario
 and only the deployment differs:
     TARGET          server hostname or IP (required)
-    DURATION        seconds per test (default 5)
-    PORT            iperf3 port (default 5201)
-    UDP_BANDWIDTH   target rate for the UDP tests, 0 is unlimited (default 0)
+    DURATION        seconds per test (default 60)
+    PORT            base iperf3 port (default 5201); the actual port dialled is
+                     PORT + AOS_INSTANCE_INDEX, matching bandwidth_server.py's
+                     one-server-per-instance layout
+    UDP_BANDWIDTH   target rate for the UDP tests, 0 is unlimited (default 80M)
 
 Usage:
     bandwidth_client.py [--victoria-url http://victoriametrics:8428]
@@ -33,9 +37,9 @@ import urllib.error
 import urllib.request
 
 TARGET = os.environ.get("TARGET", "")
-DURATION = os.environ.get("DURATION", "5")
-PORT = os.environ.get("PORT", "5201")
-UDP_BANDWIDTH = os.environ.get("UDP_BANDWIDTH", "0")
+DURATION = os.environ.get("DURATION", "60")
+PORT = int(os.environ.get("PORT", "5201")) + int(os.environ.get("AOS_INSTANCE_INDEX", "0"))
+UDP_BANDWIDTH = os.environ.get("UDP_BANDWIDTH", "80M")
 
 CONNECT_ATTEMPTS = 30
 CONNECT_DELAY = 2
@@ -182,7 +186,7 @@ def is_connect_error(message):
 
 def run_iperf(extra_args):
     """Run one iperf3 test and return its parsed result and error message."""
-    cmd = ["iperf3", "-c", TARGET, "-p", PORT, "-t", DURATION, "-J"] + extra_args
+    cmd = ["iperf3", "-c", TARGET, "-p", str(PORT), "-t", DURATION, "-J"] + extra_args
 
     log(f"Running: {' '.join(cmd)}")
 
@@ -198,13 +202,16 @@ def run_iperf(extra_args):
     return result, result.get("error", "")
 
 
-def run_test(name, protocol, extra_args, attempts=1):
-    """Run one test, log its whole result, and return the values worth charting.
+def run_test(name, protocol, extra_args, victoria_url, source, attempts=1):
+    """Push a checkpoint_event for the test's start, run it, log its result, and return the
+    values worth charting.
 
     The server instance may still be starting when the client starts, so the
     first test is given several attempts: otherwise its result would say more
     about instance start order than about the network.
     """
+    push_event(victoria_url, NODE, source, name)
+
     for attempt in range(1, attempts + 1):
         result, error = run_iperf(extra_args)
 
@@ -219,7 +226,7 @@ def run_test(name, protocol, extra_args, attempts=1):
         "test": name,
         "protocol": protocol,
         "target": TARGET,
-        "port": int(PORT),
+        "port": PORT,
         "duration_s": int(DURATION),
     }
 
@@ -230,9 +237,6 @@ def run_test(name, protocol, extra_args, attempts=1):
 
         if protocol == "udp":
             metric.update(udp_stats(result))
-
-    if result is not None:
-        metric["raw"] = result
 
     # The log keeps everything, iperf3's own document included; only a handful
     # of numbers are worth a time series.
@@ -252,7 +256,7 @@ def run_test(name, protocol, extra_args, attempts=1):
     return values
 
 
-def run_benchmark():
+def run_benchmark(victoria_url, source):
     """Run the four tests and return their results as {value_name: value}."""
     results = {}
     attempts = CONNECT_ATTEMPTS
@@ -265,7 +269,7 @@ def run_benchmark():
         if index:
             time.sleep(TEST_GAP)
 
-        results.update(run_test(name, protocol, extra_args, attempts))
+        results.update(run_test(name, protocol, extra_args, victoria_url, source, attempts))
         attempts = 1
 
     return results
@@ -286,7 +290,7 @@ def main():
     push_event(args.victoria_url, NODE, source, "Start")
 
     try:
-        results = run_benchmark()
+        results = run_benchmark(args.victoria_url, source)
 
         for name, value in results.items():
             push_result(args.victoria_url, NODE, source, name, value)
