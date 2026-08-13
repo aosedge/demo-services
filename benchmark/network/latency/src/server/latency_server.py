@@ -34,9 +34,7 @@ def main():
                 continue
 
             if process is not None:
-                log(
-                    f"sockperf {name} server exited with code {process.returncode}, restarting"
-                )
+                log(f"sockperf {name} server exited with code {process.returncode}, restarting")
 
             log(f"Starting sockperf {name} server: {' '.join(cmd)}")
 

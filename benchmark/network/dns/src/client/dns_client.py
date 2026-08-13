@@ -225,9 +225,7 @@ def summarize(samples):
     mean = sum(ordered) / count
     variance = sum((value - mean) ** 2 for value in ordered) / count
 
-    result = {
-        name: round(percentile(ordered, fraction), 3) for name, fraction in PERCENTILES
-    }
+    result = {name: round(percentile(ordered, fraction), 3) for name, fraction in PERCENTILES}
     result["min_us"] = round(ordered[0], 3)
     result["max_us"] = round(ordered[-1], 3)
     result["avg_us"] = round(mean, 3)
@@ -272,9 +270,7 @@ def pick_resolver(candidates):
                 if not error:
                     return candidate
 
-                log(
-                    f"{candidate} did not resolve {NAME} ({attempt}/{CONNECT_ATTEMPTS}): {error}"
-                )
+                log(f"{candidate} did not resolve {NAME} ({attempt}/{CONNECT_ATTEMPTS}): {error}")
 
             time.sleep(CONNECT_DELAY)
     finally:
@@ -318,19 +314,13 @@ def run_benchmark(resolver):
         metric.update(summarize(samples))
         metric["raw"] = {"samples_us": [round(value, 3) for value in samples]}
     else:
-        metric["error"] = "; ".join(
-            f"{reason} x{count}" for reason, count in failures.items()
-        )
+        metric["error"] = "; ".join(f"{reason} x{count}" for reason, count in failures.items())
 
     # The log keeps everything, every individual sample included, so the
     # percentiles can be recomputed later; only a few are worth a time series.
     log(json.dumps(metric))
 
-    return {
-        f"resolve {label}, us": metric[key]
-        for key, label in CHARTED
-        if metric.get(key) is not None
-    }
+    return {f"resolve {label}, us": metric[key] for key, label in CHARTED if metric.get(key) is not None}
 
 
 def main():
