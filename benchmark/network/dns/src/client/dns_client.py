@@ -65,6 +65,11 @@ PERCENTILES = (("p50_us", 0.50), ("p90_us", 0.90), ("p99_us", 0.99), ("p999_us",
 CHARTED = (("p50_us", "p50"), ("p99_us", "p99"), ("p999_us", "p999"))
 
 
+def log(message, file=sys.stdout):
+    """Print a message prefixed with this instance's AOS_INSTANCE_ID."""
+    print(f"[{os.environ.get('AOS_INSTANCE_ID', '')}] {message}", file=file)
+
+
 def parse_args():
     """Parse --victoria-url command-line option."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -102,7 +107,7 @@ def push_line(victoria_url, line):
         with urllib.request.urlopen(request, timeout=5) as response:
             response.read()
     except urllib.error.URLError as err:
-        print(f"failed to push to VictoriaMetrics: {err}", file=sys.stderr)
+        log(f"failed to push to VictoriaMetrics: {err}", file=sys.stderr)
 
 
 def push_event(victoria_url, node, source, event):
@@ -220,11 +225,13 @@ def summarize(samples):
     mean = sum(ordered) / count
     variance = sum((value - mean) ** 2 for value in ordered) / count
 
-    result = {name: round(percentile(ordered, fraction), 3) for name, fraction in PERCENTILES}
+    result = {
+        name: round(percentile(ordered, fraction), 3) for name, fraction in PERCENTILES
+    }
     result["min_us"] = round(ordered[0], 3)
     result["max_us"] = round(ordered[-1], 3)
     result["avg_us"] = round(mean, 3)
-    result["stddev_us"] = round(variance ** 0.5, 3)
+    result["stddev_us"] = round(variance**0.5, 3)
 
     return result
 
@@ -265,7 +272,9 @@ def pick_resolver(candidates):
                 if not error:
                     return candidate
 
-                print(f"{candidate} did not resolve {NAME} ({attempt}/{CONNECT_ATTEMPTS}): {error}")
+                log(
+                    f"{candidate} did not resolve {NAME} ({attempt}/{CONNECT_ATTEMPTS}): {error}"
+                )
 
             time.sleep(CONNECT_DELAY)
     finally:
@@ -309,11 +318,13 @@ def run_benchmark(resolver):
         metric.update(summarize(samples))
         metric["raw"] = {"samples_us": [round(value, 3) for value in samples]}
     else:
-        metric["error"] = "; ".join(f"{reason} x{count}" for reason, count in failures.items())
+        metric["error"] = "; ".join(
+            f"{reason} x{count}" for reason, count in failures.items()
+        )
 
     # The log keeps everything, every individual sample included, so the
     # percentiles can be recomputed later; only a few are worth a time series.
-    print(json.dumps(metric))
+    log(json.dumps(metric))
 
     return {
         f"resolve {label}, us": metric[key]
@@ -328,16 +339,21 @@ def main():
     source = f"Instance: {os.environ['AOS_INSTANCE_ID']}"
 
     if not NAME:
-        print("NAME environment variable is required", file=sys.stderr)
+        log("NAME environment variable is required", file=sys.stderr)
+
         return 1
 
     candidates = [RESOLVER] if RESOLVER else default_resolvers()
 
     if not candidates:
-        print(f"No resolver: RESOLVER is unset and {RESOLV_CONF} has no nameserver", file=sys.stderr)
+        log(
+            f"No resolver: RESOLVER is unset and {RESOLV_CONF} has no nameserver",
+            file=sys.stderr,
+        )
+
         return 1
 
-    print(
+    log(
         f"DNS benchmark: name={NAME} resolvers={','.join(candidates)} "
         f"queries={QUERIES} random_label={int(RANDOM_LABEL)}"
     )
@@ -346,9 +362,9 @@ def main():
 
     if not resolver:
         resolver = candidates[0]
-        print(f"No resolver answered for {NAME}, measuring against {resolver} anyway")
+        log(f"No resolver answered for {NAME}, measuring against {resolver} anyway")
     else:
-        print(f"Using resolver {resolver}")
+        log(f"Using resolver {resolver}")
 
     push_event(args.victoria_url, NODE, source, "Start")
 
@@ -360,7 +376,7 @@ def main():
     finally:
         push_event(args.victoria_url, NODE, source, "Stop")
 
-    print("All tests finished")
+    log("All tests finished")
 
     # The benchmark is a one shot run, but the instance keeps running so its
     # logs stay available and the unit does not restart it in a loop.
