@@ -66,6 +66,11 @@ CONNECT_ERRORS = (
 )
 
 
+def log(message, file=sys.stdout):
+    """Print a message prefixed with this instance's AOS_INSTANCE_ID."""
+    print(f"[{os.environ.get('AOS_INSTANCE_ID', '')}] {message}", file=file)
+
+
 def parse_args():
     """Parse --victoria-url command-line option."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -103,7 +108,7 @@ def push_line(victoria_url, line):
         with urllib.request.urlopen(request, timeout=5) as response:
             response.read()
     except urllib.error.URLError as err:
-        print(f"failed to push to VictoriaMetrics: {err}", file=sys.stderr)
+        log(f"failed to push to VictoriaMetrics: {err}", file=sys.stderr)
 
 
 def push_event(victoria_url, node, source, event):
@@ -179,14 +184,16 @@ def run_iperf(extra_args):
     """Run one iperf3 test and return its parsed result and error message."""
     cmd = ["iperf3", "-c", TARGET, "-p", PORT, "-t", DURATION, "-J"] + extra_args
 
-    print(f"Running: {' '.join(cmd)}")
+    log(f"Running: {' '.join(cmd)}")
 
     process = subprocess.run(cmd, capture_output=True, text=True)
 
     try:
         result = json.loads(process.stdout)
     except ValueError:
-        error = process.stderr.strip() or f"iperf3 exited with code {process.returncode}"
+        error = (
+            process.stderr.strip() or f"iperf3 exited with code {process.returncode}"
+        )
         return None, error
 
     # With -J iperf3 reports failures inside the JSON document itself.
@@ -206,7 +213,8 @@ def run_test(name, protocol, extra_args, attempts=1):
         if not error or not is_connect_error(error) or attempt == attempts:
             break
 
-        print(f"Server {TARGET}:{PORT} not ready ({attempt}/{attempts}): {error}")
+        log(f"Server {TARGET}:{PORT} not ready ({attempt}/{attempts}): {error}")
+
         time.sleep(CONNECT_DELAY)
 
     metric = {
@@ -230,7 +238,7 @@ def run_test(name, protocol, extra_args, attempts=1):
 
     # The log keeps everything, iperf3's own document included; only a handful
     # of numbers are worth a time series.
-    print(json.dumps(metric))
+    log(json.dumps(metric))
 
     values = {}
 
@@ -271,10 +279,11 @@ def main():
     source = f"Instance: {os.environ['AOS_INSTANCE_ID']}"
 
     if not TARGET:
-        print("TARGET environment variable is required", file=sys.stderr)
+        log("TARGET environment variable is required", file=sys.stderr)
+
         return 1
 
-    print(
+    log(
         f"Bandwidth benchmark: target={TARGET} port={PORT} "
         f"duration={DURATION}s udp_bandwidth={UDP_BANDWIDTH}"
     )
@@ -289,7 +298,7 @@ def main():
     finally:
         push_event(args.victoria_url, NODE, source, "Stop")
 
-    print("All tests finished")
+    log("All tests finished")
 
     # The benchmark is a one shot run, but the instance keeps running so its
     # logs stay available and the unit does not restart it in a loop.

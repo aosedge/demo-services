@@ -77,6 +77,11 @@ DROPPED_RE = re.compile(r"dropped messages\s*=\s*(\d+)")
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
+def log(message, file=sys.stdout):
+    """Print a message prefixed with this instance's AOS_INSTANCE_ID."""
+    print(f"[{os.environ.get('AOS_INSTANCE_ID', '')}] {message}", file=file)
+
+
 def parse_args():
     """Parse --victoria-url command-line option."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -114,7 +119,7 @@ def push_line(victoria_url, line):
         with urllib.request.urlopen(request, timeout=5) as response:
             response.read()
     except urllib.error.URLError as err:
-        print(f"failed to push to VictoriaMetrics: {err}", file=sys.stderr)
+        log(f"failed to push to VictoriaMetrics: {err}", file=sys.stderr)
 
 
 def push_event(victoria_url, node, source, event):
@@ -188,15 +193,20 @@ def parse(output):
 def run_sockperf(extra_args):
     """Run one ping-pong test and return its output and error message."""
     cmd = [
-        "sockperf", "ping-pong",
-        "-i", TARGET,
-        "-p", PORT,
-        "-t", DURATION,
-        "-m", MSG_SIZE,
+        "sockperf",
+        "ping-pong",
+        "-i",
+        TARGET,
+        "-p",
+        PORT,
+        "-t",
+        DURATION,
+        "-m",
+        MSG_SIZE,
         "--full-rtt",
     ] + extra_args
 
-    print(f"Running: {' '.join(cmd)}")
+    log(f"Running: {' '.join(cmd)}")
 
     process = subprocess.run(cmd, capture_output=True, text=True)
 
@@ -205,8 +215,11 @@ def run_sockperf(extra_args):
     output = process.stdout + process.stderr
 
     if process.returncode != 0:
-        error = output.strip().splitlines()[-1] if output.strip() else \
-            f"sockperf exited with code {process.returncode}"
+        error = (
+            output.strip().splitlines()[-1]
+            if output.strip()
+            else f"sockperf exited with code {process.returncode}"
+        )
         return output, error
 
     return output, ""
@@ -231,7 +244,10 @@ def run_test(name, protocol, extra_args, attempts=1):
         if attempt == attempts:
             break
 
-        print(f"Server {TARGET}:{PORT} not ready ({attempt}/{attempts}): {error or 'no observations'}")
+        log(
+            f"Server {TARGET}:{PORT} not ready ({attempt}/{attempts}): {error or 'no observations'}"
+        )
+
         time.sleep(CONNECT_DELAY)
 
     metric = {
@@ -252,7 +268,7 @@ def run_test(name, protocol, extra_args, attempts=1):
 
     # The log keeps everything, sockperf's own report included; only the
     # percentiles the plan asks for are worth a time series.
-    print(json.dumps(metric))
+    log(json.dumps(metric))
 
     return {
         f"{name} {label}, us": metric[key]
@@ -285,10 +301,10 @@ def main():
     source = f"Instance: {os.environ['AOS_INSTANCE_ID']}"
 
     if not TARGET:
-        print("TARGET environment variable is required", file=sys.stderr)
+        log("TARGET environment variable is required", file=sys.stderr)
         return 1
 
-    print(
+    log(
         f"Latency benchmark: target={TARGET} port={PORT} "
         f"duration={DURATION}s msg_size={MSG_SIZE}"
     )
@@ -303,7 +319,7 @@ def main():
     finally:
         push_event(args.victoria_url, NODE, source, "Stop")
 
-    print("All tests finished")
+    log("All tests finished")
 
     # The benchmark is a one shot run, but the instance keeps running so its
     # logs stay available and the unit does not restart it in a loop.
