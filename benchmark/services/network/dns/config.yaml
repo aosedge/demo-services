@@ -1,0 +1,105 @@
+schemaVersion: 2
+publisher:
+  author: Developer Name
+  company: Company Name
+publish:
+  tlsKey: aos-user-sp.p12
+items:
+- identity:
+    type: service
+    codename: benchmark-network-dns-peer
+    title: Benchmark network DNS peer
+    description: Idle peer whose name the DNS benchmark resolves
+  version: 1.0.0-beta.1
+  images:
+  - sourceFolder: src/peer
+    archInfo:
+      architecture: any
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u dns_peer.py
+    instances:
+      minInstances: 1
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 128MiB
+    hostname: dns-peer
+- identity:
+    type: service
+    codename: benchmark-network-dns-client-service
+    title: Benchmark network DNS client (service to service)
+    description: Resolve time for a peer service name
+  version: 1.0.0-beta.1
+  images:
+  - sourceFolder: src/client
+    archInfo:
+      architecture: any
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u dns_client.py
+    instances:
+      minInstances: 1
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 128MiB
+    resources:
+    - name: victoria-metrics
+      mode: rw
+    env:
+    - NAME=dns-peer
+    - QUERIES=2000
+    - RANDOM_LABEL=0
+- identity:
+    type: service
+    codename: benchmark-network-dns-client-unit
+    title: Benchmark network DNS client (service to unit)
+    description: Resolve time for a name registered on the node
+  version: 1.0.0-beta.1
+  images:
+  - sourceFolder: src/client
+    archInfo:
+      architecture: any
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u dns_client.py
+    instances:
+      minInstances: 1
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 128MiB
+    resources:
+    - name: victoria-metrics
+      mode: rw
+    env:
+    - NAME=main
+    - QUERIES=2000
+    - RANDOM_LABEL=0
+- identity:
+    type: service
+    codename: benchmark-network-dns-client-external
+    title: Benchmark network DNS client (service to external)
+    description: Resolve time for a name served outside the unit
+  version: 1.0.0-beta.1
+  images:
+  - sourceFolder: src/client
+    archInfo:
+      architecture: any
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u dns_client.py
+    instances:
+      minInstances: 1
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 128MiB
+    resources:
+    - name: victoria-metrics
+      mode: rw
+    env:
+    - NAME=dns-probe.test
+    - QUERIES=2000
+    - RANDOM_LABEL=1
