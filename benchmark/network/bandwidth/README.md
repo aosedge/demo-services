@@ -1,19 +1,39 @@
 # Bandwidth
 
 Throughput through the container network, measured with [`iperf3`](https://iperf.fr/) for TCP and UDP in both
-directions, together with UDP jitter and packet loss.
+directions, together with UDP jitter and packet loss. aos_core_cpp's
+[Network / Bandwidth](https://github.com/aosedge/aos_core_cpp/blob/main/doc/benchmark_execution.md#bandwidth)
+benchmark execution chapter describes the execution steps this implements.
 
-`config.yaml` holds four items: one server, and one client per scenario. The client code is the same for all three —
-a scenario is a different value of one environment variable, not different code.
+`config.yaml` holds two items: one server and one client. The same client item covers every scenario - which one
+runs is a choice of `TARGET`, not different code - so which scenario is measured is decided when `config.yaml` is
+generated.
 
-| Item                                          | Scenario           | `TARGET`           | Server side           |
-| --------------------------------------------- | ------------------ | ------------------ | --------------------- |
-| `benchmark-network-bandwidth-server`           | —                  | —                  | this bundle           |
-| `benchmark-network-bandwidth-client-service`   | service -> service | `bandwidth-server` | the server item above |
-| `benchmark-network-bandwidth-client-unit`      | service -> unit    | `10.0.0.100`       | `iperf3` on the node  |
-| `benchmark-network-bandwidth-client-external`  | service -> external| `10.0.0.1`         | `iperf3` on the host  |
+## Generating config.yaml
 
-Install only the items a run needs: three clients installed at once would measure each other's interference.
+`config.yaml` is generated from `config.yaml.in`, which templates the values the item is deployed with:
+
+- `@VERSION@` - `version`
+- `@NUM_INSTANCES@` - the server's `NUM_INSTANCES` env var and the client's `minInstances`, kept equal so every
+  client instance has a server instance to pair with
+- `@TEST_HOST@` - the client's `TARGET` env var, i.e. which scenario is measured
+- `@UDP_BANDWIDTH@` - the client's `UDP_BANDWIDTH` env var, i.e. the target rate for the UDP tests
+
+`config.yaml` itself is gitignored; render it with the shared `create_services.py` from `benchmark/scripts`.
+`--test-host` picks the scenario (see "Setting up each scenario" below); `--udp-bandwidth` defaults to `80M`,
+matching `bandwidth_client.py`'s own default (see "Reading the numbers" for why `0`, `iperf3`'s own "unlimited", is
+not a good choice here):
+
+```sh
+# service -> service
+../scripts/create_services.py --num-instances 1 --version 1.0.0-beta.1 --test-host bandwidth-server
+
+# service -> unit
+../scripts/create_services.py --num-instances 1 --version 1.0.0-beta.1 --test-host ${NODE_IP}
+
+# service -> external
+../scripts/create_services.py --num-instances 1 --version 1.0.0-beta.1 --test-host ${HOST_IP}
+```
 
 ## What the client measures
 
@@ -43,12 +63,27 @@ restart it in a loop.
 
 ## Environment
 
-| Variable        | Default  | Meaning                                          |
-| --------------- | -------- | ------------------------------------------------ |
-| `TARGET`        | per item | Server hostname or IP. Required.                  |
-| `DURATION`      | `5`      | Length of every single test, in seconds.          |
-| `PORT`          | `5201`   | `iperf3` port, the same for client and server.    |
-| `UDP_BANDWIDTH` | `0`      | Target rate for the UDP tests (`0` is unlimited). |
+| Variable        | Default                        | Meaning                                                                                                                       |
+| --------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `TARGET`        | `--test-host` in `config.yaml` | Server hostname or IP. Required.                                                                                              |
+| `DURATION`      | `60`                           | Length of every single test, in seconds.                                                                                      |
+| `PORT`          | `5201`                         | Base `iperf3` port; see "Running multiple instances" below.                                                                   |
+| `UDP_BANDWIDTH` | `80M`                          | Target rate for the UDP tests (`0` is unlimited, see "Reading the numbers"); `--udp-bandwidth` overrides it in `config.yaml`. |
+| `NUM_INSTANCES` | `1`                            | Server item only: how many `iperf3` servers to run. See below.                                                                |
+
+### Running multiple instances
+
+`--num-instances` at generation time sets both the server's `NUM_INSTANCES` and the client's `minInstances` to the
+same value, so the two items always scale together.
+
+The server runs `NUM_INSTANCES` `iperf3` servers, one per port from `PORT` up to `PORT + NUM_INSTANCES - 1`,
+restarting any of them independently if it dies. Each client instance dials `PORT + AOS_INSTANCE_INDEX`, the
+environment variable AosCore sets to this instance's position among the item's instances - so the batch of client
+instances spreads across the batch of server instances one-to-one, each pair on its own port, instead of every
+client hammering a single server.
+
+`AOS_INSTANCE_INDEX` is read by the client only; the server does not need it; it just opens every port from `PORT`
+up front.
 
 ## Results
 
@@ -59,33 +94,40 @@ retransmit counts, the per-second intervals and the CPU utilisation of both side
 surprising run explicable afterwards, and none of it belongs in a time series.
 
 **VictoriaMetrics** gets only what is worth charting, pushed as `benchmark_result` samples bracketed by
-`checkpoint_event` Start/Stop, in the same shape as `services/template/py`:
+`checkpoint_event` Start/Stop, in the same shape as `services/template/py`. In addition, each test pushes its own
+`checkpoint_event` (`event=<test name>`, e.g. `tcp_up`) the moment it begins, so Grafana can mark where each test
+started within the run:
 
-| Sample name                | From          |
-| -------------------------- | ------------- |
-| `<test> throughput, Mbps`  | every test    |
-| `<test> loss, %`           | the UDP tests |
-| `<test> jitter, ms`        | the UDP tests |
+| Sample name               | From          |
+| ------------------------- | ------------- |
+| `<test> throughput, Mbps` | every test    |
+| `<test> loss, %`          | the UDP tests |
+| `<test> jitter, ms`       | the UDP tests |
 
-The `source` label is the instance's `AOS_INSTANCE_ID`, which is what tells instances apart once a scenario is run at
+The `source` label is `Instance: <AOS_INSTANCE_ID>`, which is what tells instances apart once a scenario is run at
 scale.
 
 ## Setting up each scenario
 
-**service -> service** needs nothing beyond installing both items: the server sets `hostname: bandwidth-server` and
-the client reaches it by that name.
+**service -> service** needs nothing beyond installing both items with `--test-host bandwidth-server`: the server
+sets `hostname: bandwidth-server` and the client reaches it by that name.
 
-**service -> unit** needs an `iperf3` server on the node, bound to the address the client dials:
+**service -> unit** needs `--test-host` set to the node's address, and an `iperf3` server on the node, bound to that
+same address:
 
 ```console
 setsid iperf3 -s -p 5201 -B 10.0.0.100 </dev/null >/tmp/iperf3-unit.log 2>&1 &
 ```
 
-**service -> external** needs the same on the host outside the unit:
+**service -> external** needs `--test-host` set to the host's address, and the same on the host outside the unit:
 
 ```console
 setsid iperf3 -s -p 5201 -B 10.0.0.1 </dev/null >/tmp/iperf3-external.log 2>&1 &
 ```
+
+Unlike the server item, these manual servers do not scale themselves: with `--num-instances` greater than 1, start
+one more per instance, each on its own `-p 5201 + AOS_INSTANCE_INDEX`, or every client past the first one fails to
+connect.
 
 `10.0.0.1` is the host's address on the bridge carrying the unit's network — the address that faces the unit, and a
 stable one, unlike the Aos service bridge that is recreated with a new subnet on every deployment.
@@ -100,29 +142,38 @@ ones pass. Verified on a unit, where UDP failed against `10.0.0.100` without `-B
 Binding the bridge address instead would also work, but it is a worse choice: that bridge does not exist at boot and
 changes between deployments.
 
-`setsid` matters when starting a server over SSH: a plain `&` leaves it attached to the session and it dies on
-logout, which then looks like the benchmark failing to reach the far side.
-
 ### Before deploying
 
-The server item's own `iperf3` listens on 5201 too, but inside a container namespace, so it does not occupy the
-node's port; a leftover from an earlier run does. On Debian and Ubuntu the `iperf3` package also ships an enabled
-`iperf3.service` on `*:5201` — either use it as is, since it answers on every address, or take the port over with
-`sudo systemctl disable --now iperf3`.
+The server item's own `iperf3` also listens on 5201, but inside the container's own network namespace - a distinct
+port space from the node's, per the `veth`/bridge setup "Reading the numbers" describes - so it never conflicts with
+anything below. What can conflict is anything already bound to 5201 in the node's own namespace:
+
+- a leftover `iperf3 -s` process from an earlier manual run, started as above and never stopped
+- on Debian and Ubuntu, the `iperf3` package ships a systemd unit, `iperf3.service`, enabled by default and bound to
+  `*:5201` - installing the package is enough to start it, with no explicit `iperf3 -s` needed
+
+Check for either before binding a new manual server to the same port:
 
 ```console
 ss -lntu | grep 5201
+```
+
+No output means 5201 is free on the node, and the `setsid iperf3 -s ...` command above will bind it as expected.
+Output means something already owns it - identify which of the two it is (`systemctl status iperf3` for the
+packaged unit) and either reuse it, since it already answers on every address the same way a manually bound one
+would, or free the port: kill the leftover process, or `sudo systemctl disable --now iperf3` for the unit.
+
+Once a server is bound intentionally, confirm the address the client will actually dial, not merely that some
+server exists on 5201 - the bind checks above only rule out the wrong process owning the port, not the wrong
+address:
+
+```console
 iperf3 -c 10.0.0.100 -p 5201 -t 2
 ```
 
-## Requirements
-
-`iperf3` and `python3` must be in the container rootfs, which they are: service containers run on the node rootfs,
-and `aos-image-vm` installs both.
-
-`tmpLimit` is required rather than decorative. `iperf3` creates a temporary buffer file under `/tmp` for every
-stream, and the container rootfs is read-only, so without that quota every test fails on both sides with
-`unable to create a new stream: Read-only file system`.
+A 2-second test run against `--test-host`'s address is enough: it fails immediately if the bind was wrong or the
+server is unreachable, instead of the mistake surfacing later as the deployed benchmark's first test failing to
+connect.
 
 ## Reading the numbers
 
@@ -131,7 +182,9 @@ in the tens of Gbit/s with the sending side pinned at ~100% of a core, which mak
 rather than the capacity of a link. Raising `cpuLimit` raises the number, which is the clearest sign of what is
 actually being measured.
 
-UDP with `UDP_BANDWIDTH=0` measures something narrower still: `iperf3` sends 1448 byte datagrams, so the test becomes
-a syscall rate benchmark and reports several times less than TCP on the same path. That is not UDP being slower; it
-is the datagram size. Loss reported under those conditions is the receiver failing to keep up, not the network
-dropping traffic.
+UDP measures something narrower still, and needs a bound target rate to say anything useful: with `UDP_BANDWIDTH=0`,
+`iperf3`'s own "unlimited" setting, the client sends 1448 byte datagrams as fast as the CPU allows, which turns the
+test into a syscall rate benchmark that reports several times less than TCP on the same path, with most of it counted
+as loss - not the network dropping traffic, but the receiver failing to keep up with a rate nothing was aiming for.
+`80M`, `create_services.py`'s default, targets a rate the same veth/bridge path comfortably sustains, so loss and
+jitter measure the path's behavior at a realistic rate instead of a CPU's datagram-processing ceiling.

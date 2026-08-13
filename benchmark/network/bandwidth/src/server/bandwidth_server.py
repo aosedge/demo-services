@@ -3,9 +3,15 @@ import subprocess
 import sys
 import time
 
-PORT = os.environ.get("PORT", "5201")
+PORT = int(os.environ.get("PORT", "5201"))
+NUM_INSTANCES = int(os.environ.get("NUM_INSTANCES", "1"))
 
 RESTART_DELAY = 5
+
+# One iperf3 server per instance, each on its own port (PORT + index), so a
+# single deployment can serve NUM_INSTANCES clients at once without them
+# contending for the same server.
+SERVERS = [(index, ["iperf3", "-s", "-p", str(PORT + index)]) for index in range(NUM_INSTANCES)]
 
 
 def log(message, file=sys.stdout):
@@ -14,16 +20,23 @@ def log(message, file=sys.stdout):
 
 
 def main():
-    cmd = ["iperf3", "-s", "-p", PORT]
+    processes = {}
 
-    # iperf3 -s never exits on its own, so this loop only matters if it dies:
-    # the service instance stays alive and the server comes back.
+    # iperf3 -s never exits on its own, so this loop only matters if one of
+    # them dies: the service instance stays alive and it comes back.
     while True:
-        log(f"Starting iperf3 server: {' '.join(cmd)}")
+        for index, cmd in SERVERS:
+            process = processes.get(index)
 
-        code = subprocess.call(cmd)
+            if process is not None and process.poll() is None:
+                continue
 
-        log(f"iperf3 server exited with code {code}, restarting in {RESTART_DELAY}s")
+            if process is not None:
+                log(f"iperf3 server {index} exited with code {process.returncode}, restarting")
+
+            log(f"Starting iperf3 server {index}: {' '.join(cmd)}")
+
+            processes[index] = subprocess.Popen(cmd)
 
         time.sleep(RESTART_DELAY)
 

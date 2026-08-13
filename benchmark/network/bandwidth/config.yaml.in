@@ -1,0 +1,68 @@
+schemaVersion: 2
+publisher:
+  author: Developer Name
+  company: Company Name
+  
+publish:
+  tlsKey: aos-user-sp.p12
+
+items:
+- identity:
+    type: service
+    codename: benchmark-network-bandwidth-server-service
+    title: Benchmark network bandwidth server service
+    description: iperf3 server for the network bandwidth benchmark
+
+  version: @VERSION@
+  images:
+  - sourceFolder: src/server
+    archInfo:
+      architecture: any
+
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u bandwidth_server.py
+    instances:
+      minInstances: 1
+
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 256MiB
+      tmpLimit: 64MiB
+
+    hostname: bandwidth-server
+    env:
+    - NUM_INSTANCES=@NUM_INSTANCES@
+
+- identity:
+    type: service
+    codename: benchmark-network-bandwidth-client-service
+    title: Benchmark network bandwidth client service
+    description: Throughput between two services on the same unit
+
+  version: @VERSION@
+  images:
+  - sourceFolder: src/client
+    archInfo:
+      architecture: any
+
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u bandwidth_client.py
+    instances:
+      minInstances: @NUM_INSTANCES@
+
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 64MiB
+      tmpLimit: 4MiB
+
+    resources:
+    - name: victoria-metrics
+      mode: rw
+
+    env:
+    - TARGET=@TEST_HOST@
+    - UDP_BANDWIDTH=@UDP_BANDWIDTH@
