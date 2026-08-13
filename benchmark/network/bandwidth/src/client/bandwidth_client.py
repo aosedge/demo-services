@@ -191,9 +191,7 @@ def run_iperf(extra_args):
     try:
         result = json.loads(process.stdout)
     except ValueError:
-        error = (
-            process.stderr.strip() or f"iperf3 exited with code {process.returncode}"
-        )
+        error = process.stderr.strip() or f"iperf3 exited with code {process.returncode}"
         return None, error
 
     # With -J iperf3 reports failures inside the JSON document itself.
@@ -283,10 +281,7 @@ def main():
 
         return 1
 
-    log(
-        f"Bandwidth benchmark: target={TARGET} port={PORT} "
-        f"duration={DURATION}s udp_bandwidth={UDP_BANDWIDTH}"
-    )
+    log(f"Bandwidth benchmark: target={TARGET} port={PORT} " f"duration={DURATION}s udp_bandwidth={UDP_BANDWIDTH}")
 
     push_event(args.victoria_url, NODE, source, "Start")
 

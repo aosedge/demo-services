@@ -215,11 +215,7 @@ def run_sockperf(extra_args):
     output = process.stdout + process.stderr
 
     if process.returncode != 0:
-        error = (
-            output.strip().splitlines()[-1]
-            if output.strip()
-            else f"sockperf exited with code {process.returncode}"
-        )
+        error = output.strip().splitlines()[-1] if output.strip() else f"sockperf exited with code {process.returncode}"
         return output, error
 
     return output, ""
@@ -244,9 +240,7 @@ def run_test(name, protocol, extra_args, attempts=1):
         if attempt == attempts:
             break
 
-        log(
-            f"Server {TARGET}:{PORT} not ready ({attempt}/{attempts}): {error or 'no observations'}"
-        )
+        log(f"Server {TARGET}:{PORT} not ready ({attempt}/{attempts}): {error or 'no observations'}")
 
         time.sleep(CONNECT_DELAY)
 
@@ -270,11 +264,7 @@ def run_test(name, protocol, extra_args, attempts=1):
     # percentiles the plan asks for are worth a time series.
     log(json.dumps(metric))
 
-    return {
-        f"{name} {label}, us": metric[key]
-        for key, label in CHARTED
-        if metric.get(key) is not None
-    }
+    return {f"{name} {label}, us": metric[key] for key, label in CHARTED if metric.get(key) is not None}
 
 
 def run_benchmark():
@@ -304,10 +294,7 @@ def main():
         log("TARGET environment variable is required", file=sys.stderr)
         return 1
 
-    log(
-        f"Latency benchmark: target={TARGET} port={PORT} "
-        f"duration={DURATION}s msg_size={MSG_SIZE}"
-    )
+    log(f"Latency benchmark: target={TARGET} port={PORT} " f"duration={DURATION}s msg_size={MSG_SIZE}")
 
     push_event(args.victoria_url, NODE, source, "Start")
 
