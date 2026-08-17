@@ -78,6 +78,7 @@ def parse_args():
         default="http://victoriametrics:8428",
         help="main node's VictoriaMetrics base URL (default: %(default)s)",
     )
+
     return parser.parse_args()
 
 
@@ -123,6 +124,7 @@ def push_event(victoria_url, node, source, event):
         )
     )
     time_s = timestamp_us / 1_000_000
+
     push_line(victoria_url, f"checkpoint_event{{{labels}}} 1 {time_s:.3f}")
 
 
@@ -139,6 +141,7 @@ def push_result(victoria_url, node, source, name, value):
         )
     )
     time_s = timestamp_us / 1_000_000
+
     push_line(victoria_url, f"benchmark_result{{{labels}}} {value} {time_s:.3f}")
 
 
@@ -312,7 +315,6 @@ def run_benchmark(resolver):
 
     if samples:
         metric.update(summarize(samples))
-        metric["raw"] = {"samples_us": [round(value, 3) for value in samples]}
     else:
         metric["error"] = "; ".join(f"{reason} x{count}" for reason, count in failures.items())
 
@@ -352,6 +354,7 @@ def main():
 
     if not resolver:
         resolver = candidates[0]
+
         log(f"No resolver answered for {NAME}, measuring against {resolver} anyway")
     else:
         log(f"Using resolver {resolver}")
