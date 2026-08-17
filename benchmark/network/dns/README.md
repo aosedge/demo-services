@@ -3,17 +3,36 @@
 How long a service takes to resolve a name through the `dnsmasq` an AosEdge unit runs for its instances, reported as
 percentiles.
 
-`config.yaml` holds four items: an idle peer that exists only to own a name, and one client per scenario. The client
-code is the same for all three — a scenario is a different value of one environment variable, not different code.
+`config.yaml` holds two items: an idle peer that exists only to own a name, and one client. The same client item
+covers all three scenarios - which one runs is a choice of `NAME` and `RANDOM_LABEL`, not different code - so which
+scenario is measured is decided when `config.yaml` is generated.
 
-| Item                                    | Scenario           | `NAME`           | Where the name lives                 |
-| --------------------------------------- | ------------------ | ---------------- | ------------------------------------ |
-| `benchmark-network-dns-peer`             | —                  | —                | registered by the unit while it runs |
-| `benchmark-network-dns-client-service`   | service -> service | `dns-peer`       | the peer item above                  |
-| `benchmark-network-dns-client-unit`      | service -> unit    | `main`           | `/etc/aos/addnhosts` on the node     |
-| `benchmark-network-dns-client-external`  | service -> external| `dns-probe.test` | a DNS server on the host             |
+## Generating config.yaml
 
-Install only the items a run needs.
+`config.yaml` is generated from `config.yaml.in`, which templates the values both items are deployed with:
+
+- `@VERSION@` - `version`, for both items
+- `@NUM_INSTANCES@` - the client's `minInstances`; the peer stays at `1` regardless, since one instance is enough to
+  own its name no matter how many client instances resolve it
+- `@TEST_HOST@` - the client's `NAME` env var, i.e. which scenario is measured
+- `@RANDOM_LABEL@` - the client's `RANDOM_LABEL` env var; `1` only for the external scenario, see below
+
+`config.yaml` itself is gitignored; render it with the shared `create_services.py` from `benchmark/scripts`.
+`--test-host` picks the scenario (see "Setting up each scenario" below):
+
+```sh
+# service -> service
+../scripts/create_services.py --num-instances 4 --version 1.0.0-beta.1 --test-host dns-peer
+
+# service -> unit
+../scripts/create_services.py --num-instances 4 --version 1.0.0-beta.1 --test-host main
+
+# service -> external
+../scripts/create_services.py --num-instances 4 --version 1.0.0-beta.1 --test-host dns-probe.test --random-label 1
+```
+
+`--num-services` is not needed here - it defaults to 1, rendering `config.yaml.in`'s fixed set of two items once
+(`config.yaml.in` has no `@SERVICE_ID@` placeholder to clone, unlike `benchmark/timing`'s template).
 
 ## Why there is no dig
 
@@ -39,12 +58,21 @@ report timeouts instead of resolve times.
 
 ## Environment
 
-| Variable       | Default  | Meaning                                                                  |
-| -------------- | -------- | ------------------------------------------------------------------------ |
-| `NAME`         | per item | Name to resolve. Required.                                                |
-| `QUERIES`      | `2000`   | How many queries to send.                                                 |
-| `RANDOM_LABEL` | per item | Prepend a random label to `NAME` on every query, to defeat the DNS cache.  |
-| `RESOLVER`     | unset    | DNS server to ask, `host` or `host:port`. Unset means `/etc/resolv.conf`.  |
+| Variable        | Default                                 | Meaning                                                                   |
+| --------------- | --------------------------------------- | ------------------------------------------------------------------------- |
+| `NAME`          | `--test-host` in `config.yaml`          | Name to resolve. Required.                                                |
+| `QUERIES`       | `2000`                                  | How many queries to send.                                                 |
+| `RANDOM_LABEL`  | `--random-label` in `config.yaml` (`0`) | Prepend a random label to `NAME` on every query, to defeat the DNS cache. |
+| `RESOLVER`      | unset                                   | DNS server to ask, `host` or `host:port`. Unset means `/etc/resolv.conf`. |
+| `NUM_INSTANCES` | `1`                                     | Client item only: how many instances resolve concurrently. See below.     |
+
+### Running multiple instances
+
+Unlike the bandwidth and latency benchmarks, a DNS client instance owns no listening port and dials no fixed peer
+address, so there is nothing to pair one-to-one and no `AOS_INSTANCE_INDEX`-based port offset is needed: every
+instance just opens its own UDP socket, queries the same resolver, and reports its own percentiles under its own
+`source` label. `--num-instances` at generation time sets the client's `minInstances`; the peer item is unaffected,
+since a single instance already answers for as many concurrent resolvers as query it.
 
 ## Results
 
@@ -69,19 +97,20 @@ run at scale.
 
 ## Setting up each scenario
 
-**service -> service** needs nothing: install the peer alongside the client, and the unit registers `dns-peer` in
-`dnsmasq` for as long as the peer instance runs. `RANDOM_LABEL` stays off — the name is answered out of a local file
-every time, so no cache sits in the way.
+**service -> service** needs `--test-host dns-peer` at generation time, and the peer item installed alongside the
+client so the unit registers `dns-peer` in `dnsmasq` for as long as the peer instance runs. `RANDOM_LABEL` stays
+off — the name is answered out of a local file every time, so no cache sits in the way.
 
-**service -> unit** needs nothing either on a stock unit. The unit's `dnsmasq` reads two hosts files:
+**service -> unit** needs `--test-host main` and nothing else on a stock unit. The unit's `dnsmasq` reads two hosts
+files:
 
 ```
 addn-hosts=/var/aos/dns/addnhosts   # written by Aos, rewritten on every deployment
 addn-hosts=/etc/aos/addnhosts       # static, for names the unit owner adds
 ```
 
-and the second already carries `10.0.0.100 main`, which is why `NAME` defaults to `main`. To measure a different
-name, add it there and make `dnsmasq` re-read the file:
+and the second already carries `10.0.0.100 main`, which is why the example above uses `--test-host main`. To measure
+a different name, add it there, make `dnsmasq` re-read the file, and generate `config.yaml` with that name instead:
 
 ```console
 echo "10.0.0.100 dns-probe-unit" >> /etc/aos/addnhosts
@@ -90,20 +119,15 @@ kill -HUP $(cat /var/aos/dns/pidfile)
 
 Not `/var/aos/dns/addnhosts` — Aos rewrites that file whenever instances change.
 
-**service -> external** needs a DNS server on the host holding the name, and a unit that forwards to it. The
-forwarding is usually already there: check the node's `/etc/resolv.conf` for `nameserver 10.0.0.1`, and if it is
-listed, nothing on the unit has to change.
+**service -> external** needs `--test-host dns-probe.test --random-label 1` at generation time, a DNS server on the
+host holding the name, and a unit that forwards to it. The forwarding is usually already there: check the node's
+`/etc/resolv.conf` for `nameserver 10.0.0.1`, and if it is listed, nothing on the unit has to change.
 
 The host normally already runs a `dnsmasq` on the bridge, serving DHCP for it:
 
-```console
-ps -eo pid,args | grep [d]nsmasq
-ss -lnup | grep 10.0.0.1:53
-```
-
 Add the record to `/etc/dnsmasq.conf`:
 
-```
+```console
 address=/dns-probe.test/10.0.0.1
 ```
 
@@ -132,9 +156,48 @@ unit with a static address does not. Verify before deploying:
 nslookup probe123.dns-probe.test 10.0.0.100
 ```
 
-## Requirements
+If the unit and the external host are two separate machines rather than a unit sitting behind a bridge gateway
+(for example, two independent cloud instances), the forwarding described above is not already there, and the
+unit's own `dnsmasq` has to be pointed at the external host explicitly instead of relying on `/etc/resolv.conf`.
 
-`python3` in the container rootfs, which is already there. Nothing else — no `dig`, no layer, no image change.
+On the external host, bind `dnsmasq` to its own address rather than leaving it to grab every interface - a stock
+image usually already has `systemd-resolved` holding port 53 on `127.0.0.53`/`127.0.0.54`, and an unqualified
+`dnsmasq` start fails with "Address already in use" trying to bind `0.0.0.0`:
+
+```console
+# /etc/dnsmasq.conf
+listen-address=<external host's address>
+bind-interfaces
+except-interface=lo
+address=/dns-probe.test/<external host's address>
+```
+
+```console
+sudo systemctl restart dnsmasq
+```
+
+On the unit, add the external host as an explicit upstream in `/var/aos/dns/dnsmasq.conf` alongside the existing
+directives, rather than editing `/etc/resolv.conf` (which the unit's `dnsmasq` does not necessarily read from, and
+which may be managed elsewhere, e.g. `systemd-resolved`):
+
+```console
+# appended to /var/aos/dns/dnsmasq.conf
+no-resolv
+server=<external host's address>
+```
+
+`no-resolv` matters here: without it, `all-servers` (already set) still queries whatever `/etc/resolv.conf` lists
+in addition to the new `server=` line, and a real upstream may return a different (or no) answer for the test
+domain, muddying which server's latency the run is actually measuring.
+
+Unlike `address=`, `server=` and `no-resolv` are picked up on process restart, not `SIGHUP` - if the unit's
+`dnsmasq` runs under `systemd` (check with `systemctl status dnsmasq`), `sudo systemctl restart dnsmasq` reloads
+the full config; otherwise restart it the same way the process was originally started. Verify from the unit
+before deploying:
+
+```console
+nslookup probe123.dns-probe.test 10.0.0.100
+```
 
 ## Reading the numbers
 

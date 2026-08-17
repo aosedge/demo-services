@@ -1,0 +1,65 @@
+schemaVersion: 2
+
+publisher:
+  author: Developer Name
+  company: Company Name
+
+publish:
+  tlsKey: aos-user-sp.p12
+
+items:
+- identity:
+    type: service
+    codename: benchmark-network-dns-peer-service
+    title: Benchmark network DNS peer service
+    description: Idle peer whose name the DNS benchmark resolves
+
+  version: @VERSION@
+  images:
+  - sourceFolder: src/peer
+    archInfo:
+      architecture: any
+
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u dns_peer.py
+    instances:
+      minInstances: 1
+
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 32MiB
+
+    hostname: dns-peer
+
+- identity:
+    type: service
+    codename: benchmark-network-dns-client-service
+    title: Benchmark network DNS client service
+    description: Resolve time for a name chosen at generation time
+
+  version: @VERSION@
+  images:
+  - sourceFolder: src/client
+    archInfo:
+      architecture: any
+
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u dns_client.py
+    instances:
+      minInstances: @NUM_INSTANCES@
+
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 128MiB
+
+    resources:
+    - name: victoria-metrics
+      mode: rw
+
+    env:
+    - NAME=@TEST_HOST@
+    - RANDOM_LABEL=@RANDOM_LABEL@
