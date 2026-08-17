@@ -1,0 +1,40 @@
+schemaVersion: 2
+
+publisher:
+  author: Developer Name
+  company: Company Name
+
+publish:
+  tlsKey: aos-user-sp.p12
+
+items:
+- identity:
+    type: service
+    codename: benchmark-timing-service-@SERVICE_ID@
+    title: Benchmark timing service @SERVICE_ID@
+    description: Demo service for benchmarking timing
+
+  version: @VERSION@
+  images:
+    - sourceFolder: services/@SERVICE_ID@/amd64
+      archInfo:
+        architecture: amd64
+
+    - sourceFolder: services/@SERVICE_ID@/arm64
+      archInfo:
+        architecture: arm64
+
+  configuration:
+    workingDir: /
+    cmd: ./benchmark-timing
+    instances:
+      minInstances: @NUM_INSTANCES@
+
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 32MiB
+
+    resources:
+    - name: victoria-metrics
+      mode: rw
