@@ -10,14 +10,23 @@ Results go two ways. Every test's full result, sockperf's own report included,
 is printed to the service log, which is what makes a failed run diagnosable
 afterwards. Only the percentiles worth charting are pushed to VictoriaMetrics
 as benchmark_result samples, bracketed by checkpoint_event Start/Stop, exactly
-as services/template/py does.
+as services/template/py does. Each test additionally pushes its own
+checkpoint_event (event=<test name>) the moment it begins, so Grafana can mark
+where each test started within the run.
 
 Configuration comes from the environment, so one image serves every scenario
 and only the deployment differs:
     TARGET      server hostname or IP (required)
-    DURATION    seconds per test (default 5)
-    PORT        sockperf port (default 11111)
+    DURATION    seconds per test (default 10)
+    PORT        base sockperf port (default 11111); the actual port dialled is
+                PORT + AOS_INSTANCE_INDEX, matching latency_server.py's
+                one-server-pair-per-instance layout
     MSG_SIZE    payload size in bytes (default 64)
+    MSG_RATE    messages per second sockperf sends (default 10000); without a
+                cap sockperf floods the link at max rate, which measures
+                self-induced queueing delay instead of round trip latency and
+                stores one sample per message, which is what drives its
+                memory use towards the item's ramLimit
 
 Usage:
     latency_client.py [--victoria-url http://victoriametrics:8428]
@@ -35,9 +44,10 @@ import urllib.error
 import urllib.request
 
 TARGET = os.environ.get("TARGET", "")
-DURATION = os.environ.get("DURATION", "5")
-PORT = os.environ.get("PORT", "11111")
+DURATION = os.environ.get("DURATION", "10")
+PORT = int(os.environ.get("PORT", "11111")) + int(os.environ.get("AOS_INSTANCE_INDEX", "0"))
 MSG_SIZE = os.environ.get("MSG_SIZE", "64")
+MSG_RATE = os.environ.get("MSG_RATE", "10000")
 
 CONNECT_ATTEMPTS = 30
 CONNECT_DELAY = 2
@@ -90,6 +100,7 @@ def parse_args():
         default="http://victoriametrics:8428",
         help="main node's VictoriaMetrics base URL (default: %(default)s)",
     )
+
     return parser.parse_args()
 
 
@@ -135,6 +146,7 @@ def push_event(victoria_url, node, source, event):
         )
     )
     time_s = timestamp_us / 1_000_000
+
     push_line(victoria_url, f"checkpoint_event{{{labels}}} 1 {time_s:.3f}")
 
 
@@ -151,6 +163,7 @@ def push_result(victoria_url, node, source, name, value):
         )
     )
     time_s = timestamp_us / 1_000_000
+
     push_line(victoria_url, f"benchmark_result{{{labels}}} {value} {time_s:.3f}")
 
 
@@ -198,11 +211,13 @@ def run_sockperf(extra_args):
         "-i",
         TARGET,
         "-p",
-        PORT,
+        str(PORT),
         "-t",
         DURATION,
         "-m",
         MSG_SIZE,
+        "--mps",
+        MSG_RATE,
         "--full-rtt",
     ] + extra_args
 
@@ -216,18 +231,22 @@ def run_sockperf(extra_args):
 
     if process.returncode != 0:
         error = output.strip().splitlines()[-1] if output.strip() else f"sockperf exited with code {process.returncode}"
+
         return output, error
 
     return output, ""
 
 
-def run_test(name, protocol, extra_args, attempts=1):
-    """Run one test, log its whole result, and return the values worth charting.
+def run_test(name, protocol, extra_args, victoria_url, source, attempts=1):
+    """Push a checkpoint_event for the test's start, run it, log its result, and return the
+    values worth charting.
 
     The server may still be starting when the client reaches it, so the first
     test is given several attempts: otherwise its result would say more about
     start order than about the network.
     """
+    push_event(victoria_url, NODE, source, name)
+
     for attempt in range(1, attempts + 1):
         output, error = run_sockperf(extra_args)
         values = parse(output)
@@ -248,17 +267,16 @@ def run_test(name, protocol, extra_args, attempts=1):
         "test": name,
         "protocol": protocol,
         "target": TARGET,
-        "port": int(PORT),
+        "port": PORT,
         "duration_s": int(DURATION),
         "msg_size": int(MSG_SIZE),
+        "msg_rate": int(MSG_RATE),
     }
 
     if values.get("p50_us") is None:
         metric["error"] = error or "sockperf produced no observations"
     else:
         metric.update(values)
-
-    metric["raw"] = {"output": output}
 
     # The log keeps everything, sockperf's own report included; only the
     # percentiles the plan asks for are worth a time series.
@@ -267,7 +285,7 @@ def run_test(name, protocol, extra_args, attempts=1):
     return {f"{name} {label}, us": metric[key] for key, label in CHARTED if metric.get(key) is not None}
 
 
-def run_benchmark():
+def run_benchmark(victoria_url, source):
     """Run both tests and return their results as {value_name: value}."""
     results = {}
     attempts = CONNECT_ATTEMPTS
@@ -279,7 +297,7 @@ def run_benchmark():
         if index:
             time.sleep(TEST_GAP)
 
-        results.update(run_test(name, protocol, extra_args, attempts))
+        results.update(run_test(name, protocol, extra_args, victoria_url, source, attempts))
         attempts = 1
 
     return results
@@ -294,12 +312,15 @@ def main():
         log("TARGET environment variable is required", file=sys.stderr)
         return 1
 
-    log(f"Latency benchmark: target={TARGET} port={PORT} " f"duration={DURATION}s msg_size={MSG_SIZE}")
+    log(
+        f"Latency benchmark: target={TARGET} port={PORT} "
+        f"duration={DURATION}s msg_size={MSG_SIZE} msg_rate={MSG_RATE}"
+    )
 
     push_event(args.victoria_url, NODE, source, "Start")
 
     try:
-        results = run_benchmark()
+        results = run_benchmark(args.victoria_url, source)
 
         for name, value in results.items():
             push_result(args.victoria_url, NODE, source, name, value)
