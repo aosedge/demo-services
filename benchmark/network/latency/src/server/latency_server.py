@@ -3,16 +3,20 @@ import subprocess
 import sys
 import time
 
-PORT = os.environ.get("PORT", "11111")
+PORT = int(os.environ.get("PORT", "11111"))
+NUM_INSTANCES = int(os.environ.get("NUM_INSTANCES", "1"))
 
 RESTART_DELAY = 5
 
-# One server per protocol: sockperf listens either on UDP or, with --tcp, on
-# TCP, never on both. TCP and UDP port numbers are independent, so the two can
-# share PORT.
+# sockperf listens either on UDP or, with --tcp, on TCP, never on both, so
+# every instance needs two server processes. TCP and UDP port numbers are
+# independent, so a pair shares one port; each instance gets its own pair, at
+# PORT + index, so a single deployment can serve NUM_INSTANCES clients at once
+# without them contending for the same server.
 SERVERS = [
-    ("udp", ["sockperf", "server", "-i", "0.0.0.0", "-p", PORT]),
-    ("tcp", ["sockperf", "server", "-i", "0.0.0.0", "-p", PORT, "--tcp"]),
+    ((index, protocol), ["sockperf", "server", "-i", "0.0.0.0", "-p", str(PORT + index)] + extra_args)
+    for index in range(NUM_INSTANCES)
+    for protocol, extra_args in (("udp", []), ("tcp", ["--tcp"]))
 ]
 
 
@@ -27,18 +31,19 @@ def main():
     # sockperf servers never exit on their own, so this loop only matters if
     # one of them dies: the service instance stays alive and it comes back.
     while True:
-        for name, cmd in SERVERS:
-            process = processes.get(name)
+        for key, cmd in SERVERS:
+            index, protocol = key
+            process = processes.get(key)
 
             if process is not None and process.poll() is None:
                 continue
 
             if process is not None:
-                log(f"sockperf {name} server exited with code {process.returncode}, restarting")
+                log(f"sockperf {protocol} server {index} exited with code {process.returncode}, restarting")
 
-            log(f"Starting sockperf {name} server: {' '.join(cmd)}")
+            log(f"Starting sockperf {protocol} server {index}: {' '.join(cmd)}")
 
-            processes[name] = subprocess.Popen(cmd)
+            processes[key] = subprocess.Popen(cmd)
 
         time.sleep(RESTART_DELAY)
 

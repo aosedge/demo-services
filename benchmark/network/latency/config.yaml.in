@@ -1,0 +1,67 @@
+schemaVersion: 2
+publisher:
+  author: Developer Name
+  company: Company Name
+
+publish:
+  tlsKey: aos-user-sp.p12
+
+items:
+- identity:
+    type: service
+    codename: benchmark-network-latency-server-service
+    title: Benchmark network latency server service
+    description: sockperf servers for the network latency benchmark
+
+  version: @VERSION@
+  images:
+  - sourceFolder: src/server
+    archInfo:
+      architecture: any
+
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u latency_server.py
+    instances:
+      minInstances: 1
+
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 256MiB
+      tmpLimit: 64MiB
+
+    hostname: latency-server
+    env:
+    - NUM_INSTANCES=@NUM_INSTANCES@
+
+- identity:
+    type: service
+    codename: benchmark-network-latency-client-service
+    title: Benchmark network latency client service
+    description: Round trip time between two services on the same unit
+
+  version: @VERSION@
+  images:
+  - sourceFolder: src/client
+    archInfo:
+      architecture: any
+
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u latency_client.py
+    instances:
+      minInstances: @NUM_INSTANCES@
+
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 64MiB
+      tmpLimit: 4MiB
+
+    resources:
+    - name: victoria-metrics
+      mode: rw
+
+    env:
+    - TARGET=@TEST_HOST@
