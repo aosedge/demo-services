@@ -1,0 +1,46 @@
+schemaVersion: 2
+
+publisher:
+  author: Developer Name
+  company: Company Name
+
+publish:
+  tlsKey: aos-user-sp.p12
+
+items:
+- identity:
+    type: service
+    codename: benchmark-diskio-service
+    title: Benchmark disk I/O service
+    description: >-
+      Sequential write/read throughput, then random write/read IOPS, both with latency,
+      measured with fio
+
+  version: @VERSION@
+  images:
+  - sourceFolder: src
+    archInfo:
+      architecture: any
+
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u diskio_benchmark.py
+    instances:
+      minInstances: @NUM_INSTANCES@
+
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 10000
+      ramLimit: 64MiB
+      storageLimit: 32MiB
+      tmpLimit: 64MiB
+
+    resources:
+    - name: victoria-metrics
+      mode: rw
+
+    - name: common-data
+      mode: rw
+
+    env:
+    - TEST_DIR=@TEST_DIR@
