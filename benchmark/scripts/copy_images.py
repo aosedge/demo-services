@@ -3,9 +3,8 @@
 
 Copies every architecture subfolder found under --image-dir (each produced by a separate
 build.sh --arch=<name> run) into --dest-dir/<service_id>/<arch>/ (default dest-dir: services) for
-each service ID from 1 to --num-services (emptying that service's folder first if it already
-exists), adding a test.dat file of --data-size MiB of random payload to each copy if --data-size
-is given.
+each service ID from 1 to --num-services, removing --dest-dir first if it already exists, and
+adding a test.dat file of --data-size MiB of random payload to each copy if --data-size is given.
 
 Run this before create_services.py renders a config.yaml.in that references @IMAGES@ - it only
 touches --image-dir/--dest-dir, not config.yaml.in/config.yaml.
@@ -64,11 +63,8 @@ def discover_archs(image_dir, dest_dir):
 
 
 def create_service_dir(archs, service_id, data_size, image_dir, dest_dir):
-    """(Re)create dest_dir/<service_id>/ with a copy of each image_dir/<arch>/ and an optional test.dat."""
+    """Create dest_dir/<service_id>/ with a copy of each image_dir/<arch>/ and an optional test.dat."""
     service_dir = os.path.join(dest_dir, str(service_id))
-
-    if os.path.exists(service_dir):
-        shutil.rmtree(service_dir)
     os.makedirs(service_dir)
 
     for arch in archs:
@@ -91,6 +87,9 @@ def main():
 
     if args.num_services < 1:
         sys.exit("num_services must be at least 1")
+
+    if os.path.exists(args.dest_dir):
+        shutil.rmtree(args.dest_dir)
 
     archs = discover_archs(args.image_dir, args.dest_dir)
 
