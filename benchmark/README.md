@@ -1,34 +1,43 @@
 # Benchmark
 
-This folder contains AosEdge services for benchmark tests.
+This folder contains AosEdge services used to benchmark AosCore: deployment/start timing, disk I/O, and container
+network performance (latency, DNS resolution, bandwidth).
 
-Every item follows the same shape, which `services/template/py` and `services/template/cpp` define: a `config.yaml`
-and a `src/`, one image for any architecture, and results reported to VictoriaMetrics as `benchmark_result` samples
-bracketed by `checkpoint_event` Start/Stop, so that everything lands in the same Grafana tables regardless of which
-benchmark produced it.
+Every item follows the same shape, which `template/py` and `template/cpp` define: a `config.yaml` and a `src/`, one
+image for any architecture, and results reported to VictoriaMetrics as `benchmark_result` samples bracketed by
+`checkpoint_event` Start/Stop, so that everything lands in the same Grafana tables regardless of which benchmark
+produced it. `config.yaml` itself is generated from each service's `config.yaml.in` via the shared `scripts/`
+(`create_services.py`, `copy_images.py`) rather than committed as a static file, so the same service can be
+re-rendered against different instance counts, versions, and test targets.
+
+## Services
+
+- [`timing`](timing/README.md) - measures how long AosCore takes to deploy and start a set of instances, and can
+  double as a deployment-size benchmark via a configurable `test.dat` payload.
+- [`diskio`](diskio/README.md) - measures disk I/O throughput/IOPS and latency on the storage volume AosCore mounts
+  into the instance, using `fio`.
+- [`network/latency`](network/latency/README.md) - measures round trip time through the container network using
+  `sockperf`, reported as percentiles.
+- [`network/dns`](network/dns/README.md) - measures how long a service takes to resolve a name through the unit's
+  `dnsmasq`, reported as percentiles.
+- [`network/bandwidth`](network/bandwidth/README.md) - measures container network throughput with `iperf3` (TCP and
+  UDP, both directions), plus UDP jitter and packet loss.
 
 ## Network performance
 
-`services/network/` covers the network chapter of the benchmark plan: what a service actually gets out of the
-container network AosCore builds for it — `veth`, a bridge, nftables, `tc` and `dnsmasq`.
-
-Three groups, one folder each:
-
-| Group                     | Measures                                                | Tool       |
-| ------------------------- | ------------------------------------------------------- | ---------- |
-| [`bandwidth`](services/network/bandwidth) | Throughput, TCP and UDP, both directions, plus UDP jitter and loss | `iperf3`   |
-| [`latency`](services/network/latency)     | Round trip time as percentiles, TCP and UDP             | `sockperf` |
-| [`dns`](services/network/dns)             | Name resolution time as percentiles                     | built in   |
+`network/` covers the network chapter of the benchmark plan: what a service actually gets out of the container
+network AosCore builds for it — `veth`, a bridge, nftables, `tc` and `dnsmasq`.
 
 ### Scenarios
 
-Each group is exercised in the same three scenarios. A group is one folder with one `config.yaml`, and the scenarios
-are items inside it — the client code is written once and pointed at different things:
+Each of the three groups above (`bandwidth`, `latency`, `dns`) is exercised in the same three scenarios. A group is
+one folder with one `config.yaml`, and the scenarios are items inside it — the client code is written once and
+pointed at different things:
 
 ```
-services/network/<group>/src/client/     the client, one copy
-services/network/<group>/src/server/     the server, where the scenario needs one in a container
-services/network/<group>/config.yaml     one item per scenario, plus the server
+network/<group>/src/client/     the client, one copy
+network/<group>/src/server/     the server, where the scenario needs one in a container
+network/<group>/config.yaml     one item per scenario, plus the server
 ```
 
 The container is always the client; only the server side moves. A scenario is a different value of one environment
@@ -37,11 +46,11 @@ variable, not different code, which is why the items share the sources rather th
 Install only the items a run needs. Every installed client generates traffic, so leaving all three in place would
 have them measure each other's interference.
 
-| Scenario           | Server side                                         | Measures                                     |
-| ------------------ | --------------------------------------------------- | -------------------------------------------- |
-| service -> service | a second item in the same group                     | two containers on one node and one bridge     |
-| service -> unit    | a plain process on the node                         | the container to node/gateway path            |
-| service -> external| a process on a machine outside the unit             | egress through masquerade to a LAN host        |
+| Scenario            | Server side                              | Measures                                       |
+| -------------------- | ----------------------------------------- | ----------------------------------------------- |
+| service -> service   | a second item in the same group           | two containers on one node and one bridge       |
+| service -> unit      | a plain process on the node               | the container to node/gateway path              |
+| service -> external  | a process on a machine outside the unit   | egress through masquerade to a LAN host         |
 
 The two scenarios whose server lives outside the container need it started by hand — each group's README gives the
 exact commands. One rule spans all of them: **bind the server to the address the client dials**. A node has more than
@@ -60,11 +69,11 @@ detail. That is what makes a failed or surprising run explicable afterwards, and
 `name`, with `source` set to the instance's `AOS_INSTANCE_ID` so instances are told apart once a scenario is run at
 scale.
 
-| Group     | Samples pushed                                                         |
-| --------- | ---------------------------------------------------------------------- |
-| bandwidth | `<test> throughput, Mbps`, and for UDP `<test> loss, %` and `<test> jitter, ms` |
-| latency   | `<test> p50, us`, `<test> p99, us`, `<test> p999, us`                  |
-| dns       | `resolve p50, us`, `resolve p99, us`, `resolve p999, us`               |
+| Group     | Samples pushed                                                                  |
+| --------- | -------------------------------------------------------------------------------- |
+| bandwidth | `<test> throughput, Mbps`, and for UDP `<test> loss, %` and `<test> jitter, ms`   |
+| latency   | `<test> p50, us`, `<test> p99, us`, `<test> p999, us`                            |
+| dns       | `resolve p50, us`, `resolve p99, us`, `resolve p999, us`                         |
 
 Latency and DNS report percentiles rather than averages on purpose. Their distributions are skewed: most samples sit
 near the minimum and a thin tail runs orders of magnitude longer, so an average hides exactly the behaviour that
