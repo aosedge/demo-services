@@ -2,9 +2,10 @@
 """Copy a service's per-architecture build output into one numbered folder per service instance.
 
 Copies every architecture subfolder found under --image-dir (each produced by a separate
-build.sh --arch=<name> run) into --dest-dir/<service_id>/<arch>/ for each service ID from 1 to
---num-services (emptying that service's folder first if it already exists), adding a test.dat
-file of --data-size MiB of random payload to each copy if --data-size is given.
+build.sh --arch=<name> run) into --dest-dir/<service_id>/<arch>/ (default dest-dir: services) for
+each service ID from 1 to --num-services (emptying that service's folder first if it already
+exists), adding a test.dat file of --data-size MiB of random payload to each copy if --data-size
+is given.
 
 Run this before create_services.py renders a config.yaml.in that references @IMAGES@ - it only
 touches --image-dir/--dest-dir, not config.yaml.in/config.yaml.
@@ -32,8 +33,8 @@ def parse_args():
     )
     parser.add_argument(
         "--dest-dir",
-        default=None,
-        help="directory to copy each service's per-arch output into (default: <image-dir>/services)",
+        default="services",
+        help="directory to copy each service's per-arch output into (default: %(default)s)",
     )
     parser.add_argument(
         "--data-size",
@@ -91,12 +92,10 @@ def main():
     if args.num_services < 1:
         sys.exit("num_services must be at least 1")
 
-    dest_dir = args.dest_dir or os.path.join(args.image_dir, "services")
-
-    archs = discover_archs(args.image_dir, dest_dir)
+    archs = discover_archs(args.image_dir, args.dest_dir)
 
     for service_id in range(1, args.num_services + 1):
-        create_service_dir(archs, service_id, args.data_size, args.image_dir, dest_dir)
+        create_service_dir(archs, service_id, args.data_size, args.image_dir, args.dest_dir)
 
 
 if __name__ == "__main__":
