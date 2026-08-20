@@ -176,6 +176,21 @@ address=/dns-probe.test/<external host's address>
 sudo systemctl restart dnsmasq
 ```
 
+If the external host has no `dnsmasq` installed as a system service yet, run it standalone instead of creating
+`/etc/dnsmasq.conf` - `-C /dev/null` makes it skip config files entirely and take everything from the command
+line, so nothing on the host's default configuration is touched:
+
+```console
+sudo dnsmasq -C /dev/null --no-daemon \
+             --listen-address=<external host's address> --bind-interfaces --except-interface=lo \
+             --address=/dns-probe.test/<external host's address>
+```
+
+`--no-daemon` keeps it in the foreground so startup errors are visible and `Ctrl-C` stops it; drop it to run
+detached instead, and stop it later with `sudo pkill -f 'dnsmasq -C /dev/null'`. Binding to the host's own
+address rather than `0.0.0.0` means a stock `systemd-resolved` already holding `127.0.0.53`/`127.0.0.54` is not a
+conflict.
+
 On the unit, add the external host as an explicit upstream in `/var/aos/dns/dnsmasq.conf` alongside the existing
 directives, rather than editing `/etc/resolv.conf` (which the unit's `dnsmasq` does not necessarily read from, and
 which may be managed elsewhere, e.g. `systemd-resolved`):
