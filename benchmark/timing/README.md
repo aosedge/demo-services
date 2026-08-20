@@ -36,9 +36,10 @@ First, copy each built architecture's output into a numbered folder per service:
 - `--num-services` - number of service folders to create
 - `--data-size` - optional; size (in MiB) of a `test.dat` file generated for each service (default: no `test.dat`)
 
-This copies every architecture subfolder found under `output/` into `output/services/<service_id>/<arch>/` for each
-service ID from 1 to `--num-services` (emptying that service's folder first if it already exists), adding a
-`test.dat` file with `--data-size` MiB of random payload to each copy if `--data-size` was given.
+This copies every architecture subfolder found under `output/` into `services/<service_id>/<arch>/` (default
+`--dest-dir`) for each service ID from 1 to `--num-services` (clearing `--dest-dir` first if it already exists),
+adding a `test.dat` file with `--data-size` MiB of random payload to each copy if `--data-size` was given -
+`config.yaml.in`'s `sourceFolder` entries point at this same `services/@SERVICE_ID@/<arch>` path.
 
 Then render `config.yaml` from `config.yaml.in`:
 
