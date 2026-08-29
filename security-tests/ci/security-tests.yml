@@ -1,0 +1,58 @@
+# CI for demo-services/security-tests.
+#
+# Copy to .github/workflows/ when the suite is published. Kept out of the
+# workflow directory in this branch so the change stays additive and reviewable.
+#
+# Only static checks and unit-level coverage run in CI: the suite proper needs a
+# QEMU VM and live AosCloud credentials, which do not belong in a public runner.
+name: security-tests
+
+on:
+  pull_request:
+    paths: [security-tests/**]
+  push:
+    paths: [security-tests/**]
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: security-tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff mypy
+
+      - name: Lint
+        run: ruff check runner bootstrap cloud probes
+
+      - name: Type check
+        run: mypy --ignore-missing-imports runner
+
+      - name: Collect-only (no VM, no cloud)
+        run: python -m pytest --collect-only -q
+
+      - name: Secret guard
+        run: |
+          if git ls-files | grep -E '\.(p12|pem|key)$|(^|/)config\.env$'; then
+            echo "Credentials must never be committed." >&2
+            exit 1
+          fi
+
+      - name: SonarCloud
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: security-tests

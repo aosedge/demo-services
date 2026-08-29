@@ -1,0 +1,13 @@
+# Never commit credentials or local configuration.
+config.env
+*.p12
+*.pem
+*.key
+# Local artefacts.
+*.qcow2
+*.tar.xz
+.run/
+.pytest_cache/
+__pycache__/
+coverage.xml
+.coverage
