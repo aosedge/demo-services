@@ -1,12 +1,22 @@
 # Timing benchmark services
 
-These services measure how long AosCore takes to deploy and start a set of instances. Each generated service is an
-independent AosEdge service running `benchmark-timing`, a C++ binary that pushes a `checkpoint_event` sample
-(`event="Start"`) to VictoriaMetrics as soon as the instance starts, then prints its `AOS_AOS_ITEM_ID`,
-`AOS_SUBJECT_ID`, `AOS_INSTANCE_ID` environment variables and its service ID every 10 seconds - the Start event shows
-up in the same Grafana Events table/annotations as AosCore's own instance start/stop checkpoints, so it can be used
-to measure deployment/start timing across a batch of services. Each service also ships a `test.dat` file of
-configurable random-payload size, so the batch can double as a deployment-size benchmark.
+Purpose: This benchmark measures AosCore lifecycle timing under different service workloads,
+including service deployment, preparation, network setup, and instance start/stop operations.
+
+Each generated service is an independent AosEdge service running `benchmark-timing`,
+a C++ binary that sends a `checkpoint_event (event="Start")` to VictoriaMetrics
+as soon as the instance starts.
+This event is correlated with AosCore's own lifecycle checkpoints to measure timing across a batch of services.
+
+Benchmark workload can be varied by:
+
+- number of services (`--num-services`)
+- instances per service (`--num-instances`)
+- payload size per service (`--data-size`)
+
+A typical test flow is:
+
+build the benchmark binary → generate services → start `report_timing.py` → execute the Operational Speed benchmark procedure
 
 ## Building
 
