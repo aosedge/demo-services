@@ -19,7 +19,9 @@ exactly what was done to the unit.
 """
 from __future__ import annotations
 
+import ipaddress
 import logging
+import os
 
 from .report import note
 from .vm import VM
@@ -28,7 +30,20 @@ _LOG = logging.getLogger("security-tests.network")
 
 # QEMU user-mode networking puts its DNS forwarder on the third address of the
 # emulated subnet, while the gateway sits on the first.
-EMULATED_DNS = "10.0.0.3"
+def _default_emulated_dns() -> str:
+    """Where the emulator answers DNS, derived from the network it emulates.
+
+    QEMU user-mode networking puts its DNS forwarder at the third address of
+    the guest network, so this follows AOS_VM_GUEST_NET rather than repeating
+    an address that would silently go stale if that network were changed.
+    """
+    network = ipaddress.ip_network(os.environ.get("AOS_VM_GUEST_NET", "10.0.0.0/24"))
+    return str(network.network_address + 3)
+
+
+# A different emulator or topology may place its forwarder elsewhere; override
+# with AOS_EMULATED_DNS.
+EMULATED_DNS = os.environ.get("AOS_EMULATED_DNS") or _default_emulated_dns()
 _LINK = "enp0s3"
 
 

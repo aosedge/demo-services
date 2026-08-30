@@ -19,7 +19,12 @@ _LOG = logging.getLogger("security-tests.serial")
 _ANSI = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]")
 _PROMPT = b"# "
 _LOGIN_PROMPT = b"login:"
-_PASSWORD_PROMPT = b"assword"
+_AUTH_PROMPT = b"assword"
+# Kernel messages share this console with the shell, so they land in the
+# middle of command output. They are recognisable by their timestamp prefix
+# and are dropped from what a command is considered to have produced.
+_KERNEL_LINE = re.compile(r"^\[\s*\d+\.\d+\]")
+_NOT_CONNECTED = "console is not connected"
 _RECV = 65536
 
 
@@ -47,7 +52,7 @@ class SerialConsole:
     def _pump(self, seconds: float) -> bytes:
         """Drain the console for a while and return everything seen so far."""
         if self._sock is None:
-            raise SerialError("console is not connected")
+            raise SerialError(_NOT_CONNECTED)
         deadline = time.time() + seconds
         while time.time() < deadline:
             try:
@@ -60,7 +65,7 @@ class SerialConsole:
 
     def _wait_for(self, needles: tuple[bytes, ...], timeout: float) -> bytes | None:
         if self._sock is None:
-            raise SerialError("console is not connected")
+            raise SerialError(_NOT_CONNECTED)
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
@@ -77,7 +82,7 @@ class SerialConsole:
 
     def _send(self, text: str) -> None:
         if self._sock is None:
-            raise SerialError("console is not connected")
+            raise SerialError(_NOT_CONNECTED)
         self._sock.sendall(text.encode())
 
     # ---------------------------------------------------------------- session
@@ -104,7 +109,7 @@ class SerialConsole:
         self._buffer = b""
         self._send(self._user + "\n")
         time.sleep(3)
-        if self._wait_for((_PASSWORD_PROMPT,), 30) is None:
+        if self._wait_for((_AUTH_PROMPT,), 30) is None:
             return False
         time.sleep(2)
         self._send(self._password + "\n")
@@ -116,6 +121,9 @@ class SerialConsole:
         # piped commands hard to delimit reliably.
         self._buffer = b""
         self._send("stty -echo\n")
+        time.sleep(1)
+        # Keep the kernel from writing into the same console we parse.
+        self._send("dmesg -n 1\n")
         time.sleep(1)
         self._pump(1.0)
         return True
@@ -157,5 +165,9 @@ class SerialConsole:
         payload = text[start + len(begin):stop].strip("\r\n")
         tail = text[stop + len(end):].strip().split()
         status = int(tail[0]) if tail and tail[0].isdigit() else 0
-        cleaned = "\n".join(line.rstrip("\r") for line in payload.splitlines())
-        return status, cleaned
+        lines = [
+            line.rstrip("\r")
+            for line in payload.splitlines()
+            if not _KERNEL_LINE.match(line.strip().lstrip("\r"))
+        ]
+        return status, "\n".join(lines)

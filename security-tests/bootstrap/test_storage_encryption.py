@@ -58,7 +58,10 @@ def unit(config, target, cloud, marker):
     state["system_uid"] = system_uid
 
     version = service.publish_probe(cloud, config, marker)
-    service.deliver(cloud, system_uid, config.unit_set_id, config.subject_id, version)
+    service.deliver(
+        cloud, system_uid, config.unit_set_id,
+        subject_id=config.subject_id, version=version,
+    )
     state["probe_running"] = service.wait_until_running(vm)
 
     yield state

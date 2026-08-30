@@ -32,7 +32,8 @@ def delivered(provisioned_unit, config, cloud, marker):
     vm = provisioned_unit["vm"]
     version = service.publish_probe(cloud, config, marker)
     service.deliver(
-        cloud, provisioned_unit["system_uid"], config.unit_set_id, config.subject_id, version
+        cloud, provisioned_unit["system_uid"], config.unit_set_id,
+        subject_id=config.subject_id, version=version,
     )
     return {"running": service.wait_until_running(vm), "vm": vm}
 
@@ -159,12 +160,18 @@ def test_c3_service_not_delivered_to_untargeted_unit(
             f"| grep -c 'id={other_subject}'"
         ).text()
 
-        assert processed.isdigit() and int(processed) > 0, report.failed(
-            CHECK_C3,
-            "the unit did not process any desired status in this window, so its not receiving the "
-            "service proves nothing",
+        assert processed.isdigit(), report.failed(
+            CHECK_C3, f"could not read how many desired-status updates arrived: {processed!r}"
         )
-        assert offered.isdigit() and int(offered) == 0, report.failed(
+        assert int(processed) > 0, report.failed(
+            CHECK_C3,
+            "the unit did not process any desired status in this window, so its not receiving "
+            "the service proves nothing",
+        )
+        assert offered.isdigit(), report.failed(
+            CHECK_C3, f"could not read whether the subject was offered: {offered!r}"
+        )
+        assert int(offered) == 0, report.failed(
             CHECK_C3,
             f"the unit was offered the subject {other_subject} it was never attached to",
         )

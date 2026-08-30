@@ -38,13 +38,13 @@ guest_ip="${AOS_VM_GUEST_IP:-10.0.0.100}"
 command -v qemu-system-x86_64 >/dev/null || {
     echo "qemu-system-x86_64 not found. Install qemu-system-x86." >&2; exit 2; }
 
-if [ ! -f "$bios" ]; then
+if [[ ! -f "$bios" ]]; then
     for candidate in /usr/share/ovmf/OVMF.fd /usr/share/OVMF/OVMF_CODE_4M.fd \
                      /usr/share/OVMF/OVMF_CODE.fd; do
-        [ -f "$candidate" ] && { bios="$candidate"; break; }
+        [[ -f "$candidate" ]] && { bios="$candidate"; break; }
     done
 fi
-[ -f "$bios" ] || { echo "No OVMF firmware found; set AOS_VM_BIOS." >&2; exit 2; }
+[[ -f "$bios" ]] || { echo "No OVMF firmware found; set AOS_VM_BIOS." >&2; exit 2; }
 
 case "$disk_if" in
     scsi) disk_args=(-device virtio-scsi-pci,id=scsi
@@ -53,7 +53,7 @@ case "$disk_if" in
     *)    echo "AOS_VM_DISK_IF must be 'scsi' or 'nvme', got '$disk_if'." >&2; exit 2 ;;
 esac
 
-if [ "$accel" = "kvm" ] && [ -w /dev/kvm ]; then
+if [[ "$accel" == "kvm" && -w /dev/kvm ]]; then
     accel_args=(-cpu host -enable-kvm)
 else
     # Falls back to software emulation so the suite still runs where KVM is

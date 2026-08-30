@@ -20,6 +20,8 @@ import tarfile
 
 _SIGN_TIMEOUT_S = 1800
 
+CONFIG_TEMPLATE = "config.yaml.in"
+CONFIG_RENDERED = "config.yaml"
 PAYLOAD_MEMBER = "./src_any/marker_writer.py"
 
 
@@ -44,14 +46,14 @@ def stage(source: pathlib.Path, work_dir: pathlib.Path, name: str, *,
     if staged.exists():
         shutil.rmtree(staged)
     shutil.copytree(source, staged)
-    template = (staged / "config.yaml.in").read_text(encoding="utf-8")
+    template = (staged / CONFIG_TEMPLATE).read_text(encoding="utf-8")
     rendered = (
         template.replace("@VERSION@", version)
         .replace("@MARKER@", marker)
         .replace("@CODENAME@", codename)
     )
-    (staged / "config.yaml").write_text(rendered, encoding="utf-8")
-    (staged / "config.yaml.in").unlink()
+    (staged / CONFIG_RENDERED).write_text(rendered, encoding="utf-8")
+    (staged / CONFIG_TEMPLATE).unlink()
     if not sp_p12.is_file():
         raise BundleError(f"service-provider certificate not found: {sp_p12}")
     shutil.copy2(sp_p12, staged / "aos-user-sp.p12")

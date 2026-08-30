@@ -32,14 +32,14 @@ def stage_probe(suite_root: pathlib.Path, work_dir: pathlib.Path, marker: str,
         shutil.rmtree(staged)
     shutil.copytree(source, staged)
 
-    config = (staged / "config.yaml.in").read_text(encoding="utf-8")
+    config = (staged / _CONFIG_TEMPLATE).read_text(encoding="utf-8")
     config = (
         config.replace("@VERSION@", version)
         .replace("@MARKER@", marker)
         .replace("@CODENAME@", PROBE_CODENAME)
     )
-    (staged / "config.yaml").write_text(config, encoding="utf-8")
-    (staged / "config.yaml.in").unlink()
+    (staged / _CONFIG_RENDERED).write_text(config, encoding="utf-8")
+    (staged / _CONFIG_TEMPLATE).unlink()
 
     if not sp_p12.is_file():
         raise ServiceError(f"service-provider certificate not found: {sp_p12}")
@@ -55,6 +55,47 @@ def publish_probe(cloud: CloudClient, config, marker: str) -> str:
     )
     publish(staged)
     return version
+
+
+def publish_snooper(cloud: CloudClient, config, marker: str,
+                    targets: tuple[str, ...]) -> str:
+    """Stage, sign and upload the isolation probe; return the version published."""
+    version = next_version(cloud, SNOOPER_CODENAME)
+    source = config.suite_root / "probes" / "snooper"
+    work = config.suite_root / ".run"
+    staged = work / "snooper"
+    if staged.exists():
+        shutil.rmtree(staged)
+    shutil.copytree(source, staged)
+    template = (staged / _CONFIG_TEMPLATE).read_text(encoding="utf-8")
+    rendered = (
+        template.replace("@VERSION@", version)
+        .replace("@MARKER@", marker)
+        .replace("@CODENAME@", SNOOPER_CODENAME)
+        .replace("@TARGETS@", ":".join(targets))
+    )
+    (staged / _CONFIG_RENDERED).write_text(rendered, encoding="utf-8")
+    (staged / _CONFIG_TEMPLATE).unlink()
+    if not config.sp_p12.is_file():
+        raise ServiceError(f"service-provider certificate not found: {config.sp_p12}")
+    shutil.copy2(config.sp_p12, staged / "aos-user-sp.p12")
+    publish(staged)
+    return version
+
+
+def wait_for_snoop_report(vm: VM, timeout_s: int = 900) -> str:
+    """Wait for the isolation probe to write its report, and return it."""
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        path = vm.exec(
+            f"find {INSTANCE_STORAGE} -name '*.snoop' 2>/dev/null | head -1", timeout=300
+        ).text()
+        if path:
+            content = vm.exec(f"cat {path}", timeout=300).text()
+            if content.strip().endswith("}"):
+                return content
+        time.sleep(_POLL_S)
+    return ""
 
 
 def publish(folder: pathlib.Path) -> None:
@@ -87,7 +128,12 @@ PROBE_CODENAME = "security-probe-marker-writer"
 # The tamper check publishes into its own service so that its control bundle
 # can never become the version the delivery tests are offered.
 TAMPER_CODENAME = "security-probe-tamper-check"
+# The isolation probe is its own service too, so its versions cannot become
+# the ones the delivery tests are offered.
+SNOOPER_CODENAME = "security-probe-snooper"
 _VERSION_PREFIX = "1.0.0-rc."
+_CONFIG_TEMPLATE = "config.yaml.in"
+_CONFIG_RENDERED = "config.yaml"
 _READY_STATE = "ready"
 _READY_TIMEOUT_S = 900
 
@@ -132,8 +178,8 @@ def wait_until_ready(cloud: CloudClient, service_id: str, version: str,
     )
 
 
-def deliver(cloud: CloudClient, system_uid: str, unit_set_id: str, subject_id: str,
-            version: str) -> None:
+def deliver(cloud: CloudClient, system_uid: str, unit_set_id: str, *,
+            subject_id: str, version: str, codename: str = PROBE_CODENAME) -> None:
     """Make the cloud offer the probe to this unit.
 
     Three bindings are needed and all three are keyed the way the API expects:
@@ -142,10 +188,10 @@ def deliver(cloud: CloudClient, system_uid: str, unit_set_id: str, subject_id: s
     the unit-set membership the desired status arrives with no services at all
     and nothing reports an error.
     """
-    service_id = cloud.find_service_id(PROBE_CODENAME)
+    service_id = cloud.find_service_id(codename)
     if service_id is None:
         raise ServiceError(
-            f"service {PROBE_CODENAME!r} is not present in the tenant after upload"
+            f"service {codename!r} is not present in the tenant after upload"
         )
     wait_until_ready(cloud, service_id, version)
     _LOG.info("attaching service %s to subject %s", service_id, subject_id)
