@@ -9,7 +9,7 @@ import logging
 
 _LOG = logging.getLogger("security-tests")
 
-_PASS = "PASS"
+_PASS = "PASS"  # noqa: S105 - a result label, not a credential
 _FAIL = "FAIL"
 _INFO = "INFO"
 

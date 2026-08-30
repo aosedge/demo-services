@@ -35,10 +35,10 @@ jobs:
           pip install ruff mypy
 
       - name: Lint
-        run: ruff check runner bootstrap cloud probes
+        run: ruff check runner bootstrap cloud probes conftest.py
 
       - name: Type check
-        run: mypy --ignore-missing-imports runner
+        run: mypy
 
       - name: Collect-only (no VM, no cloud)
         run: python -m pytest --collect-only -q

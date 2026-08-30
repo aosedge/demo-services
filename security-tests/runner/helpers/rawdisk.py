@@ -29,13 +29,13 @@ def data_partition(vm: VM) -> str:
     return f"/dev/{disk}{separator}{_DATA_PARTITION_INDEX}"
 
 
-def partition_fstype(vm: VM, device: "str | None" = None) -> str:
+def partition_fstype(vm: VM, device: str | None = None) -> str:
     """Filesystem type as the kernel sees it - 'crypto_LUKS' when encrypted."""
     target = device or data_partition(vm)
     return vm.exec(f"lsblk -no FSTYPE {target} 2>/dev/null | head -1").text()
 
 
-def is_luks(vm: VM, device: "str | None" = None) -> bool:
+def is_luks(vm: VM, device: str | None = None) -> bool:
     """Authoritative LUKS check via cryptsetup."""
     target = device or data_partition(vm)
     return vm.exec(f"cryptsetup isLuks {target}").ok
@@ -46,7 +46,7 @@ def volume_group_present(vm: VM, name: str = "aosvg") -> bool:
     return name in vm.exec("vgs --noheadings -o vg_name 2>/dev/null").text()
 
 
-def marker_occurrences(vm: VM, marker: str, device: "str | None" = None) -> int:
+def marker_occurrences(vm: VM, marker: str, device: str | None = None) -> int:
     """Count plaintext occurrences of the marker across the whole raw device.
 
     Streams the device through grep inside the guest so no multi-gigabyte

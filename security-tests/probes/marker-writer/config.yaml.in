@@ -10,8 +10,8 @@ publish:
 items:
 - identity:
     type: service
-    codename: security-probe-marker-writer
-    title: Security probe - marker writer
+    codename: @CODENAME@
+    title: Security probe - @CODENAME@
     description: Writes a known marker into instance storage so the suite can
       verify that data at rest is stored as ciphertext.
 

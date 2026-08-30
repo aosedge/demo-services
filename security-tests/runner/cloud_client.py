@@ -20,6 +20,9 @@ from cryptography.hazmat.primitives.serialization import (
 from cryptography.hazmat.primitives.serialization.pkcs12 import load_pkcs12
 
 _TIMEOUT = 60
+_HTTP_OK = 200
+_HTTP_CREATED = 201
+_HTTP_BAD_REQUEST = 400
 
 
 class CloudError(RuntimeError):
@@ -53,29 +56,45 @@ class CloudClient:
         pathlib.Path(handle.name).chmod(0o600)
         return handle.name
 
-    def request(self, method: str, path: str, body: "Any | None" = None) -> requests.Response:
+    @property
+    def client_pem(self) -> str:
+        """Path of the materialised client identity, for direct TLS probes."""
+        return self._pem
+
+    @property
+    def base_url(self) -> str:
+        """Endpoint the suite talks to."""
+        return self._base
+
+    def request(self, method: str, path: str, body: Any | None = None) -> requests.Response:
         """Issue one request; callers decide what an acceptable status is."""
         split = urlsplit(self._base + path.lstrip("/"))
-        url = urlunsplit((split.scheme, split.netloc, split.path.rstrip("/") + "/", split.query, ""))
-        kwargs: "dict[str, Any]" = {"json": body} if body is not None else {}
+        url = urlunsplit(
+            (split.scheme, split.netloc, split.path.rstrip("/") + "/", split.query, "")
+        )
+        kwargs: dict[str, Any] = {"json": body} if body is not None else {}
         return requests.request(
             method, url, cert=self._pem, verify=self._ca, timeout=_TIMEOUT, **kwargs
         )
 
-    def get_json(self, path: str) -> "dict[str, Any]":
+    def get_json(self, path: str) -> dict[str, Any]:
         response = self.request("GET", path)
-        if response.status_code != 200:
+        if response.status_code != _HTTP_OK:
             raise CloudError(f"GET {path} returned {response.status_code}")
         return response.json()
 
     # ---------------------------------------------------------------- units
 
-    def find_unit(self, system_uid: str) -> "dict[str, Any] | None":
+    def find_unit(self, system_uid: str) -> dict[str, Any] | None:
         """Return the cloud record for a system id, or None when unknown."""
         for item in self.get_json("units").get("items", []):
             if item.get("system_uid") == system_uid:
                 return item
         return None
+
+    def unit_system_uids(self) -> list[str]:
+        """System ids the tenant currently knows about."""
+        return [str(item["system_uid"]) for item in self.get_json("units").get("items", [])]
 
     def attach_unit(self, system_uid: str, unit_set_id: str, subject_id: str) -> None:
         """Attach a unit to the validation unit-set and to the test subject.
@@ -87,7 +106,10 @@ class CloudClient:
             response = self.request("POST", path, {"system_uids": [system_uid]})
             # A repeated attachment is reported as a 400 rather than a conflict;
             # it means the binding the caller asked for already holds.
-            already = response.status_code == 400 and "already" in response.text.lower()
+            already = (
+                response.status_code == _HTTP_BAD_REQUEST
+                and "already" in response.text.lower()
+            )
             if response.status_code not in (200, 201) and not already:
                 raise CloudError(f"POST {path} returned {response.status_code}: {response.text}")
 
@@ -97,14 +119,14 @@ class CloudClient:
 
     # ---------------------------------------------------------------- services
 
-    def find_service_id(self, codename: str) -> "str | None":
+    def find_service_id(self, codename: str) -> str | None:
         """Cloud id of a published service, by codename."""
         for item in self.get_json("services").get("items", []):
             if item.get("codename") == codename:
                 return str(item["id"])
         return None
 
-    def service_version_state(self, service_id: str, version: str) -> "str | None":
+    def service_version_state(self, service_id: str, version: str) -> str | None:
         """Container state of one uploaded version, or None if it is unknown.
 
         An uploaded bundle is validated by the cloud before it can be used; the
@@ -115,7 +137,7 @@ class CloudClient:
                 return item.get("container_state")
         return None
 
-    def subject_service_ids(self, subject_id: str) -> "list[str]":
+    def subject_service_ids(self, subject_id: str) -> list[str]:
         """Ids of the services the subject currently offers."""
         detail = self.get_json(f"subjects/{subject_id}")
         return [str(item["id"]) for item in (detail.get("services") or [])]
@@ -137,6 +159,26 @@ class CloudClient:
                 f"attaching service {service_id} to subject {subject_id} returned "
                 f"{response.status_code}: {response.text}"
             )
+
+    def service_versions(self, service_id: str) -> dict[str, str]:
+        """Map of published version -> container state for one service."""
+        return {
+            str(item["version"]): str(item.get("container_state"))
+            for item in self.get_json(f"services/{service_id}").get("versions", [])
+        }
+
+    # ---------------------------------------------------------------- subjects
+
+    def create_subject(self, label: str) -> str:
+        """Create a group subject and return its id."""
+        response = self.request("POST", "subjects", {"label": label, "is_group": True})
+        if response.status_code not in (200, 201):
+            raise CloudError(f"creating subject {label!r} returned {response.status_code}")
+        return str(response.json()["id"])
+
+    def delete_subject(self, subject_id: str) -> None:
+        """Remove a subject the suite created."""
+        self.request("DELETE", f"subjects/{subject_id}")
 
     def deprovision_and_delete(self, unit_uid: str) -> None:
         """Release the cloud-side unit record. The unit must be offline first."""

@@ -6,7 +6,7 @@ import pathlib
 import time
 from dataclasses import dataclass
 
-_DEFAULTS: "dict[str, str]" = {
+_DEFAULTS: dict[str, str] = {
     "AOS_TARGET": "local-ubuntu",
     "AOS_VM_ACCEL": "kvm",
     "AOS_VM_DISK_IF": "scsi",
@@ -26,8 +26,8 @@ class ConfigError(RuntimeError):
     """Raised when the suite is not configured well enough to run."""
 
 
-def _read_env_file(path: pathlib.Path) -> "dict[str, str]":
-    values: "dict[str, str]" = {}
+def _read_env_file(path: pathlib.Path) -> dict[str, str]:
+    values: dict[str, str] = {}
     if not path.is_file():
         return values
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -80,7 +80,8 @@ class Config:
             raise ConfigError(
                 "AosCloud settings are incomplete: "
                 + ", ".join(missing)
-                + ". There is no offline mode - see README, section 'Why the cloud is always needed'."
+                + ". There is no offline mode - see the README section"
+                + " 'Why the cloud is always needed'."
             )
         if not self.oem_p12.is_file():
             raise ConfigError(f"OEM certificate not found: {self.oem_p12}")
@@ -101,12 +102,13 @@ def _resolve_probe_version(value: str) -> str:
     return f"1.0.0-rc.{int(time.time())}"
 
 
-def load(suite_root: "pathlib.Path | None" = None) -> Config:
+def load(suite_root: pathlib.Path | None = None) -> Config:
     """Load config.env, overlaid by real environment variables."""
     root = suite_root or pathlib.Path(__file__).resolve().parent.parent
     values = dict(_DEFAULTS)
     values.update(_read_env_file(root / "config.env"))
-    for key in list(values) + [
+    for key in [
+        *values,
         "AOS_CLOUD_API",
         "AOS_OEM_P12",
         "AOS_SP_P12",

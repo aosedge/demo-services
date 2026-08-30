@@ -41,7 +41,7 @@ def can_resolve(vm: VM, host: str) -> bool:
     return vm.exec(f"nslookup {host} >/dev/null 2>&1", timeout=90).ok
 
 
-def ensure_name_resolution(vm: VM, host: str, dns: str = EMULATED_DNS) -> "str | None":
+def ensure_name_resolution(vm: VM, host: str, dns: str = EMULATED_DNS) -> str | None:
     """Guarantee the unit can resolve *host*; return a note when it was changed.
 
     Returns None when nothing had to be done, so a bridged or otherwise

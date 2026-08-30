@@ -74,7 +74,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config) -> None:
     printed together at the end, in check order.
     """
     del exitstatus, config
-    lines: "set[tuple[str, str]]" = set()
+    lines: set[tuple[str, str]] = set()
     for reports in terminalreporter.stats.values():
         for report in reports:
             for name, value in getattr(report, "user_properties", []):

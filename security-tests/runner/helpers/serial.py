@@ -34,7 +34,7 @@ class SerialConsole:
         self._path = socket_path
         self._user = user
         self._password = password
-        self._sock: "socket.socket | None" = None
+        self._sock: socket.socket | None = None
         self._buffer = b""
 
     # ---------------------------------------------------------------- plumbing
@@ -54,11 +54,11 @@ class SerialConsole:
                 chunk = self._sock.recv(_RECV)
                 if chunk:
                     self._buffer += chunk
-            except socket.timeout:
+            except TimeoutError:
                 continue
         return _ANSI.sub(b"", self._buffer)
 
-    def _wait_for(self, needles: "tuple[bytes, ...]", timeout: float) -> "bytes | None":
+    def _wait_for(self, needles: tuple[bytes, ...], timeout: float) -> bytes | None:
         if self._sock is None:
             raise SerialError("console is not connected")
         deadline = time.time() + timeout
@@ -67,7 +67,7 @@ class SerialConsole:
                 chunk = self._sock.recv(_RECV)
                 if chunk:
                     self._buffer += chunk
-            except socket.timeout:
+            except TimeoutError:
                 pass
             clean = _ANSI.sub(b"", self._buffer)
             for needle in needles:
@@ -127,7 +127,7 @@ class SerialConsole:
 
     # ---------------------------------------------------------------- commands
 
-    def run(self, command: str, timeout: float = 300.0) -> "tuple[int, str]":
+    def run(self, command: str, timeout: float = 300.0) -> tuple[int, str]:
         """Run one command; return its exit status and combined output.
 
         Output is delimited by per-call random markers. The echoed command line

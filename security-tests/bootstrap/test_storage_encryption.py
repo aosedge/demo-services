@@ -44,7 +44,7 @@ def unit(config, target, cloud, marker):
     config.require_cloud()
     vm = target.start()
 
-    state: "dict[str, object]" = {"vm": vm, "pre_provision_fstype": None, "system_uid": None}
+    state: dict[str, object] = {"vm": vm, "pre_provision_fstype": None, "system_uid": None}
     cloud_host = urlsplit(config.cloud_api).hostname or ""
     state["network_note"] = network.ensure_name_resolution(vm, cloud_host)
     state["pre_provision_fstype"] = rawdisk.partition_fstype(vm)
@@ -57,14 +57,8 @@ def unit(config, target, cloud, marker):
     system_uid = provisioning.provision(config)
     state["system_uid"] = system_uid
 
-    staged = service.stage_probe(
-        config.suite_root, config.suite_root / ".run", marker,
-        config.probe_version, config.sp_p12,
-    )
-    service.publish(staged)
-    service.deliver(
-        cloud, system_uid, config.unit_set_id, config.subject_id, config.probe_version
-    )
+    version = service.publish_probe(cloud, config, marker)
+    service.deliver(cloud, system_uid, config.unit_set_id, config.subject_id, version)
     state["probe_running"] = service.wait_until_running(vm)
 
     yield state
@@ -81,7 +75,10 @@ def test_a0_no_encrypted_volume_before_provisioning(unit, record_property):
     """Before the unit is bound to a tenant there is no encrypted volume at all."""
     fstype = unit["pre_provision_fstype"]
     assert fstype != "crypto_LUKS", (
-        report.failed(CHECK_A0, f"an encrypted volume already existed before provisioning: {fstype}")
+        report.failed(
+            CHECK_A0,
+            f"an encrypted volume already existed before provisioning: {fstype}",
+        )
     )
     record_property(
         CHECK_A0,
@@ -98,7 +95,8 @@ def test_a1_volume_is_luks(unit, record_property):
     vm = unit["vm"]
     fstype = rawdisk.partition_fstype(vm)
     assert fstype == "crypto_LUKS", report.failed(
-        CHECK_A1, f"the AosCore data partition is {fstype or 'unformatted'}, not an encrypted volume"
+        CHECK_A1,
+        f"the AosCore data partition is {fstype or 'unformatted'}, not an encrypted volume",
     )
     assert rawdisk.is_luks(vm), report.failed(
         CHECK_A1, "cryptsetup does not recognise the partition as LUKS"

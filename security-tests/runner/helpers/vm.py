@@ -61,8 +61,8 @@ class VM:
         self._work = work_dir
         self._disk = work_dir / "vm-main.qcow2"
         self._serial = work_dir / "serial.sock"
-        self._process: "subprocess.Popen[bytes] | None" = None
-        self._console: "SerialConsole | None" = None
+        self._process: subprocess.Popen[bytes] | None = None
+        self._console: SerialConsole | None = None
 
     # ---------------------------------------------------------------- lifecycle
 
@@ -71,11 +71,13 @@ class VM:
         if not self._cfg.vm_image.is_file():
             raise VMError(f"VM image not found: {self._cfg.vm_image}")
         self._work.mkdir(parents=True, exist_ok=True)
-        if not self._disk.exists():
-            _LOG.info("copying VM image to %s", self._disk)
-            shutil.copy2(self._cfg.vm_image, self._disk)
+        # Always taken afresh from the pinned image. Reusing a disk that a
+        # previous run had provisioned would quietly invalidate any check that
+        # describes the state of a unit before provisioning.
+        _LOG.info("copying VM image to %s", self._disk)
+        shutil.copy2(self._cfg.vm_image, self._disk)
 
-    def verify_image_hash(self) -> "tuple[bool, str]":
+    def verify_image_hash(self) -> tuple[bool, str]:
         """Check the configured image against its expected SHA-256."""
         if not self._cfg.vm_image_sha256:
             return False, "no AOS_VM_IMAGE_SHA256 configured"
@@ -102,7 +104,7 @@ class VM:
             "AOS_VM_CONSOLE": str(self._work / "vm-console.log"),
         }
         _LOG.info("starting VM via %s", script)
-        self._process = subprocess.Popen(  # noqa: S603 - fixed argv, no shell
+        self._process = subprocess.Popen(
             ["/usr/bin/env", "bash", str(script)],
             env=env,
             stdout=subprocess.DEVNULL,

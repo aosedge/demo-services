@@ -33,7 +33,11 @@ def stage_probe(suite_root: pathlib.Path, work_dir: pathlib.Path, marker: str,
     shutil.copytree(source, staged)
 
     config = (staged / "config.yaml.in").read_text(encoding="utf-8")
-    config = config.replace("@VERSION@", version).replace("@MARKER@", marker)
+    config = (
+        config.replace("@VERSION@", version)
+        .replace("@MARKER@", marker)
+        .replace("@CODENAME@", PROBE_CODENAME)
+    )
     (staged / "config.yaml").write_text(config, encoding="utf-8")
     (staged / "config.yaml.in").unlink()
 
@@ -43,9 +47,19 @@ def stage_probe(suite_root: pathlib.Path, work_dir: pathlib.Path, marker: str,
     return staged
 
 
+def publish_probe(cloud: CloudClient, config, marker: str) -> str:
+    """Stage, sign and upload the probe, and return the version published."""
+    version = next_version(cloud, PROBE_CODENAME)
+    staged = stage_probe(
+        config.suite_root, config.suite_root / ".run", marker, version, config.sp_p12
+    )
+    publish(staged)
+    return version
+
+
 def publish(folder: pathlib.Path) -> None:
     """Sign and upload the staged probe with aos-signer."""
-    completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
+    completed = subprocess.run(
         ["aos-signer", "go"], cwd=folder, capture_output=True, text=True,
         timeout=1800, check=False,
     )
@@ -70,8 +84,30 @@ def wait_until_running(vm: VM, timeout_s: int = _DELIVERY_TIMEOUT_S) -> bool:
 
 
 PROBE_CODENAME = "security-probe-marker-writer"
+# The tamper check publishes into its own service so that its control bundle
+# can never become the version the delivery tests are offered.
+TAMPER_CODENAME = "security-probe-tamper-check"
+_VERSION_PREFIX = "1.0.0-rc."
 _READY_STATE = "ready"
 _READY_TIMEOUT_S = 900
+
+
+def next_version(cloud: CloudClient, codename: str) -> str:
+    """Return a version strictly above every version this service already has.
+
+    The cloud keeps offering the highest existing version, and it orders
+    pre-release identifiers as text, so a number with more digits outranks a
+    larger-looking one. Reading the current versions and stepping past them is
+    the only way to be sure the bundle just published is the one delivered.
+    """
+    service_id = cloud.find_service_id(codename)
+    highest = 0
+    if service_id:
+        for version in cloud.service_versions(service_id):
+            suffix = version[len(_VERSION_PREFIX):] if version.startswith(_VERSION_PREFIX) else ""
+            if suffix.isdigit():
+                highest = max(highest, int(suffix))
+    return f"{_VERSION_PREFIX}{max(highest + 1, int(time.time()))}"
 
 
 def wait_until_ready(cloud: CloudClient, service_id: str, version: str,
@@ -132,6 +168,21 @@ def find_marker_path(vm: VM, marker: str) -> str:
     return vm.exec(
         f"grep -rl -- {marker!r} {INSTANCE_STORAGE} 2>/dev/null | head -1", timeout=900
     ).text()
+
+
+def wait_for_marker(vm: VM, marker: str, timeout_s: int = 600) -> str:
+    """Wait for the instance to write its marker, and return where it landed.
+
+    Being reported active only means the runtime started the container; the
+    payload writes its data a moment later, so a single look can miss it.
+    """
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        path = find_marker_path(vm, marker)
+        if path:
+            return path
+        time.sleep(_POLL_S)
+    return ""
 
 
 def read_marker_in_instance(vm: VM, marker: str) -> bool:
