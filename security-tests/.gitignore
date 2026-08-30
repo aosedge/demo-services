@@ -1,13 +1,21 @@
-# Never commit credentials or local configuration.
+# Credentials and local configuration - never commit these.
 config.env
 *.p12
 *.pem
 *.key
+*.pfx
+# The example is the template users copy; it holds no secrets and stays tracked.
+!config.example.env
+
 # Local artefacts.
+.run/
+staging/
 *.qcow2
 *.tar.xz
-.run/
-.pytest_cache/
-__pycache__/
+
+# Test and build output.
 coverage.xml
 .coverage
+.pytest_cache/
+__pycache__/
+*.pyc
