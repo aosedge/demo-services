@@ -70,9 +70,34 @@ def wait_until_running(vm: VM, timeout_s: int = _DELIVERY_TIMEOUT_S) -> bool:
 
 
 PROBE_CODENAME = "security-probe-marker-writer"
+_READY_STATE = "ready"
+_READY_TIMEOUT_S = 900
 
 
-def deliver(cloud: CloudClient, system_uid: str, unit_set_id: str, subject_id: str) -> None:
+def wait_until_ready(cloud: CloudClient, service_id: str, version: str,
+                     timeout_s: int = _READY_TIMEOUT_S) -> None:
+    """Block until the uploaded version is usable.
+
+    Uploading is not enough: the cloud validates the bundle first, and
+    assigning a service whose version is not yet "ready" is refused with
+    HTTP 400 ("without versions in \"ready\" state cannot be assigned").
+    """
+    deadline = time.time() + timeout_s
+    state = None
+    while time.time() < deadline:
+        state = cloud.service_version_state(service_id, version)
+        if state == _READY_STATE:
+            _LOG.info("service %s version %s is ready", service_id, version)
+            return
+        time.sleep(_POLL_S)
+    raise ServiceError(
+        f"service {service_id} version {version} did not reach "
+        f"{_READY_STATE!r} within {timeout_s}s (last state: {state!r})"
+    )
+
+
+def deliver(cloud: CloudClient, system_uid: str, unit_set_id: str, subject_id: str,
+            version: str) -> None:
     """Make the cloud offer the probe to this unit.
 
     Three bindings are needed and all three are keyed the way the API expects:
@@ -86,15 +111,42 @@ def deliver(cloud: CloudClient, system_uid: str, unit_set_id: str, subject_id: s
         raise ServiceError(
             f"service {PROBE_CODENAME!r} is not present in the tenant after upload"
         )
+    wait_until_ready(cloud, service_id, version)
     _LOG.info("attaching service %s to subject %s", service_id, subject_id)
     cloud.attach_service_to_subject(subject_id, service_id)
     _LOG.info("attaching unit %s to unit-set and subject", system_uid)
     cloud.attach_unit(system_uid, unit_set_id, subject_id)
 
 
-def read_marker_in_instance(vm: VM, marker: str) -> bool:
-    """Whether the marker is readable through the instance storage mount."""
-    found = vm.exec(
-        f"grep -rl -- {marker!r} /var/aos/storages 2>/dev/null | head -1"
+INSTANCE_STORAGE = "/var/aos/storages"
+
+
+def find_marker_path(vm: VM, marker: str) -> str:
+    """Path of the *data file* the probe wrote, as seen from the unit, or "".
+
+    Scoped to the instance storage area on purpose. Searching all of /var/aos
+    also matches the marker inside the service image blob, because the value is
+    carried into the bundle as an environment variable - so a wider search
+    would report success even if the instance had never written anything.
+    """
+    return vm.exec(
+        f"grep -rl -- {marker!r} {INSTANCE_STORAGE} 2>/dev/null | head -1", timeout=900
     ).text()
-    return bool(found)
+
+
+def read_marker_in_instance(vm: VM, marker: str) -> bool:
+    """Whether the marker written by the probe is readable on the unit."""
+    return bool(find_marker_path(vm, marker))
+
+
+def storage_layout(vm: VM) -> str:
+    """Short description of the instance storage area, for failure messages."""
+    return vm.exec("ls -R /var/aos/storages 2>/dev/null | head -20").text()
+
+
+def instance_log_tail(vm: VM, lines: int = 15) -> str:
+    """Recent service-instance output, for failure messages."""
+    return vm.exec(
+        f"journalctl --no-pager -o cat --since -30min 2>/dev/null "
+        f"| grep -iE 'marker|traceback|storage' | tail -{lines}"
+    ).text()

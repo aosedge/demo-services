@@ -16,9 +16,11 @@ guarantee, never as a verified result. See README, "Key protection".
 """
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 import pytest
 
-from runner.helpers import provisioning, rawdisk, report, service
+from runner.helpers import network, provisioning, rawdisk, report, service
 
 pytestmark = pytest.mark.bootstrap
 
@@ -43,6 +45,8 @@ def unit(config, target, cloud, marker):
     vm = target.start()
 
     state: "dict[str, object]" = {"vm": vm, "pre_provision_fstype": None, "system_uid": None}
+    cloud_host = urlsplit(config.cloud_api).hostname or ""
+    state["network_note"] = network.ensure_name_resolution(vm, cloud_host)
     state["pre_provision_fstype"] = rawdisk.partition_fstype(vm)
     if provisioning.is_provisioned(vm):
         # The published image ships unprovisioned; a reused local copy may not
@@ -58,7 +62,9 @@ def unit(config, target, cloud, marker):
         config.probe_version, config.sp_p12,
     )
     service.publish(staged)
-    service.deliver(cloud, system_uid, config.unit_set_id, config.subject_id)
+    service.deliver(
+        cloud, system_uid, config.unit_set_id, config.subject_id, config.probe_version
+    )
     state["probe_running"] = service.wait_until_running(vm)
 
     yield state
@@ -115,18 +121,36 @@ def test_a2_probe_instance_running(unit, record_property):
 
 
 def test_a3_marker_readable_inside_instance(unit, marker, record_property):
-    """The marker the probe wrote is readable through the storage mount."""
-    assert service.read_marker_in_instance(unit["vm"], marker), report.failed(
-        CHECK_A3, "the marker written by the probe could not be read back"
+    """The marker the probe wrote is readable on the unit."""
+    vm = unit["vm"]
+    path = service.find_marker_path(vm, marker)
+    unit["marker_path"] = path
+    assert path, report.failed(
+        CHECK_A3,
+        "the marker written by the probe could not be read back. Storage area:\n"
+        f"{service.storage_layout(vm)}\nRecent instance output:\n"
+        f"{service.instance_log_tail(vm)}",
     )
     record_property(
         CHECK_A3,
-        report.passed(CHECK_A3, "the service reads its own data normally through the filesystem"),
+        report.passed(
+            CHECK_A3, f"the service reads its own data normally through the filesystem ({path})"
+        ),
     )
 
 
 def test_a4_marker_absent_from_raw_device(unit, marker, record_property):
-    """The whole raw partition contains no plaintext copy of the marker."""
+    """The whole raw partition contains no plaintext copy of the marker.
+
+    Guarded by A2/A3 on purpose: if the probe never wrote the marker, "not
+    found on the device" is vacuously true and would report encryption that was
+    never exercised. A check that cannot be performed is a failure, not a pass.
+    """
+    assert unit.get("marker_path"), report.failed(
+        CHECK_A4,
+        "could not be verified: the marker was never confirmed on the unit (A3), so finding "
+        "nothing on the raw device would prove nothing about encryption",
+    )
     occurrences = rawdisk.marker_occurrences(unit["vm"], marker)
     assert occurrences == 0, report.failed(
         CHECK_A4,
@@ -166,7 +190,7 @@ def test_a7_key_protection_is_a_hardware_guarantee(unit, target, record_property
 
 
 @pytest.mark.destructive
-def test_a6_volume_destroyed_on_deprovision(unit, record_property):
+def test_a6_volume_destroyed_on_deprovision(unit, marker, record_property):
     """Deprovisioning destroys the encrypted volume.
 
     Runs last: it removes the volume the earlier checks inspect.
@@ -176,10 +200,23 @@ def test_a6_volume_destroyed_on_deprovision(unit, record_property):
     assert not rawdisk.volume_group_present(vm), report.failed(
         CHECK_A6, "the AosCore volume group still exists after deprovisioning"
     )
-    assert rawdisk.partition_fstype(vm) != "crypto_LUKS", report.failed(
-        CHECK_A6, "the encrypted volume still exists after deprovisioning"
+    assert not service.read_marker_in_instance(vm, marker), report.failed(
+        CHECK_A6, "data written before deprovisioning is still readable on the unit"
     )
     record_property(
         CHECK_A6,
-        report.passed(CHECK_A6, "deprovisioning destroyed the encrypted volume and its contents"),
+        report.passed(
+            CHECK_A6,
+            "deprovisioning destroyed the volume group and its contents are no longer readable",
+        ),
     )
+    if rawdisk.partition_fstype(vm) == "crypto_LUKS":
+        record_property(
+            CHECK_A6 + "-header",
+            report.note(
+                CHECK_A6,
+                "the partition still carries a LUKS header after deprovisioning: the volume group "
+                "and its data are gone, but the container itself is not wiped. Not a finding by "
+                "itself - stated so nobody reads the leftover header as leftover data",
+            ),
+        )

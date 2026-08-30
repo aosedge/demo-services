@@ -63,3 +63,24 @@ def cloud(config, ca_bundle):
 def marker():
     """A fresh random marker per run, so a stale one cannot make a test pass."""
     return "AOSSECMARK" + secrets.token_hex(16).upper()
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config) -> None:
+    """Print the plain-language result of every check.
+
+    pytest only shows captured output for failures, so on a fully passing run
+    the customer-facing statements would never be seen - which is the whole
+    point of the suite. They are collected from the recorded properties and
+    printed together at the end, in check order.
+    """
+    del exitstatus, config
+    lines: "set[tuple[str, str]]" = set()
+    for reports in terminalreporter.stats.values():
+        for report in reports:
+            for name, value in getattr(report, "user_properties", []):
+                lines.add((str(name), str(value)))
+    if not lines:
+        return
+    terminalreporter.write_sep("=", "what this run established")
+    for _, text in sorted(lines):
+        terminalreporter.write_line(text)

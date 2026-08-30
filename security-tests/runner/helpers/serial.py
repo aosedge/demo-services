@@ -109,7 +109,16 @@ class SerialConsole:
         time.sleep(2)
         self._send(self._password + "\n")
         time.sleep(5)
-        return self._wait_for((_PROMPT,), 60) is not None
+        if self._wait_for((_PROMPT,), 60) is None:
+            return False
+        # Silence terminal echo: the console would otherwise return every
+        # command back alongside its output, which makes the result of long or
+        # piped commands hard to delimit reliably.
+        self._buffer = b""
+        self._send("stty -echo\n")
+        time.sleep(1)
+        self._pump(1.0)
+        return True
 
     def close(self) -> None:
         if self._sock is not None:
@@ -126,9 +135,15 @@ class SerialConsole:
         opening marker onwards.
         """
         token = secrets.token_hex(6).upper()
-        begin, end = f"__B{token}__", f"__E{token}__"
+        begin, end = f"B{token}", f"E{token}"
         self._buffer = b""
-        self._send(f"echo {begin}; {command}; echo {end}$?\n")
+        # printf keeps the marker out of the echoed command line: the line
+        # carries the format string and the token separately, while only the
+        # output carries them joined. Without that the delimiters match the
+        # echo of the command itself.
+        self._send(
+            f"printf 'B%s\\n' {token}; {command}; printf 'E%s %d\\n' {token} $?\n"
+        )
 
         if self._wait_for((end.encode(),), timeout) is None:
             raise SerialError(f"command timed out after {timeout}s: {command}")
@@ -140,7 +155,7 @@ class SerialConsole:
         if start < 0 or stop < 0:
             raise SerialError(f"could not delimit output of: {command}")
         payload = text[start + len(begin):stop].strip("\r\n")
-        status_text = text[stop + len(end):].strip().split()
-        status = int(status_text[0]) if status_text and status_text[0].isdigit() else 0
+        tail = text[stop + len(end):].strip().split()
+        status = int(tail[0]) if tail and tail[0].isdigit() else 0
         cleaned = "\n".join(line.rstrip("\r") for line in payload.splitlines())
         return status, cleaned

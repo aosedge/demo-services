@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import time
 from dataclasses import dataclass
 
 _DEFAULTS: "dict[str, str]" = {
@@ -17,7 +18,7 @@ _DEFAULTS: "dict[str, str]" = {
     "AOS_VM_SSH_USER": "root",
     "AOS_VM_SSH_PASSWORD": "Password1",
     "AOS_VM_BIOS": "/usr/share/ovmf/OVMF.fd",
-    "AOS_PROBE_VERSION": "1.0.0-rc.1",
+    "AOS_PROBE_VERSION": "auto",
 }
 
 
@@ -85,6 +86,21 @@ class Config:
             raise ConfigError(f"OEM certificate not found: {self.oem_p12}")
 
 
+def _resolve_probe_version(value: str) -> str:
+    """Give every run its own service version.
+
+    Re-uploading an existing version does not replace the bundle already held
+    by the cloud, so a fixed version would silently keep deploying the first
+    payload ever published - with the first run's marker inside it. The
+    pre-release label is kept and only its number grows, because the cloud
+    compares pre-release identifiers alphanumerically and would otherwise go on
+    offering the older version.
+    """
+    if value and value != "auto":
+        return value
+    return f"1.0.0-rc.{int(time.time())}"
+
+
 def load(suite_root: "pathlib.Path | None" = None) -> Config:
     """Load config.env, overlaid by real environment variables."""
     root = suite_root or pathlib.Path(__file__).resolve().parent.parent
@@ -121,6 +137,6 @@ def load(suite_root: "pathlib.Path | None" = None) -> Config:
         ssh_user=values["AOS_VM_SSH_USER"],
         ssh_password=values["AOS_VM_SSH_PASSWORD"],
         bios=values["AOS_VM_BIOS"],
-        probe_version=values["AOS_PROBE_VERSION"],
+        probe_version=_resolve_probe_version(values["AOS_PROBE_VERSION"]),
         suite_root=root,
     )

@@ -85,7 +85,10 @@ class CloudClient:
         """
         for path in (f"unit-sets/{unit_set_id}/units", f"subjects/{subject_id}/units"):
             response = self.request("POST", path, {"system_uids": [system_uid]})
-            if response.status_code not in (200, 201):
+            # A repeated attachment is reported as a 400 rather than a conflict;
+            # it means the binding the caller asked for already holds.
+            already = response.status_code == 400 and "already" in response.text.lower()
+            if response.status_code not in (200, 201) and not already:
                 raise CloudError(f"POST {path} returned {response.status_code}: {response.text}")
 
     def detach_unit(self, system_uid: str, subject_id: str) -> None:
@@ -101,12 +104,35 @@ class CloudClient:
                 return str(item["id"])
         return None
 
+    def service_version_state(self, service_id: str, version: str) -> "str | None":
+        """Container state of one uploaded version, or None if it is unknown.
+
+        An uploaded bundle is validated by the cloud before it can be used; the
+        version only becomes usable once this reports "ready".
+        """
+        for item in self.get_json(f"services/{service_id}").get("versions", []):
+            if item.get("version") == version:
+                return item.get("container_state")
+        return None
+
+    def subject_service_ids(self, subject_id: str) -> "list[str]":
+        """Ids of the services the subject currently offers."""
+        detail = self.get_json(f"subjects/{subject_id}")
+        return [str(item["id"]) for item in (detail.get("services") or [])]
+
     def attach_service_to_subject(self, subject_id: str, service_id: str) -> None:
-        """Make the subject offer this service. Idempotent."""
+        """Make the subject offer this service.
+
+        Idempotent by checking membership first: re-posting an already attached
+        service is rejected with HTTP 400 ("already contains of the provided
+        service"), which would otherwise break every run after the first.
+        """
+        if service_id in self.subject_service_ids(subject_id):
+            return
         response = self.request(
             "POST", f"subjects/{subject_id}/services", {"service_ids": [service_id]}
         )
-        if response.status_code not in (200, 201, 409):
+        if response.status_code not in (200, 201):
             raise CloudError(
                 f"attaching service {service_id} to subject {subject_id} returned "
                 f"{response.status_code}: {response.text}"
