@@ -1,14 +1,12 @@
 """Tests D and E - what an instance can reach, and what identity it runs as.
 
-Both are answered from one deployment: a probe that tries to read things
-belonging to the unit, tries the usual ways of becoming root, and writes down
-exactly how each attempt ended.
+Both are answered from one deployment: a probe tries to read files belonging to
+the unit, tries to become root by syscall, and records the errno of every
+attempt.
 
-Two things are deliberately reported as statements rather than results:
-domain isolation, because this target runs no hypervisor at all, and explicit
-IAM permission grants, because nothing on the image or in the published demo
-services exposes a permission to grant or withhold. Writing a test that
-"passes" against a surface that is not there would prove nothing.
+Domain isolation (D3) and enforcement of granted permissions (E3) are reported
+as statements rather than results: this image runs no hypervisor, and nothing
+on it declares a permission to grant or withhold.
 """
 from __future__ import annotations
 
@@ -77,7 +75,11 @@ def test_d1_instance_reads_its_own_data(snooped, record_property):
 
 
 def test_d2_unit_data_is_not_reachable_from_an_instance(snooped, record_property):
-    """Files that exist on the unit are unreachable from inside an instance."""
+    """Files that exist on the unit are unreachable from inside an instance.
+
+    Each target is confirmed present on the unit first, so a refusal cannot be
+    a path that was never there.
+    """
     missing_ground_truth = [t for t, present in snooped["exists_on_unit"].items() if not present]
     assert not missing_ground_truth, report.failed(
         CHECK_D2,
@@ -105,7 +107,11 @@ def test_d2_unit_data_is_not_reachable_from_an_instance(snooped, record_property
 
 
 def test_d3_domain_isolation_is_a_platform_property(provisioned_unit, record_property):
-    """State domain isolation honestly for this target."""
+    """Report domain isolation for this target rather than asserting it.
+
+    The VM image runs no hypervisor, so there are no domains to separate and
+    nothing here can demonstrate the property either way.
+    """
     vm = provisioned_unit["vm"]
     hypervisor = vm.exec("test -d /proc/xen && echo yes || echo no").text()
     if hypervisor == "yes":
@@ -124,7 +130,10 @@ def test_d3_domain_isolation_is_a_platform_property(provisioned_unit, record_pro
 
 
 def test_e1_instance_runs_as_a_granted_non_root_identity(snooped, record_property):
-    """The instance runs as the unit-assigned identity, not as root."""
+    """The instance runs as the unit-assigned identity, not as root.
+
+    A non-root identity is what makes the escalation attempts in E2 meaningful.
+    """
     uid = snooped["report"]["uid"]
     gid = snooped["report"]["gid"]
     assert uid != 0, report.failed(
@@ -178,7 +187,11 @@ def test_e2_privilege_escalation_is_refused(snooped, record_property):
 
 
 def test_e3_explicit_permission_grants(record_property):
-    """Say plainly that granted-permission enforcement was not exercised."""
+    """Report that granted-permission enforcement was not exercised.
+
+    No permission surface is configured on the image, so there is nothing to
+    grant or withhold and no grant/deny test can be written honestly.
+    """
     record_property(
         CHECK_E3,
         report.note(

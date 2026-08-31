@@ -1,18 +1,13 @@
-"""Test A - data at rest on an AosCore unit is stored as ciphertext.
+"""Test A - deployable-item data at rest is stored as ciphertext.
 
-WHAT THIS PROVES, and what it deliberately does not
----------------------------------------------------
-On this target the suite proves that AosCore keeps deployable-item data on an
-encrypted volume: the volume is LUKS2, and a marker written by a running
-service cannot be found in plaintext anywhere on the raw partition.
+Proves that AosCore keeps service data on a LUKS2 volume, and that a marker
+written by a running instance appears nowhere in plaintext on the raw
+partition.
 
-It does NOT prove that the encryption key is protected against extraction.
-On a QEMU VM AosCore uses SoftHSM, whose token lives on the filesystem and
-whose user PIN is stored in /var/aos/iam/.usrpin on an *unencrypted*
-partition. Anyone with root on the VM, or with the disk image, can unlock the
-volume. Key non-extractability is a property of the hardware platform
-(OP-TEE-backed PKCS#11 on the target SoC) and is reported here as a stated
-guarantee, never as a verified result. See README, "Key protection".
+It does not prove that the encryption key is protected. On a VM AosCore falls
+back to SoftHSM, whose PIN sits on unencrypted /var; key non-extractability is
+a property of OP-TEE-backed hardware and is reported here as a stated
+guarantee, never as a result.
 """
 from __future__ import annotations
 
@@ -75,7 +70,11 @@ def unit(config, target, cloud, marker):
 
 
 def test_a0_no_encrypted_volume_before_provisioning(unit, record_property):
-    """Before the unit is bound to a tenant there is no encrypted volume at all."""
+    """No encrypted volume exists before the unit is bound to a tenant.
+
+    Establishes the baseline, so A1 shows that provisioning created the volume
+    rather than finding one that was already there.
+    """
     fstype = unit["pre_provision_fstype"]
     assert fstype != "crypto_LUKS", (
         report.failed(
@@ -94,7 +93,11 @@ def test_a0_no_encrypted_volume_before_provisioning(unit, record_property):
 
 
 def test_a1_volume_is_luks(unit, record_property):
-    """After provisioning the AosCore data partition is a LUKS2 volume."""
+    """After provisioning the AosCore data partition is a LUKS2 volume.
+
+    This is the storage every deployable item is given, so what a service
+    writes later lands on encrypted media.
+    """
     vm = unit["vm"]
     fstype = rawdisk.partition_fstype(vm)
     assert fstype == "crypto_LUKS", report.failed(
@@ -111,7 +114,11 @@ def test_a1_volume_is_luks(unit, record_property):
 
 
 def test_a2_probe_instance_running(unit, record_property):
-    """The probe service was delivered and its instance reached the active state."""
+    """The probe service was delivered and its instance reached the active state.
+
+    A running instance is the precondition for A3 and A4: without one there is
+    nothing writing data to look for.
+    """
     assert unit["probe_running"], report.failed(
         CHECK_A2, "the probe service instance never reached the active state"
     )
@@ -122,7 +129,11 @@ def test_a2_probe_instance_running(unit, record_property):
 
 
 def test_a3_marker_readable_inside_instance(unit, marker, record_property):
-    """The marker the probe wrote is readable on the unit."""
+    """The marker the probe wrote is readable on the unit.
+
+    Positive control for A4 - the marker must be known to exist before its
+    absence from the raw device means anything.
+    """
     vm = unit["vm"]
     path = service.find_marker_path(vm, marker)
     unit["marker_path"] = path

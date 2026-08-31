@@ -1,13 +1,11 @@
 """Test C - only signed, correctly targeted services reach a unit.
 
-Anti-rollback is deliberately out of scope. What we have observed is cloud-side
-version ordering, which is not evidence that a unit refuses an older build, and
-no unit-side requirement has been confirmed. Claiming it here would overstate
-what the suite checks.
+The tamper check is an A/B: two bundles are signed and repacked identically and
+only one has its payload altered in between, so a rejection is attributable to
+the change rather than to the repacking.
 
-The tamper check is an A/B: two bundles are signed, unpacked and repacked the
-same way, and only one of them has its payload altered in between. Without that
-control a rejection would only show that the cloud disliked a rebuilt archive.
+Anti-rollback is out of scope. Cloud-side version ordering is not evidence that
+a unit refuses an older build, and no unit-side requirement has been confirmed.
 """
 from __future__ import annotations
 
@@ -39,7 +37,11 @@ def delivered(provisioned_unit, config, cloud, marker):
 
 
 def test_c1_signed_service_is_installed(delivered, marker, record_property):
-    """A correctly signed service is delivered and actually runs."""
+    """A correctly signed service is delivered and actually runs its payload.
+
+    Control for C2: it shows the publishing path works, so the rejection there
+    is attributable to the tampering.
+    """
     assert delivered["running"], report.failed(
         CHECK_C1, "the signed service was published but its instance never became active"
     )

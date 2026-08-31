@@ -1,11 +1,9 @@
-"""Test B - a unit is served only after it has been registered, over mutual TLS.
+"""Test B - a unit is served only after registration, and only over mutual TLS.
 
-Each check is written so that it can only pass by observing the mechanism act.
-"The unit was not served" is never inferred from silence: the unit's identity
-service reports a condition, and the tenant is asked directly whether it knows
-the system id. The mutual-TLS checks are run alongside a successful call with
-the real certificate, so a refusal cannot be confused with an endpoint that is
-simply unreachable.
+No refusal is inferred from silence: the tenant is asked directly whether it
+knows the unit, the identity service reports its own start condition, and every
+mTLS refusal is paired with a successful call using the real certificate, so a
+refusal cannot be mistaken for an unreachable endpoint.
 """
 from __future__ import annotations
 
