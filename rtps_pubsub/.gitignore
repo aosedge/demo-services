@@ -1,0 +1,5 @@
+# The root .gitignore only reaches one level down, and the publishable units
+# sit one level deeper so that each can be signed under its own provider.
+*/build/
+*/output/
+*/batch.tar.gz

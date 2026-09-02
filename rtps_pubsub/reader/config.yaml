@@ -1,0 +1,100 @@
+schemaVersion: 2
+
+publisher:
+  author: Developer Name
+  company: Company Name
+
+publish:
+  tlsKey: aos-user-sp.p12
+
+items:
+  ##############################################################################
+  # RTPS reader 1. Placed under a different provider than the writer so that
+  # the traffic between them crosses a network boundary.
+  ##############################################################################
+- identity:
+    type: service
+    codename: demo-rtps-reader-1
+    title: Demo RTPS Reader 1
+    description: Fast DDS subscriber used to exercise cross-provider networking
+
+  version: 1.0.0-beta.1
+  sourceFolder: output
+  images:
+  - sourceFolder: amd64
+    archInfo:
+      architecture: amd64
+
+  configuration:
+    workingDir: /
+    cmd: /rtps-reader
+
+    baseLayerIsNodeRootfs: true
+
+    env:
+    - DS_ADDRESS=10.0.0.100
+    - DS_PORT=11811
+    - TOPIC=RtpsProbe
+
+    instances:
+      minInstances: 1
+      priority: 10
+
+    exposedPorts:
+      - 7410-7449/udp
+
+    # Substitute the item UUID the writer was published under, see the
+    # placeholder table in README.md.
+    allowedConnections:
+    - <demo-rtps-writer-uuid>/7410-7449/udp
+
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 1000
+      ramLimit: 128MiB
+
+  ##############################################################################
+  # RTPS reader 2. A second, separate service rather than a second instance:
+  # each service gets its own item UUID, which is what allowedConnections
+  # resolves against.
+  ##############################################################################
+- identity:
+    type: service
+    codename: demo-rtps-reader-2
+    title: Demo RTPS Reader 2
+    description: Fast DDS subscriber used to exercise cross-provider networking
+
+  version: 1.0.0-beta.1
+  sourceFolder: output
+  images:
+  - sourceFolder: amd64
+    archInfo:
+      architecture: amd64
+
+  configuration:
+    workingDir: /
+    cmd: /rtps-reader
+
+    baseLayerIsNodeRootfs: true
+
+    env:
+    - DS_ADDRESS=10.0.0.100
+    - DS_PORT=11811
+    - TOPIC=RtpsProbe
+
+    instances:
+      minInstances: 1
+      priority: 10
+
+    exposedPorts:
+      - 7410-7449/udp
+
+    # Substitute the item UUID the writer was published under, see the
+    # placeholder table in README.md.
+    allowedConnections:
+    - <demo-rtps-writer-uuid>/7410-7449/udp
+
+    skipResourceLimits: true
+    quotas:
+      cpuLimit: 1000
+      ramLimit: 128MiB
