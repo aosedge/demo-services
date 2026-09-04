@@ -1,0 +1,35 @@
+schemaVersion: 2
+
+publisher:
+  author: AosEdge security tests
+  company: AosEdge
+
+publish:
+  tlsKey: aos-user-sp.p12
+
+items:
+- identity:
+    type: service
+    codename: @CODENAME@
+    title: Security probe - @CODENAME@
+    description: Attempts to reach data belonging to the unit and to other
+      instances, and records exactly how each attempt was refused.
+
+  version: @VERSION@
+  images:
+    - sourceFolder: src_any
+      archInfo:
+        architecture: any
+
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u snooper.py
+    instances:
+      minInstances: 1
+    quotas:
+      cpuLimit: 1000
+      ramLimit: 128MiB
+      storageLimit: 32MiB
+    env:
+      - AOS_SEC_MARKER=@MARKER@
+      - AOS_SEC_TARGETS=@TARGETS@
