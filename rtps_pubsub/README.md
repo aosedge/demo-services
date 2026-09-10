@@ -92,23 +92,21 @@ cd reader && aos-signer go
 Putting the writer and the readers under the same provider places them in one
 network segment, and the setup stops exercising anything.
 
-### Filling in the UUID placeholders
+### `allowedConnections` addressing
 
-`allowedConnections` names the peer by the **item UUID** the peer was published
-under, and that UUID only exists once the item has been published. Both
-configurations therefore ship with placeholders that have to be replaced by
-hand:
+`allowedConnections` names the peer by **hostname** rather than by item UUID.
+Each item sets a fixed `hostname` (matching its `PARTICIPANT_NAME`), and the
+peer's `allowedConnections` entry references that same name directly:
 
-| Placeholder | In | Replace with the item UUID of |
-|---|---|---|
-| `<demo-rtps-writer-uuid>` | `reader/config.yaml`, both items | `demo-rtps-writer` |
-| `<demo-rtps-reader-1-uuid>` | `writer/config.yaml` | `demo-rtps-reader-1` |
-| `<demo-rtps-reader-2-uuid>` | `writer/config.yaml` | `demo-rtps-reader-2` |
+| Item | `hostname` / `PARTICIPANT_NAME` |
+|---|---|
+| `demo-rtps-writer` | `VehicleStatePublisher` |
+| `demo-rtps-reader-1` | `AnalyticsConsumer` |
+| `demo-rtps-reader-2` | `DiagnosticsConsumer` |
 
-So the first publish is a bootstrap: publish all three items with the
-placeholders still in place, read the item UUIDs off the service page in the
-cloud, substitute them, and publish again. The placeholders are intentionally
-not valid UUIDs so that an entry nobody has substituted yet stands out.
+Because the names are fixed in the configuration instead of assigned at
+publish time, there's no bootstrap step: publish all three items once and the
+allow lists already match.
 
 ## Configuration
 
@@ -126,7 +124,7 @@ Each service logs every participant it discovers together with the locators
 that participant advertises:
 
 ```
-discovered participant: rtps-reader-1
+discovered participant: AnalyticsConsumer
     metatraffic unicast   UDPv4:[172.20.0.3]:7412
     user data   unicast   UDPv4:[172.20.0.3]:7413
 ```
