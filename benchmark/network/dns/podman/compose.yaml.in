@@ -1,0 +1,47 @@
+version: "3"
+services:
+  dns-peer:
+    image: ${REGISTRY_HOST}/benchmark-network-dns-peer:latest
+    security_opt:
+      - label=disable
+
+    extra_hosts:
+      - "victoriametrics:10.0.0.100"
+
+    deploy:
+      mode: replicated
+      replicas: 1
+
+  dns-client:
+    image: ${REGISTRY_HOST}/benchmark-network-dns-client:latest
+    security_opt:
+      - label=disable
+
+    extra_hosts:
+      - "victoriametrics:10.0.0.100"
+
+    environment:
+      # NAME=dns-peer (the peer service's own compose name) is the "service to service" path;
+      # a real hostname is the "service to unit"/"service to external host" path - see this
+      # item's doc chapter. dns_client.py queries whichever DNS server the container was handed
+      # in /etc/resolv.conf directly (it doesn't use the OS resolver), so this relies on Podman's
+      # own per-network DNS already being in there.
+      NAME: @TEST_HOST@
+      RANDOM_LABEL: @RANDOM_LABEL@
+      # Empty (service to service) means the nameserver in the container's /etc/resolv.conf, which is
+      # the network's aardvark-dns - the one that knows dns-peer. For the unit/external paths it's the
+      # unit's own dnsmasq (--resolver), the resolver AosCore instances are pointed at: aardvark-dns
+      # would answer NXDOMAIN for names only that dnsmasq knows.
+      RESOLVER: "@RESOLVER@"
+
+    deploy:
+      # mode: replicated must be explicit - podman-compose >=1.6.0 only reads deploy.replicas
+      # when this is also set (confirmed: replicas alone silently created exactly 1 container
+      # regardless of the value), unlike 1.0.6 which read replicas unconditionally.
+      mode: replicated
+      replicas: @NUM_INSTANCES@
+
+networks:
+  default:
+    external: true
+    name: benchmark

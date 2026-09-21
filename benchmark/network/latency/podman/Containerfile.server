@@ -1,0 +1,34 @@
+# Build from the parent "latency" directory so this can COPY the shared benchmark source
+# (../src/server/latency_server.py - the same script AosCore's config.yaml.in deploys) without
+# duplicating it here:
+#
+#   cd benchmark/network/latency
+#   podman build -f podman/Containerfile.server -t ${REGISTRY_HOST}/benchmark-network-latency-server:latest .
+# sockperf is built from the exact commit meta-aos' sockperf recipe pins (recipes-support/sockperf,
+# 3.10+git) instead of installed from Debian: Debian's 3.7-1 rejects a hostname for -i ("'-i' Invalid
+# address"), while this commit resolves it with getaddrinfo() - what AosCore's own TARGET=latency-server
+# relies on, so both runtimes now run the same sockperf.
+FROM debian:trixie-slim AS sockperf-builder
+ARG SOCKPERF_REV=3c65ad99cd385e18f8a2a655c19826e81a4d17e8
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential autoconf automake libtool git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN git init /src && cd /src \
+    && git remote add origin https://github.com/Mellanox/sockperf.git \
+    && git fetch --depth 1 origin ${SOCKPERF_REV} && git checkout FETCH_HEAD \
+    && mkdir -p build config/m4 config/aux \
+    && printf '3.10\n%s\n' "${SOCKPERF_REV}" > build/current-version \
+    && ./autogen.sh && ./configure && make -j"$(nproc)" && make install DESTDIR=/out
+
+FROM debian:trixie-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends python3 libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=sockperf-builder /out/usr/local/bin/sockperf /usr/local/bin/sockperf
+
+WORKDIR /
+COPY src/server/latency_server.py /latency_server.py
+COPY podman/entrypoint-server.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
