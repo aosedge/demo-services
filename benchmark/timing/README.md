@@ -123,3 +123,18 @@ Start instances, per instance:
   daa792b1-6d97-3374-9067-4302e0b740fe     0.020 s
   57655bc9-4c5d-337d-95ad-812a27c5eb64     0.020 s
 ```
+
+## Podman and k3s
+
+`podman/` builds the same `benchmark-timing` binary into an image (`Containerfile`, `entrypoint.sh`; the `SERVICE_ID`
+build argument has to differ across the images of a batch, see the Containerfile) and `podman/compose.yaml.in` runs it
+under `podman-compose`. `k3s/manifest.yaml.in` runs the same image as one Deployment per item. Render either from
+inside its folder:
+
+```sh
+../../scripts/create_services.py --num-services N [--num-instances N]                            # podman/
+../../scripts/create_services.py --num-services N [--num-instances N] --registry-host HOST:PORT  # k3s/
+```
+
+`--num-services` is the number of items (one image, `benchmark-timing-<N>`, each) and `--num-instances` the replicas of
+each.
