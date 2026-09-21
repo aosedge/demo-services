@@ -97,3 +97,19 @@ at scale (concurrent I/O across N instances).
 Latency avg/p99 are read from fio's `clat_ns` (completion latency) section, requested via `--lat_percentiles=1`;
 this has not yet been verified against a real `fio` JSON output on target, see the `NOTE` in
 `src/diskio_benchmark.py`'s `latency_stats()`.
+
+## Podman and k3s
+
+`podman/` builds the same `diskio_benchmark.py` into an image (`Containerfile`, `entrypoint.sh`) and
+`podman/compose.yaml.in` runs it under `podman-compose`; `k3s/manifest.yaml.in` runs the image as a Deployment, one pod
+per instance. Both mount the unit's real `/var/aos/storages` (as `/storage`, encrypted) and `/var/aos/common-data` (as
+`/common`, unencrypted), and `--test-dir` picks which one is measured. The k3s manifest is a Deployment and not a Job
+because the benchmark keeps running after its jobs finish, so a pod never completes. Render either from inside its
+folder:
+
+```sh
+../../scripts/create_services.py --num-instances N --test-dir /storage                              # podman/
+../../scripts/create_services.py --num-instances N --test-dir /storage --registry-host HOST:PORT    # k3s/
+```
+
+Every instance leaves its data file (`<instance ID>.dat`) on the volume, so remove them between runs.

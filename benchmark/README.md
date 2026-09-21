@@ -1,7 +1,8 @@
 # Benchmark
 
 This folder contains AosEdge services used to benchmark AosCore: deployment/start timing, disk I/O, and container
-network performance (latency, DNS resolution, bandwidth).
+network performance (latency, DNS resolution, bandwidth). The same workloads also run on two other container runtimes,
+Podman and k3s, so the three can be compared on the same metrics - see "Podman and k3s" below.
 
 Every item follows the same shape, which `template/py` and `template/cpp` define: a `config.yaml` and a `src/`, one
 image for any architecture, and results reported to VictoriaMetrics as `benchmark_result` samples bracketed by
@@ -22,6 +23,49 @@ re-rendered against different instance counts, versions, and test targets.
   `dnsmasq`, reported as percentiles.
 - [`network/bandwidth`](network/bandwidth/README.md) - measures container network throughput with `iperf3` (TCP and
   UDP, both directions), plus UDP jitter and packet loss.
+
+## Podman and k3s
+
+Each service folder can carry two more folders next to its AosCore `config.yaml.in`, which run the same benchmark code
+on another runtime. The container images are built from the same sources (`src/`) as the AosCore ones and are shared by
+both, so nothing is rebuilt for k3s:
+
+```
+<service>/podman/   Containerfile(s) and entrypoint(s) that build the images, and compose.yaml.in for podman-compose
+<service>/k3s/      manifest.yaml.in for kubectl - it uses the images the podman/ folder builds
+```
+
+`scripts/create_services.py` renders whichever template is in the current directory - `config.yaml.in`,
+`compose.yaml.in` or `manifest.yaml.in` - into the file next to it (`config.yaml`, `compose.yaml`, `manifest.yaml`;
+none of them is committed). Run it from inside the folder of the template it renders. Besides the AosCore options it
+takes a few that only these templates use:
+
+| Option              | Substituted for      | Used by                                                            |
+| ------------------- | -------------------- | ------------------------------------------------------------------ |
+| `--num-services`    | `@NUM_SERVICES@`; the clone count of a template with `@SERVICE_ID@` | timing, Podman network clients     |
+| `--num-instances`   | `@NUM_INSTANCES@`    | the replicas of a compose service or a Kubernetes workload         |
+| `--test-host`       | `@TEST_HOST@`        | the network clients' target (`TARGET`, or `NAME` for dns)          |
+| `--test-dir`        | `@TEST_DIR@`         | diskio's storage backend (`/storage` or `/common`)                 |
+| `--resolver`        | `@RESOLVER@`         | dns: the nameserver for the "service to unit"/"external" paths     |
+| `--random-label`    | `@RANDOM_LABEL@`     | dns: a fresh label for every query                                 |
+| `--udp-bandwidth`   | `@UDP_BANDWIDTH@`    | bandwidth: the UDP rate                                            |
+| `--registry-host`   | `@REGISTRY_HOST@`    | k3s manifests: the image registry (Kubernetes doesn't expand env vars) |
+
+How an item's instances map to each runtime:
+
+- **AosCore**: an item is a deployable item, its instances are `minInstances`.
+- **Podman**: an item is a compose service and its instances are `deploy.replicas`. compose replicas have no ordinal,
+  so the bandwidth and latency clients, which each need their own port, are cloned into one service per instance
+  instead (`--num-services`).
+- **k3s**: an item is a Deployment and its instances are its replicas, each one a pod of its own. The bandwidth and
+  latency clients are a StatefulSet instead, whose pod-name ordinal is the per-instance index.
+
+`time_event.py`, which meta-aos installs on the unit (its `time-event` recipe), wraps a command and pushes
+`checkpoint_event` Start/Stop samples around it, the same shape the AosCore items push, so timings of `podman-compose`
+and `kubectl` operations land in the same Grafana Events table.
+
+How to build the images, deploy and measure each scenario is documented in meta-aos, in
+`doc/benchmark_execution_podman.md` and `doc/benchmark_execution_k3s.md`.
 
 ## Network performance
 
