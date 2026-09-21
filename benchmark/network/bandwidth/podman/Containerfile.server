@@ -1,0 +1,17 @@
+# Build from the parent "bandwidth" directory so this can COPY the shared benchmark source
+# (../src/server/bandwidth_server.py - the same script AosCore's config.yaml.in deploys) without
+# duplicating it here:
+#
+#   cd benchmark/network/bandwidth
+#   podman build -f podman/Containerfile.server -t ${REGISTRY_HOST}/benchmark-network-bandwidth-server:latest .
+FROM debian:trixie-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends python3 iperf3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /
+COPY src/server/bandwidth_server.py /bandwidth_server.py
+COPY podman/entrypoint-server.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
