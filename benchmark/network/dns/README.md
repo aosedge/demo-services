@@ -223,3 +223,23 @@ the external scenario leaves the node, and it costs several times more — that 
 Comparing a resolve time against the latency benchmark's round trip time on the same path is worth doing: locally the
 two come out nearly identical, which says the lookup inside `dnsmasq` is almost free and what is being measured is
 the network round trip.
+
+## Podman and k3s
+
+`podman/` builds the peer and client images (`Containerfile.peer`, `Containerfile.client` and their entrypoints) and
+`podman/compose.yaml.in` runs them under `podman-compose`; `k3s/manifest.yaml.in` runs the same images as a peer and a
+client Deployment. The clients are plain replicas (`--num-instances`) on both, since nothing here is addressed per
+instance. `--test-host` is the `NAME` to resolve and `--resolver` the nameserver to ask:
+
+- **service to service**: the peer's service name, with `--resolver` left empty so the client asks the nameserver in its
+  own `/etc/resolv.conf`. The client sends the name as it is and doesn't apply search domains, so on k3s it has to be
+  the full `dns-peer.default.svc.cluster.local`, while on Podman `dns-peer` works.
+- **service to unit / external**: the unit's `dnsmasq` as `--resolver`, which is where AosCore instances resolve these
+  names anyway. Podman's network DNS (aardvark-dns) doesn't know them, and k3s uses the same setting so all three
+  measure the same resolver. These scenarios need no peer: on k3s apply just the client with
+  `kubectl apply -f manifest.yaml -l app=dns-client`.
+
+```sh
+../../../scripts/create_services.py --num-instances N --test-host NAME [--resolver ADDRESS] [--random-label 1]                            # podman/
+../../../scripts/create_services.py --num-instances N --test-host NAME [--resolver ADDRESS] [--random-label 1] --registry-host HOST:PORT   # k3s/
+```

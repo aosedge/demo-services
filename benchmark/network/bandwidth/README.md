@@ -188,3 +188,21 @@ test into a syscall rate benchmark that reports several times less than TCP on t
 as loss - not the network dropping traffic, but the receiver failing to keep up with a rate nothing was aiming for.
 `80M`, `create_services.py`'s default, targets a rate the same veth/bridge path comfortably sustains, so loss and
 jitter measure the path's behavior at a realistic rate instead of a CPU's datagram-processing ceiling.
+
+## Podman and k3s
+
+`podman/` builds the server and client images (`Containerfile.server`, `Containerfile.client` and their entrypoints)
+and `podman/compose.yaml.in` runs them under `podman-compose`; `k3s/manifest.yaml.in` runs the same images as a server
+Deployment and a client StatefulSet. Both bundle the server, which is unused in the "service to unit" and "service to
+external" scenarios. In both, one server serves every client and `--test-host` is the client's `TARGET`.
+
+- **Podman**: compose replicas have no ordinal, so the clients are cloned into one service per instance, and
+  `--num-services` is the client count. The client's entrypoint derives its 0-based `AOS_INSTANCE_INDEX` (which of the
+  server's ports it dials) from the service ID.
+- **k3s**: the clients are a StatefulSet, so `--num-instances` is the client count and the pod-name ordinal is the
+  index. Both services are headless, so a name resolves straight to the pod's IP.
+
+```sh
+../../../scripts/create_services.py --num-services N --test-host TARGET --udp-bandwidth RATE                            # podman/
+../../../scripts/create_services.py --num-instances N --test-host TARGET --udp-bandwidth RATE --registry-host HOST:PORT   # k3s/
+```
