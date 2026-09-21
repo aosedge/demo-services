@@ -1,0 +1,50 @@
+# Build from the parent "timing" directory so this can COPY the shared benchmark source
+# (../CMakeLists.txt, ../src/benchmark-timing.cpp - the same sources AosCore's own SDK-toolchain
+# build compiles) without duplicating them here:
+#
+#   cd benchmark/timing
+#   podman build -f podman/Containerfile --build-arg SIZE_MB=16 --build-arg SERVICE_ID=1 \
+#       -t benchmark-timing-1:latest .
+#
+# SERVICE_ID must differ across a batch of otherwise-identical builds (e.g. the 16 separate
+# benchmark-timing-<N> images "Install new deployable items" needs): without something in the
+# Containerfile that actually varies per build, Podman/Docker's layer cache reuses the first
+# build's `dd` layer verbatim for every later one with the same SIZE_MB, silently giving every
+# image byte-identical "unique" payload data instead of independently-random ones (confirmed by
+# building the same Containerfile/args twice and diffing the resulting image digests).
+FROM debian:trixie-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential cmake libpoco-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY CMakeLists.txt .
+COPY src ./src
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release . \
+    && cmake --build build --target benchmark-timing -j"$(nproc)"
+
+# Same technique benchmark/payload uses to measure `podman pull` download speed at a defined
+# size, folded into this image instead of a separate one - this is also exactly what AosCore's
+# own timing item does (meta-aos' doc/benchmark_execution_aos.md, "Install new deployable items"):
+# ships a configurable-size test.dat payload alongside the binary, so deploying/pulling this same
+# image doubles as a deployment-size benchmark rather than only a timing one. /dev/urandom (not
+# /dev/zero) so the payload doesn't compress away over the wire.
+ARG SIZE_MB=16
+ARG SERVICE_ID=1
+RUN dd if=/dev/urandom of=/test.dat bs=1M count=${SIZE_MB} && echo "${SERVICE_ID}" > /service_id
+
+FROM debian:trixie-slim
+
+# libpoco-dev also pulls in the actual runtime shared libraries (no separate -dev/runtime split
+# needed); simplest correct option since this image doesn't otherwise try to be minimal.
+RUN apt-get update && apt-get install -y --no-install-recommends libpoco-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /src/build/benchmark-timing /usr/local/bin/benchmark-timing
+COPY --from=builder /test.dat /test.dat
+COPY --from=builder /service_id /service_id
+COPY podman/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
