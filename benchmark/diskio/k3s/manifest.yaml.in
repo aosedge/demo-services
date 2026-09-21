@@ -1,0 +1,89 @@
+# The diskio benchmark as one Deployment whose replicas are the instances (one pod per instance,
+# like the timing Deployment). It renders to manifest.yaml with scripts/create_services.py, applied
+# with kubectl. The image is the one the Podman benchmark builds and pushes (podman/Containerfile) -
+# nothing is rebuilt for k3s.
+#
+# A Deployment and not a Job: diskio_benchmark.py runs its four fio jobs once and then keeps
+# running (idling) so its logs stay available and it isn't restarted in a loop, so a pod never
+# completes and a Job would never finish. The end of a run is the "All jobs finished" line in the
+# pod's log and its Stop checkpoint event.
+#
+# --num-instances sets the number of replicas, so every instance runs concurrently, the same as
+# `deploy.replicas` in the Podman compose file. --test-dir picks the backend: /storage (encrypted)
+# or /common (unencrypted).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diskio
+
+spec:
+  replicas: @NUM_INSTANCES@
+  selector:
+    matchLabels:
+      app: diskio
+
+  template:
+    metadata:
+      labels:
+        app: diskio
+
+    spec:
+      # diskio_benchmark.py installs no SIGTERM handler, and as PID 1 the kernel then ignores
+      # SIGTERM entirely - so deleting a pod would wait out its whole termination grace period
+      # (30 s) before SIGKILL. With a shared process namespace the pod's pause container is PID 1
+      # instead, so the signal terminates the benchmark at once.
+      shareProcessNamespace: true
+
+      # diskio_benchmark.py's own default (--victoria-url http://victoriametrics:8428) then just
+      # works, without needing a --victoria-url override here.
+      hostAliases:
+        - ip: "10.0.0.100"
+          hostnames:
+            - "victoriametrics"
+
+      containers:
+        - name: diskio
+          image: @REGISTRY_HOST@/benchmark-diskio:latest
+          imagePullPolicy: IfNotPresent
+
+          # fio's libaio engine needs a syscall (io_getevents) that a runtime-default seccomp
+          # profile blocks (the Podman compose file sets seccomp=unconfined for the same reason).
+          # k3s doesn't apply one to pods that don't ask for it, but it is stated explicitly so
+          # that doesn't depend on the cluster's default.
+          securityContext:
+            seccompProfile:
+              type: Unconfined
+
+          env:
+            # TEST_DIR picks which backend this run exercises - /storage (encrypted, the same
+            # LUKS-mapped aosvg-storages volume AosCore's own instances use) or /common
+            # (unencrypted, a plain directory on the unit's /var partition). Both are always
+            # mounted below, so switching backends is just changing this value, matching the
+            # AosCore diskio service's own --test-dir-driven config.yaml.
+            - name: TEST_DIR
+              value: "@TEST_DIR@"
+            - name: SIZE
+              value: "16M"
+            - name: RUNTIME
+              value: "60"
+
+          volumeMounts:
+            - name: storage
+              mountPath: /storage
+            - name: common
+              mountPath: /common
+
+      volumes:
+        # Real host paths, so the comparison against AosCore's own diskio results is against the
+        # same physical storage. "type: Directory" makes the pod fail to start (with a clear
+        # event) if the path doesn't exist - i.e. the unit isn't provisioned - instead of
+        # containerd silently creating a directory on the root filesystem.
+        - name: storage
+          hostPath:
+            path: /var/aos/storages
+            type: Directory
+
+        - name: common
+          hostPath:
+            path: /var/aos/common-data
+            type: Directory
