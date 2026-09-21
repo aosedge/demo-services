@@ -1,0 +1,47 @@
+version: "3"
+
+networks:
+  default:
+    external: true
+    name: benchmark
+
+services:
+  diskio:
+    image: ${REGISTRY_HOST}/benchmark-diskio:latest
+    security_opt:
+      # Podman's default seccomp profile blocks a syscall fio's libaio engine needs
+      # (io_getevents fails with "Unknown error -1") - confirmed this is the only blocker
+      # by re-running with seccomp=unconfined.
+      - seccomp=unconfined
+      # SELinux (when enforcing) denies container_t processes write access to their own
+      # stdout/stderr pipe - confirmed via AVC denials ("denied { write } ... tclass=fifo_file")
+      # that otherwise silently swallow all container output, podman logs included.
+      - label=disable
+
+    environment:
+      # TEST_DIR picks which backend this run exercises - /storage (encrypted, the same
+      # LUKS-mapped aosvg-storages volume AosCore's own instances use) or /common (unencrypted,
+      # a plain directory on the unit's /var partition). Both are always bind-mounted below so
+      # switching backends is just changing this value, matching the AosCore diskio service's
+      # own --test-dir-driven config.yaml (see ../README.md "Storage backends").
+      TEST_DIR: @TEST_DIR@
+      SIZE: 16M
+      RUNTIME: "60"
+
+    # diskio_benchmark.py's own default (--victoria-url http://victoriametrics:8428) then just
+    # works, without needing a --victoria-url override here.
+    extra_hosts:
+      - "victoriametrics:10.0.0.100"
+
+    volumes:
+      # Real host paths, not podman-managed volumes, so the comparison against AosCore's own
+      # diskio results is against the same physical storage.
+      - /var/aos/storages:/storage
+      - /var/aos/common-data:/common
+
+    deploy:
+      # mode: replicated must be explicit - podman-compose >=1.6.0 only reads deploy.replicas
+      # when this is also set (confirmed: replicas alone silently created exactly 1 container
+      # regardless of the value), unlike 1.0.6 which read replicas unconditionally.
+      mode: replicated
+      replicas: @NUM_INSTANCES@
