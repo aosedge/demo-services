@@ -1,0 +1,123 @@
+# The bandwidth benchmark for k3s: one server pod and --num-instances client pods. It renders to
+# manifest.yaml with scripts/create_services.py, applied with kubectl. The images are the ones the
+# Podman benchmark builds and pushes (podman/Containerfile.*) - nothing is rebuilt for k3s.
+#
+# The server serves every client: one bandwidth_server.py opens NUM_INSTANCES separate iperf3
+# ports (5201 + index), so its NUM_INSTANCES is the client count. The clients are the
+# StatefulSet's replicas, one pod per instance, and the ordinal in a pod's name is what gives each
+# client the 0-based AOS_INSTANCE_INDEX (and so the port) AosCore's own scaled instances get.
+# A Deployment's replicas have random names and no such number.
+#
+# --test-host is TARGET: "bandwidth-server" (this file's server, by name) is the "service to
+# service" path; a real address is the "service to unit"/"service to external host" path, in which
+# case the server pod is started too but isn't used. --udp-bandwidth is the UDP rate.
+#
+# Services are headless (clusterIP: None) so a name resolves straight to the pod's IP: the traffic
+# is pod to pod, like container to container in the other runtimes, and doesn't go through
+# kube-proxy's address translation, which a normal (ClusterIP) service would add to every packet.
+apiVersion: v1
+kind: Service
+metadata:
+  name: bandwidth-server
+
+spec:
+  clusterIP: None
+  selector:
+    app: bandwidth-server
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bandwidth-server
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bandwidth-server
+
+  template:
+    metadata:
+      labels:
+        app: bandwidth-server
+
+    spec:
+      # The benchmark installs no SIGTERM handler, and as PID 1 the kernel then ignores SIGTERM
+      # entirely, so deleting the pod would wait out its whole termination grace period (30 s).
+      # With a shared process namespace the pod's pause container is PID 1 instead.
+      shareProcessNamespace: true
+
+      # The default --victoria-url (http://victoriametrics:8428) then just works.
+      hostAliases:
+        - ip: "10.0.0.100"
+          hostnames:
+            - "victoriametrics"
+
+      containers:
+        - name: bandwidth-server
+          image: @REGISTRY_HOST@/benchmark-network-bandwidth-server:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NUM_INSTANCES
+              value: "@NUM_INSTANCES@"
+
+---
+# The headless service the StatefulSet below needs to give its pods stable names.
+apiVersion: v1
+kind: Service
+metadata:
+  name: bandwidth-client
+
+spec:
+  clusterIP: None
+  selector:
+    app: bandwidth-client
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: bandwidth-client
+
+spec:
+  serviceName: bandwidth-client
+  replicas: @NUM_INSTANCES@
+
+  # All clients start at once, not one after another (the StatefulSet default), so they run their
+  # tests concurrently.
+  podManagementPolicy: Parallel
+
+  selector:
+    matchLabels:
+      app: bandwidth-client
+
+  template:
+    metadata:
+      labels:
+        app: bandwidth-client
+
+    spec:
+      shareProcessNamespace: true
+
+      hostAliases:
+        - ip: "10.0.0.100"
+          hostnames:
+            - "victoriametrics"
+
+      containers:
+        - name: bandwidth-client
+          image: @REGISTRY_HOST@/benchmark-network-bandwidth-client:latest
+          imagePullPolicy: IfNotPresent
+
+          # The image's entrypoint derives the 0-based AOS_INSTANCE_INDEX from a 1-based
+          # SERVICE_ID (see podman/entrypoint-client.sh), which the Podman compose file gets from
+          # its per-instance clones. Here it comes from the pod's ordinal: the hostname is the pod
+          # name, "bandwidth-client-<ordinal>".
+          command: ["/bin/sh", "-c", "SERVICE_ID=$(( ${HOSTNAME##*-} + 1 )) exec /entrypoint.sh"]
+
+          env:
+            - name: TARGET
+              value: "@TEST_HOST@"
+            - name: UDP_BANDWIDTH
+              value: "@UDP_BANDWIDTH@"
