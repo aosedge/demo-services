@@ -17,20 +17,20 @@ items:
     title: Demo RTPS Writer
     description: Fast DDS publisher used to exercise cross-provider networking
 
-  version: 1.0.0-beta.1
+  version: 1.0.0
   sourceFolder: output
   images:
   - sourceFolder: amd64
     archInfo:
       architecture: amd64
 
+  - sourceFolder: arm64
+    archInfo:
+      architecture: arm64
+
   configuration:
     workingDir: /
     cmd: /rtps-writer
-
-    # Fast DDS comes from the node rootfs, so the container has to use it as
-    # its base layer.
-    baseLayerIsNodeRootfs: true
 
     env:
     - DS_ADDRESS=10.0.0.100
@@ -54,7 +54,6 @@ items:
     - AnalyticsConsumer/7410-7449/udp
     - DiagnosticsConsumer/7410-7449/udp
 
-    skipResourceLimits: true
     quotas:
       cpuLimit: 1000
       ramLimit: 128MiB

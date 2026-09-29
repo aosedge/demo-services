@@ -18,18 +18,20 @@ items:
     title: Demo RTPS Reader 1
     description: Fast DDS subscriber used to exercise cross-provider networking
 
-  version: 1.0.0-beta.1
+  version: 1.0.0
   sourceFolder: output
   images:
   - sourceFolder: amd64
     archInfo:
       architecture: amd64
 
+  - sourceFolder: arm64
+    archInfo:
+      architecture: arm64
+
   configuration:
     workingDir: /
     cmd: /rtps-reader
-
-    baseLayerIsNodeRootfs: true
 
     env:
     - DS_ADDRESS=10.0.0.100
@@ -49,14 +51,13 @@ items:
     allowedConnections:
     - VehicleStatePublisher/7410-7449/udp
 
-    skipResourceLimits: true
     quotas:
       cpuLimit: 1000
       ramLimit: 128MiB
 
   ##############################################################################
   # RTPS reader 2. A second, separate service rather than a second instance:
-  # each service gets its own item UUID, which is what allowedConnections
+  # each service gets its own hostname, which is what allowedConnections
   # resolves against.
   ##############################################################################
 - identity:
@@ -65,18 +66,20 @@ items:
     title: Demo RTPS Reader 2
     description: Fast DDS subscriber used to exercise cross-provider networking
 
-  version: 1.0.0-beta.1
+  version: 1.0.0
   sourceFolder: output
   images:
   - sourceFolder: amd64
     archInfo:
       architecture: amd64
 
+  - sourceFolder: arm64
+    archInfo:
+      architecture: arm64
+
   configuration:
     workingDir: /
     cmd: /rtps-reader
-
-    baseLayerIsNodeRootfs: true
 
     env:
     - DS_ADDRESS=10.0.0.100
@@ -96,7 +99,6 @@ items:
     allowedConnections:
     - VehicleStatePublisher/7410-7449/udp
 
-    skipResourceLimits: true
     quotas:
       cpuLimit: 1000
       ramLimit: 128MiB
