@@ -1,0 +1,186 @@
+"""Minimal AosCloud REST client (API v11) over mutual TLS.
+
+Deliberately small and dependency-light: the suite must be auditable by the
+customer running it. Credentials are read from the configured PKCS#12 bundle at
+runtime and never written into the repository.
+"""
+from __future__ import annotations
+
+import pathlib
+import tempfile
+from typing import Any
+from urllib.parse import urlsplit, urlunsplit
+
+import requests
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+)
+from cryptography.hazmat.primitives.serialization.pkcs12 import load_pkcs12
+
+_TIMEOUT = 60
+_HTTP_OK = 200
+_HTTP_CREATED = 201
+_HTTP_BAD_REQUEST = 400
+
+
+class CloudError(RuntimeError):
+    """Raised when the cloud rejects a request the suite depends on."""
+
+
+class CloudClient:
+    """mTLS client for the handful of endpoints the suite needs."""
+
+    def __init__(self, base_url: str, oem_p12: pathlib.Path, ca_bundle: pathlib.Path) -> None:
+        self._base = base_url if base_url.endswith("/") else base_url + "/"
+        self._ca = str(ca_bundle)
+        self._pem = self._materialise_pem(oem_p12)
+
+    @staticmethod
+    def _materialise_pem(p12_path: pathlib.Path) -> str:
+        """Convert PKCS#12 to a temporary PEM chain readable by requests."""
+        bundle = load_pkcs12(p12_path.read_bytes(), None)
+        if bundle.key is None or bundle.cert is None:
+            raise CloudError(f"{p12_path} does not contain a key and certificate pair")
+        parts = [
+            bundle.key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()),
+            bundle.cert.certificate.public_bytes(Encoding.PEM),
+        ]
+        parts += [extra.certificate.public_bytes(Encoding.PEM) for extra in bundle.additional_certs]
+        handle = tempfile.NamedTemporaryFile(  # noqa: SIM115 - lifetime is the client's
+            prefix="aos-oem-", suffix=".pem", delete=False
+        )
+        handle.write(b"".join(parts))
+        handle.close()
+        pathlib.Path(handle.name).chmod(0o600)
+        return handle.name
+
+    @property
+    def client_pem(self) -> str:
+        """Path of the materialised client identity, for direct TLS probes."""
+        return self._pem
+
+    @property
+    def base_url(self) -> str:
+        """Endpoint the suite talks to."""
+        return self._base
+
+    def request(self, method: str, path: str, body: Any | None = None) -> requests.Response:
+        """Issue one request; callers decide what an acceptable status is."""
+        split = urlsplit(self._base + path.lstrip("/"))
+        url = urlunsplit(
+            (split.scheme, split.netloc, split.path.rstrip("/") + "/", split.query, "")
+        )
+        kwargs: dict[str, Any] = {"json": body} if body is not None else {}
+        return requests.request(
+            method, url, cert=self._pem, verify=self._ca, timeout=_TIMEOUT, **kwargs
+        )
+
+    def get_json(self, path: str) -> dict[str, Any]:
+        response = self.request("GET", path)
+        if response.status_code != _HTTP_OK:
+            raise CloudError(f"GET {path} returned {response.status_code}")
+        return response.json()
+
+    # ---------------------------------------------------------------- units
+
+    def find_unit(self, system_uid: str) -> dict[str, Any] | None:
+        """Return the cloud record for a system id, or None when unknown."""
+        for item in self.get_json("units").get("items", []):
+            if item.get("system_uid") == system_uid:
+                return item
+        return None
+
+    def unit_system_uids(self) -> list[str]:
+        """System ids the tenant currently knows about."""
+        return [str(item["system_uid"]) for item in self.get_json("units").get("items", [])]
+
+    def attach_unit(self, system_uid: str, unit_set_id: str, subject_id: str) -> None:
+        """Attach a unit to the validation unit-set and to the test subject.
+
+        Both bindings are sub-resource POSTs keyed by *system id*. A PATCH on
+        units/{id} answers 200 and silently does not apply - do not use it.
+        """
+        for path in (f"unit-sets/{unit_set_id}/units", f"subjects/{subject_id}/units"):
+            response = self.request("POST", path, {"system_uids": [system_uid]})
+            # A repeated attachment is reported as a 400 rather than a conflict;
+            # it means the binding the caller asked for already holds.
+            already = (
+                response.status_code == _HTTP_BAD_REQUEST
+                and "already" in response.text.lower()
+            )
+            if response.status_code not in (200, 201) and not already:
+                raise CloudError(f"POST {path} returned {response.status_code}: {response.text}")
+
+    def detach_unit(self, system_uid: str, subject_id: str) -> None:
+        """Detach the unit from the test subject (idempotent)."""
+        self.request("DELETE", f"subjects/{subject_id}/units/{system_uid}")
+
+    # ---------------------------------------------------------------- services
+
+    def find_service_id(self, codename: str) -> str | None:
+        """Cloud id of a published service, by codename."""
+        for item in self.get_json("services").get("items", []):
+            if item.get("codename") == codename:
+                return str(item["id"])
+        return None
+
+    def service_version_state(self, service_id: str, version: str) -> str | None:
+        """Container state of one uploaded version, or None if it is unknown.
+
+        An uploaded bundle is validated by the cloud before it can be used; the
+        version only becomes usable once this reports "ready".
+        """
+        for item in self.get_json(f"services/{service_id}").get("versions", []):
+            if item.get("version") == version:
+                return item.get("container_state")
+        return None
+
+    def subject_service_ids(self, subject_id: str) -> list[str]:
+        """Ids of the services the subject currently offers."""
+        detail = self.get_json(f"subjects/{subject_id}")
+        return [str(item["id"]) for item in (detail.get("services") or [])]
+
+    def attach_service_to_subject(self, subject_id: str, service_id: str) -> None:
+        """Make the subject offer this service.
+
+        Idempotent by checking membership first: re-posting an already attached
+        service is rejected with HTTP 400 ("already contains of the provided
+        service"), which would otherwise break every run after the first.
+        """
+        if service_id in self.subject_service_ids(subject_id):
+            return
+        response = self.request(
+            "POST", f"subjects/{subject_id}/services", {"service_ids": [service_id]}
+        )
+        if response.status_code not in (200, 201):
+            raise CloudError(
+                f"attaching service {service_id} to subject {subject_id} returned "
+                f"{response.status_code}: {response.text}"
+            )
+
+    def service_versions(self, service_id: str) -> dict[str, str]:
+        """Map of published version -> container state for one service."""
+        return {
+            str(item["version"]): str(item.get("container_state"))
+            for item in self.get_json(f"services/{service_id}").get("versions", [])
+        }
+
+    # ---------------------------------------------------------------- subjects
+
+    def create_subject(self, label: str) -> str:
+        """Create a group subject and return its id."""
+        response = self.request("POST", "subjects", {"label": label, "is_group": True})
+        if response.status_code not in (200, 201):
+            raise CloudError(f"creating subject {label!r} returned {response.status_code}")
+        return str(response.json()["id"])
+
+    def delete_subject(self, subject_id: str) -> None:
+        """Remove a subject the suite created."""
+        self.request("DELETE", f"subjects/{subject_id}")
+
+    def deprovision_and_delete(self, unit_uid: str) -> None:
+        """Release the cloud-side unit record. The unit must be offline first."""
+        self.request("DELETE", f"units/{unit_uid}/deprovision")
+        self.request("DELETE", f"units/{unit_uid}")

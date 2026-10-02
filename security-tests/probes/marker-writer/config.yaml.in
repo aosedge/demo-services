@@ -1,0 +1,34 @@
+schemaVersion: 2
+
+publisher:
+  author: AosEdge security tests
+  company: AosEdge
+
+publish:
+  tlsKey: aos-user-sp.p12
+
+items:
+- identity:
+    type: service
+    codename: @CODENAME@
+    title: Security probe - @CODENAME@
+    description: Writes a known marker into instance storage so the suite can
+      verify that data at rest is stored as ciphertext.
+
+  version: @VERSION@
+  images:
+    - sourceFolder: src_any
+      archInfo:
+        architecture: any
+
+  configuration:
+    workingDir: /
+    cmd: /usr/bin/python3 -u marker_writer.py
+    instances:
+      minInstances: 1
+    quotas:
+      cpuLimit: 1000
+      ramLimit: 128MiB
+      storageLimit: 32MiB
+    env:
+      - AOS_SEC_MARKER=@MARKER@
