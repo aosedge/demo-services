@@ -1,0 +1,57 @@
+# "networks:" comes before the services block here (matching timing's own cloning template),
+# because @SERVICE_ID@ cloning takes everything from the marker service key verbatim and repeats
+# it once per service ID - see scripts/create_services.py's module docstring. latency-server sits
+# *before* the marker precisely because it is not meant to be cloned: one server instance opens
+# NUM_INSTANCES separate sockperf port pairs (see latency_server.py), serving every client below.
+# (Deliberately not spelling the marker itself out here, line-broken or otherwise: the render
+# splits on the first literal occurrence of that text, so an example of it sitting in this comment
+# above the real one would silently hijack the split - confirmed the hard way, per timing's own
+# template.)
+version: "3"
+
+networks:
+  default:
+    external: true
+    name: benchmark
+
+services:
+  latency-server:
+    image: ${REGISTRY_HOST}/benchmark-network-latency-server:latest
+    security_opt:
+      - label=disable
+
+    extra_hosts:
+      - "victoriametrics:10.0.0.100"
+
+    environment:
+      # Must match how many latency-client-@SERVICE_ID@ instances are cloned below, so this
+      # server opens exactly that many port pairs - @NUM_SERVICES@ (the clone count), not
+      # @NUM_INSTANCES@, is what create_services.py fills in here.
+      NUM_INSTANCES: "@NUM_SERVICES@"
+
+    deploy:
+      mode: replicated
+      replicas: 1
+
+  latency-client-@SERVICE_ID@:
+    image: ${REGISTRY_HOST}/benchmark-network-latency-client:latest
+    security_opt:
+      - label=disable
+
+    extra_hosts:
+      - "victoriametrics:10.0.0.100"
+
+    environment:
+      # TARGET=latency-server (the server service's own compose name, resolvable via Podman's
+      # built-in network DNS) is the "service to service" path; a real address is the
+      # "service to unit"/"service to external host" path - see this item's doc chapter.
+      TARGET: @TEST_HOST@
+      # 1-based service ID from create_services.py's own numbering. entrypoint-client.sh derives
+      # the 0-based AOS_INSTANCE_INDEX latency_client.py/latency_server.py's shared, AosCore-owned
+      # port numbering expects from it, rather than changing that shared source's own 0-based
+      # convention just for Podman.
+      SERVICE_ID: "@SERVICE_ID@"
+
+    deploy:
+      mode: replicated
+      replicas: 1

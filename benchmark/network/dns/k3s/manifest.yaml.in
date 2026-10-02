@@ -1,0 +1,107 @@
+# The dns benchmark for k3s: one peer pod (the "service to service" name) and --num-instances
+# client pods. It renders to manifest.yaml with scripts/create_services.py, applied with kubectl.
+# The images are the ones the Podman benchmark builds and pushes (podman/Containerfile.*) -
+# nothing is rebuilt for k3s.
+#
+# The clients are plain replicas: nothing here is addressed per instance (every client resolves
+# the same NAME), so unlike bandwidth/latency no per-client index is needed.
+#
+# --test-host is NAME. dns_client.py sends NAME to the nameserver in the pod's /etc/resolv.conf
+# (CoreDNS) as it is, without applying the resolver's search domains, so the "service to service"
+# name has to be the full one, "dns-peer.default.svc.cluster.local". For the "service to unit" and
+# "service to external host" paths --resolver is the unit's address (RESOLVER) and the peer isn't
+# needed: apply just the client with `kubectl apply -f manifest.yaml -l app=dns-client`.
+# --random-label makes every query a fresh, uncached label.
+#
+# The peer's service is headless (clusterIP: None), so CoreDNS answers its name with the pod's IP
+# straight away.
+apiVersion: v1
+kind: Service
+metadata:
+  name: dns-peer
+  labels:
+    app: dns-peer
+
+spec:
+  clusterIP: None
+  selector:
+    app: dns-peer
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dns-peer
+  labels:
+    app: dns-peer
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dns-peer
+
+  template:
+    metadata:
+      labels:
+        app: dns-peer
+
+    spec:
+      # The benchmark installs no SIGTERM handler, and as PID 1 the kernel then ignores SIGTERM
+      # entirely, so deleting the pod would wait out its whole termination grace period (30 s).
+      # With a shared process namespace the pod's pause container is PID 1 instead.
+      shareProcessNamespace: true
+
+      # The default --victoria-url (http://victoriametrics:8428) then just works.
+      hostAliases:
+        - ip: "10.0.0.100"
+          hostnames:
+            - "victoriametrics"
+
+      containers:
+        - name: dns-peer
+          image: @REGISTRY_HOST@/benchmark-network-dns-peer:latest
+          imagePullPolicy: IfNotPresent
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dns-client
+  labels:
+    app: dns-client
+
+spec:
+  replicas: @NUM_INSTANCES@
+  selector:
+    matchLabels:
+      app: dns-client
+
+  template:
+    metadata:
+      labels:
+        app: dns-client
+
+    spec:
+      shareProcessNamespace: true
+
+      hostAliases:
+        - ip: "10.0.0.100"
+          hostnames:
+            - "victoriametrics"
+
+      containers:
+        - name: dns-client
+          image: @REGISTRY_HOST@/benchmark-network-dns-client:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NAME
+              value: "@TEST_HOST@"
+            - name: RANDOM_LABEL
+              value: "@RANDOM_LABEL@"
+
+            # Empty (service to service) means the nameserver in the pod's /etc/resolv.conf,
+            # which is CoreDNS - the one that knows dns-peer. For the unit/external paths it is
+            # the unit's own dnsmasq (--resolver), the resolver AosCore instances are pointed at.
+            - name: RESOLVER
+              value: "@RESOLVER@"

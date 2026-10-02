@@ -1,0 +1,44 @@
+# "networks:" comes before the services block here (the opposite of this repo's other, non-cloning
+# compose.yaml.in templates), because @SERVICE_ID@ cloning takes everything after that marker line
+# verbatim and repeats it once per service ID - see scripts/create_services.py's module docstring.
+# (Deliberately not spelling the marker itself out here, line-broken or otherwise: the render
+# splits on the first literal occurrence of that text, so an example of it sitting in this comment
+# above the real one would silently hijack the split - confirmed the hard way.)
+# This one template covers every Operational Speed chapter's shape:
+#   - "Install new deployable items"/"Install cached deployable items": N separate items, each 1
+#     instance - vary --num-services (1/8/16), leave --num-instances at its default (1).
+#   - "Start/stop already installed instances": 1 (or more, at the 128/256 tiers) item(s) scaled
+#     to up to 64 instances each - vary --num-instances, and --num-services only past 64 total.
+version: "3"
+
+networks:
+  default:
+    external: true
+    name: benchmark
+
+services:
+  timing-@SERVICE_ID@:
+    image: ${REGISTRY_HOST}/benchmark-timing-@SERVICE_ID@:latest
+    security_opt:
+      # SELinux (when enforcing) denies container_t processes write access to their own
+      # stdout/stderr pipe - confirmed via AVC denials ("denied { write } ... tclass=fifo_file")
+      # that otherwise silently swallow all container output, podman logs included.
+      - label=disable
+
+    # benchmark-timing's own default (--victoria-url http://victoriametrics:8428) then just
+    # works, without needing a --victoria-url override here.
+    extra_hosts:
+      - "victoriametrics:10.0.0.100"
+
+    # benchmark-timing installs no SIGTERM handler, and as PID 1 the kernel then ignores SIGTERM
+    # entirely - so `podman stop` waits out its whole 10 s grace period before SIGKILL (measured:
+    # 10.2 s per stop vs 182 ms with an init as PID 1, which forwards the signal to a normal child).
+    # Without this, "Stop instances" would measure the grace period, not stopping.
+    init: true
+
+    deploy:
+      # mode: replicated must be explicit - podman-compose >=1.6.0 only reads deploy.replicas
+      # when this is also set (confirmed: replicas alone silently created exactly 1 container
+      # regardless of the value), unlike 1.0.6 which read replicas unconditionally.
+      mode: replicated
+      replicas: @NUM_INSTANCES@

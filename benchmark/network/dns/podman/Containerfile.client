@@ -1,0 +1,17 @@
+# Build from the parent "dns" directory so this can COPY the shared benchmark source
+# (../src/client/dns_client.py - the same script AosCore's config.yaml.in deploys) without
+# duplicating it here:
+#
+#   cd benchmark/network/dns
+#   podman build -f podman/Containerfile.client -t ${REGISTRY_HOST}/benchmark-network-dns-client:latest .
+FROM debian:trixie-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /
+COPY src/client/dns_client.py /dns_client.py
+COPY podman/entrypoint-client.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
