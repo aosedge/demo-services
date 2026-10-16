@@ -1,0 +1,13 @@
+[run]
+# Paths must be relative to this directory: the analysis that consumes
+# coverage.xml does not run from the machine that produced it.
+relative_files = True
+source = .
+omit =
+    # Probe payloads run inside the unit, in their own container, not in the
+    # process that measures coverage - they can never be recorded here.
+    probes/*
+    .run/*
+
+[xml]
+output = coverage.xml

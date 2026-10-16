@@ -1,0 +1,21 @@
+# Lint rules for the security test suite. Kept explicit so a contributor sees
+# exactly what is enforced rather than inheriting whatever the repo default is.
+line-length = 100
+target-version = "py310"
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "S", "C4", "PL"]
+ignore = [
+    # The suite deliberately shells out to the published aos-prov / aos-signer
+    # CLIs and to qemu; every call site uses a fixed argument list and no shell.
+    "S603",
+    "S607",
+    # Sleeping between polls of a slow emulated unit is the point, not a smell.
+    "PLR0913",
+]
+
+[lint.per-file-ignores]
+# Tests assert; that is their job. Long, explanatory assertion messages are
+# preferred over terse ones here.
+"bootstrap/*" = ["S101", "PLR2004"]
+"cloud/*" = ["S101", "PLR2004"]
