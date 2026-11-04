@@ -24,7 +24,7 @@ Exit codes of status: 0 every check passed, 1 a check failed, 2 an error.
 Exit codes of wait:   0 ready (the batch id is printed), 1 the version failed on a Unit (the batch id is printed:
                       reject it), 2 decide nothing: timed out, no batch, the batch is already decided or locked, no
                       test Unit, or an error that waiting cannot fix (a setting, a TLS error, an HTTP 4xx answer),
-                      3 decide nothing: timed out while AosCloud could not be reached.
+                      3 decide nothing: timed out while AosCloud could not be reached or a test Unit was offline.
 Exit codes of decide: 0 sent, 2 refused or not sent (the batch is not waiting, an unknown architecture, AosCloud
                       not reachable, or an error), 3 the decision may have been applied (no answer, or HTTP 5xx):
                       check the batch in the UI.
@@ -202,9 +202,16 @@ def still_open(batch: dict) -> bool:
     return batch.get('state') == WAITING and not batch.get('is_locked')
 
 
+def is_online(unit_id: str) -> bool:
+    """GET units/{id}/: online_status. AosCloud keeps the last state of a Unit that went offline, even 'active'."""
+    return str(get(f'units/{unit_id}/').get('online_status')).lower() == 'online'
+
+
 def state_on_unit(unit_id: str, service_id: str, version: str) -> str:
-    """GET units/{id}/subjects-services/{service_id}/: 'installed' (an instance of it is active), 'failed' or
-    'waiting'."""
+    """'offline' (what AosCloud shows for the Unit is old), or from GET units/{id}/subjects-services/{service_id}/:
+    'installed' (an instance of it is active), 'failed' or 'waiting'."""
+    if not is_online(unit_id):
+        return 'offline'
     for entry in items(get(f'units/{unit_id}/subjects-services/{service_id}/')):
         versions = entry.get('service_versions') or {}
         installed = (versions.get('installed_service_version') or {}).get('version')
@@ -263,6 +270,8 @@ def status(args) -> int:
     rows = [('A1', 'exactly this Service and version', exact and state == WAITING, a1)]
     running, failed = [], []
     for unit in units:
+        if not is_online(unit):  # neither a pass nor a fail: its state in AosCloud says nothing about this version
+            raise Stop(f'Unit {short(unit)} is offline: what AosCloud shows for it is old, so it proves nothing')
         installed, instances = on_unit(unit, args.service_id)
         mine = [i for i in instances if i.get('version') == args.version]
         if installed == args.version and any(i.get('run_state') == 'active' for i in mine):
@@ -340,7 +349,7 @@ def checked_ids(values: list[str]) -> list[str]:
 def wait(args) -> int:
     units = checked_ids(args.unit)
     deadline = time.monotonic() + args.timeout
-    batch, last, told, covered, unreachable = None, None, False, False, False
+    batch, last, told, covered, unreachable, offline = None, None, False, False, False, []
     while time.monotonic() < deadline:
         try:
             batch = batch or find_batch(args.service_id, args.version)
@@ -367,8 +376,12 @@ def wait(args) -> int:
                 if args.units_file:
                     Path(args.units_file).write_text(' '.join(units), encoding='utf-8')
                 states = {unit: state_on_unit(unit, args.service_id, args.version) for unit in units}
+                offline = [short(unit) for unit, state in states.items() if state == 'offline']
                 if states != last:  # print only changes, so the log stays short
                     print(f'batch {batch["id"]}: {states}', file=sys.stderr)
+                    if offline:
+                        print(f"Unit {', '.join(offline)} is offline: what AosCloud shows for it is old, so it does "
+                              f'not count; waiting until it is online', file=sys.stderr)
                     last = states
                 if 'failed' in states.values():
                     print(batch['id'])
@@ -383,8 +396,9 @@ def wait(args) -> int:
             print(f'AosCloud not reachable, retrying: {e}', file=sys.stderr)
             unreachable = True
         time.sleep(args.interval)
-    print(f'timed out after {args.timeout:.0f} s: decide nothing', file=sys.stderr)
-    return 3 if unreachable else 2
+    print(f'timed out after {args.timeout:.0f} s: decide nothing'
+          + (f": Unit {', '.join(offline)} is offline" if offline else ''), file=sys.stderr)
+    return 3 if unreachable or offline else 2
 
 
 def decide(args) -> int:

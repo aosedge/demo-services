@@ -83,7 +83,7 @@ def render(args, rows: list[dict], when: str) -> str:
     if failed or (not unread and not any(r['result'] == 'PASS' for r in rows)):
         verdict, tone = 'FAIL → reject', 'fail'
     elif unread:
-        verdict, tone = 'AosCloud could not be read → no decision', 'none'
+        verdict, tone = 'AosCloud unreadable or a Unit offline → no decision', 'none'
     else:
         verdict, tone = 'PASS → approve', 'pass'
     builtin = [r for r in rows if r['part'] == 'builtin']

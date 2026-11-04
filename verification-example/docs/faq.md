@@ -9,7 +9,9 @@ calls, see the [API reference](api.md).
 The Service Provider, with the SP certificate.
 
 **What if a test Unit never gets the version?**
-`wait` times out with exit 2, and the job decides nothing. The batch keeps waiting, with no time limit. Check that the
+`wait` times out with exit 2, or exit 3 if the Unit is offline, and the job decides nothing. An offline Unit does not
+count, even if AosCloud still shows the new version active: that state is old. The batch keeps waiting, with no time
+limit. Check that the
 Unit is online, in the Verification Set, and linked to the Service through the Subject
 ([README, prerequisite 2](../README.md#2-verification-configured-oem)). Then run the job again with
 `workflow_dispatch`, with the same version. The watch does not start a batch a second time.
@@ -133,10 +135,9 @@ TLS inspection.
 ## Security
 
 **What does a public run show?**
-The job masks the batch, Unit and Service ids in its log. Three things stay visible: the run title carries the batch id,
-because the watch finds its runs by it; the concurrency group carries the Service id; and a Service id that comes from
-a variable appears once, in the header of the first step that uses it. Keep the repository private, or store
-`AOS_SERVICE_ID` as a secret, if that matters.
+The job masks the batch, Unit and Service ids in its log. Two things stay visible: the run title carries the batch id,
+because the watch finds its runs by it; and the variable `AOS_API_URL` shows your API host. Keep the repository private
+if that matters.
 
 **The PEM secret holds the private key.**
 Anyone who can run a workflow with this secret can act as your SP user. The job reads the secrets from the GitHub

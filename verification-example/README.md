@@ -35,7 +35,7 @@ schedule, with the SP certificate alone. Nobody presses anything.
 - **When to start, and which version:** the highest version of your Service, if its batch waits.
 - **Which Set:** the test Units are the Units of the Verification Set that have your Service.
 - **Which tests:** `tests/run_tests.sh` in your repository: the built-in checks, then your tests.
-- **Did the deployment reach the whole Set?** `wait` asks every test Unit: installed, with an active instance. One failed Unit rejects the version; a Unit that never gets it ends in a timeout and no decision.
+- **Did the deployment reach the whole Set?** `wait` asks every test Unit: online, installed, with an active instance. One failed Unit rejects the version; a Unit that is offline or never gets it ends in a timeout and no decision.
 
 A chained start fits when the upload runs in the same workflow: it calls the verification right after the upload. The
 scheduled watch catches every other upload. Both end in the same `verify-release`, in one queue per version, and
@@ -146,12 +146,13 @@ It finds the batch of this Service and version, takes the test Units from AosClo
 - `GET verification-batch/{batch_id}/`: [check that it still waits](docs/api.md#read-the-batch)
 - `GET verification-batch/{batch_id}/statistics/` and `GET services/{service_id}/units/`: [the test Units](docs/api.md#the-units-of-the-verification-set).
   Units you give must be in the Set, and every architecture of the batch needs one, because the decision covers them all
+- `GET units/{unit_id}/`: [is the test Unit online](docs/api.md#is-the-unit-online)
 - `GET units/{unit_id}/subjects-services/{service_id}/`: [the version on each test Unit](docs/api.md#read-the-version-on-a-unit)
 
 Exit 0: ready, and the batch id is printed. Exit 1: the version failed to start on a Unit, the batch id is printed,
 and the job rejects. Exit 2: timed out, no batch, the batch is already decided, or an error that waiting cannot fix
 (a setting, a TLS error, an HTTP 4xx answer); the job decides nothing. Exit 3: timed out while AosCloud could not be
-reached; the job decides nothing. Only a lost connection, a timeout and HTTP 5xx are retried.
+reached or a test Unit was offline; the job decides nothing. Only a lost connection, a timeout and HTTP 5xx are retried.
 
 ![The test Unit runs the new version (Unit → Subjects & Services → Service Instances)](docs/img/09-sp-unit-service-instances.png)
 
@@ -160,7 +161,7 @@ reached; the job decides nothing. Only a lost connection, a timeout and HTTP 5xx
 The built-in checks run first: they read the batch and the Units again (exactly this version, on every Unit, no crash) and
 watch the version for 60 s (late failure, restarts). Then your tests, from `tests/your_tests.sh` when you add it
 ([Your tests](docs/tests.md)), in a step of their own, with no secret. Exit 0 when every check passed, 1 when a check
-failed, 3 when AosCloud could not be read: an outage decides nothing. It writes `report/report.html` and
+failed, 3 when AosCloud could not be read or a test Unit is offline: neither decides anything. It writes `report/report.html` and
 `report/junit.xml`; the job keeps them: open the run page → **Artifacts** → **verification-report**.
 
 ### 3. Decide: `verify_batch.py decide --approve` or `--reject`
@@ -192,7 +193,7 @@ Copy this file to `.github/workflows/watch-verification.yml` on the default bran
 there. It needs three settings, from [Parameters](#parameters):
 
 1. The variable `AOS_API_URL`.
-2. The variable `AOS_SERVICE_ID`.
+2. The secret `AOS_SERVICE_ID`: a secret, so that GitHub masks it in the log.
 3. The secrets `AOS_USER_PEM` and `AOS_ROOT_CA_PEM`, in the environment `aos-verification`.
 
 `AOS_TEST_UNITS` is no longer required: the job takes the Units from AosCloud.
@@ -239,7 +240,7 @@ jobs:
         id: discover
         env:
           AOS_API_URL: ${{ vars.AOS_API_URL }}
-          SERVICE_ID: ${{ vars.AOS_SERVICE_ID }}
+          SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
           TEST_UNITS: ${{ vars.AOS_TEST_UNITS }}
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
           ROOT_CA: ${{ secrets.AOS_ROOT_CA_PEM }}
@@ -294,7 +295,7 @@ confirm (repository Settings → Environments). The variables go in Settings →
 | `AOS_API_URL` | variable | `https://api.aoscloud.io:10000/api/v11`, or your API host |
 | `AOS_USER_PEM` | secret | one PEM file with the SP user certificate, the intermediate certificates and the key (see below) |
 | `AOS_ROOT_CA_PEM` | secret | the AosEdge root CA file `aos-root-ca.crt` (from `aos-keys`, see below; it is not secret) |
-| `AOS_SERVICE_ID` | variable | your Service id |
+| `AOS_SERVICE_ID` | secret | your Service id; it is not secret, but GitHub masks a secret in the log |
 | `AOS_TEST_UNITS` | variable | optional: test only these Units of the Verification Set; ids separated by spaces. A Unit you leave out is not checked. The job stops if one is outside the Set, or if an architecture of the batch has none |
 | `AOS_WATCH_SECONDS` | variable | how long the built-in checks watch the version on the test Units; default `60`, `0` turns the watch off. See [Example checks](docs/checks.md#c3-late-failure) |
 | `AOS_WAIT_TIMEOUT` | variable | seconds to wait for the version on the Units; default `1800`. The job stops after 60 minutes |

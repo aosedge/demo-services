@@ -48,6 +48,8 @@ class Cloud:
         self.verification_set = {'amd64': [UNIT]}  # per architecture: what statistics lists
         self.service_units = [UNIT]  # what services/{id}/units/ lists
         self.states = {}  # per Unit, other than UNIT: pending | installed | failed
+        self.offline = set()  # the Units that are offline
+        self.offline_reads = 0  # UNIT reads as offline this many times, then online
 
     def entry(self):
         if self.unit == 'none':
@@ -96,6 +98,12 @@ class Cloud:
                     offset, limit = int(params.get('offset', 0)), int(params.get('limit', 50))
                     every = [{'id': unit} for unit in cloud.service_units]
                     return Answer(200, {'total': len(every), 'offset': offset, 'items': every[offset:offset + limit]})
+                unit_read = re.fullmatch(r'units/([^/]+)/', path)
+                if unit_read:
+                    late = unit_read[1] == UNIT and cloud.offline_reads > 0
+                    cloud.offline_reads -= 1 if late else 0
+                    down = late or unit_read[1] in cloud.offline
+                    return Answer(200, {'id': unit_read[1], 'online_status': 'Offline' if down else 'Online'})
                 if path == f'units/{UNIT}/subjects-services/{SERVICE}/':
                     return Answer(200, {'total': 1, 'offset': 0, 'items': cloud.entry()})
                 for unit, state in cloud.states.items():
@@ -237,6 +245,51 @@ def test_a_given_unit_cannot_stand_in_for_an_untested_architecture(cloud, capsys
     assert wait() == 2
     out = capsys.readouterr()
     assert out.out == '' and 'no test Unit for arm64' in out.err
+
+
+def test_an_offline_unit_that_still_shows_active_decides_nothing(cloud, capsys):
+    cloud.offline = {UNIT}  # cloud.unit is 'installed': the state AosCloud kept from before
+    assert wait() == 3
+    out = capsys.readouterr()
+    assert out.out == '' and cloud.patches == [] and 'is offline' in out.err and 'does not count' in out.err
+    assert 'decide nothing: Unit' in out.err and not [path for path, _ in cloud.gets if 'subjects-services' in path]
+
+
+def test_an_offline_unit_that_shows_failed_is_not_rejected(cloud, capsys):
+    cloud.offline, cloud.unit = {UNIT}, 'failed'
+    assert wait() == 3 and capsys.readouterr().out == '' and cloud.patches == []
+
+
+def test_a_unit_that_comes_online_is_ready(cloud, capsys):
+    cloud.offline_reads = 2
+    assert wait(timeout=1) == 0
+    out = capsys.readouterr()
+    assert out.out.strip() == BATCH and 'is offline' in out.err
+
+
+def test_a_unit_without_an_online_status_does_not_count(cloud, monkeypatch):
+    real = verify_batch.get
+    monkeypatch.setattr(verify_batch, 'get', lambda path, **kw: {} if path == f'units/{UNIT}/' else real(path, **kw))
+    assert wait() == 3
+
+
+def test_of_two_units_one_offline_is_not_ready(cloud, capsys):
+    cloud.verification_set = {'amd64': [UNIT, 'unit-2']}
+    cloud.states, cloud.offline = {'unit-2': 'installed'}, {'unit-2'}
+    assert wait(units=(UNIT, 'unit-2')) == 3 and capsys.readouterr().out == ''
+
+
+def test_a_failed_online_unit_rejects_even_if_another_is_offline(cloud, capsys):
+    cloud.verification_set = {'amd64': [UNIT, 'unit-2']}
+    cloud.unit, cloud.states, cloud.offline = 'failed', {'unit-2': 'installed'}, {'unit-2'}
+    assert wait(units=(UNIT, 'unit-2')) == 1 and capsys.readouterr().out.strip() == BATCH
+
+
+def test_status_on_an_offline_unit_is_an_error_not_a_fail(cloud, capsys):
+    cloud.offline = {UNIT}
+    assert main('status', '--service-id', SERVICE, '--version', NEW, '--batch-id', BATCH, '--unit', UNIT) == 2
+    out = capsys.readouterr()
+    assert out.out == '' and 'is offline' in out.err
 
 
 def test_a_locked_batch_is_not_waited_for(cloud, capsys):
@@ -754,6 +807,7 @@ def test_the_report_is_told_who_found_the_batch_and_the_units(tmp_path, units, o
                                                               units_from):
     run, output, _ = run_wait_step(tmp_path, 0, BATCH, units=units, override=override, batch_input=batch, actor=actor)
     assert run.returncode == 0 and f'found_by={found_by}\n' in output and f'units_from={units_from}\n' in output
+    assert f'service_id={SERVICE}\n' in output
 
 
 @needs_bash
@@ -881,6 +935,7 @@ def test_the_first_step_masks_the_inputs_without_an_env(tmp_path):
 def test_your_tests_step_has_no_secret_and_only_the_verdict_decides():
     yours = workflow_step('2b.', WORKFLOW)
     assert 'secrets.' not in yours and 'USER_PEM' not in yours and 'RUN_PART: yours' in yours
+    assert 'SERVICE_ID: ${{ steps.wait.outputs.service_id }}' in yours
     assert 'secrets.AOS_USER_PEM' in workflow_step('2a.', WORKFLOW)
     text = WORKFLOW.read_text(encoding='utf-8')
     assert "steps.tests.outputs.code == '0'" in workflow_step('3a.', WORKFLOW)
@@ -925,9 +980,11 @@ def test_the_discover_step_deletes_the_key_and_calls_discover(tmp_path):
 
 def test_both_starts_end_in_one_concurrency_group():
     text = WORKFLOW.read_text(encoding='utf-8')
-    assert 'group: verify-${{ inputs.service_id || vars.AOS_SERVICE_ID }}-${{ inputs.version }}' in text
+    assert "group: verify-${{ inputs.service_id || 'service' }}-${{ inputs.version }}" in text
+    assert 'vars.AOS_SERVICE_ID' not in text + WATCH.read_text(encoding='utf-8')
     assert 'cancel-in-progress: false' in text and "run-name: verify ${{ inputs.batch_id || 'manual' }} " in text
     caller = (ROOT / 'examples' / 'release-caller.yml').read_text(encoding='utf-8')
+    assert 'service_id' not in caller and 'secrets: inherit' in caller
     assert 'uses: ./.github/workflows/verify-release.yml' in caller and 'version:' in caller
 
 

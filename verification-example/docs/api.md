@@ -115,6 +115,23 @@ curl -sS --cert "$AOS_CERT" --cacert "$AOS_CA" "$AOS_API_URL/services/$SERVICE_I
 The Units linked to your Service through a Subject, whether they are in the Set or not. An architecture of the batch with no Unit in both lists stops
 the job with no decision: `no test Unit for arm64`.
 
+### Is the Unit online
+
+AosCloud keeps the last state of a Unit that went offline, even an active instance, so the job asks this first.
+**GET `units/{unit_id}/`** · SP · read ·
+Swagger: [units_read](https://api.aoscloud.io/api/v11/docs#/units/units_read)
+
+```bash
+curl -sS --cert "$AOS_CERT" --cacert "$AOS_CA" "$AOS_API_URL/units/$UNIT_ID/"
+```
+
+```json
+{"id": "<unit id>", "status": "provisioned", "online_status": "Online", "last_online_changed_at": "2026-11-04T10:01:58+00:00"}
+```
+
+Only `online_status` `Online` counts. An offline Unit is neither ready nor failed: the job waits, and at the timeout it
+decides nothing.
+
 ### Read the version on a Unit
 
 Shows which version of your Service a test Unit has installed, and whether it runs.

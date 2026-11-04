@@ -39,7 +39,7 @@ jobs:
         id: discover
         env:
           AOS_API_URL: ${{ vars.AOS_API_URL }}
-          SERVICE_ID: ${{ vars.AOS_SERVICE_ID }}
+          SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
           TEST_UNITS: ${{ vars.AOS_TEST_UNITS }}
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
           ROOT_CA: ${{ secrets.AOS_ROOT_CA_PEM }}

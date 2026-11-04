@@ -9,7 +9,7 @@ on:
   workflow_call:
     inputs:
       service_id:
-        description: AosCloud id of the Service; default the variable AOS_SERVICE_ID
+        description: AosCloud id of the Service; default the secret AOS_SERVICE_ID
         type: string
         required: false
       version:
@@ -32,13 +32,15 @@ on:
         required: false
       AOS_ROOT_CA_PEM:
         required: false
+      AOS_SERVICE_ID:
+        required: false
   workflow_dispatch:
     inputs:
       version:
         description: the version that was uploaded
         required: true
       service_id:
-        description: AosCloud id of the Service; default the variable AOS_SERVICE_ID
+        description: AosCloud id of the Service; default the secret AOS_SERVICE_ID
         required: false
       batch_id:
         description: the batch of this version; default found by the version
@@ -47,10 +49,11 @@ on:
         description: the test Units, separated by spaces; default the Units of the Verification Set that have the Service
         required: false
 
-# By Service and version, not by batch id: an upload job does not know the batch id, and its run must queue with a run
-# that the watch started for the same batch. AosCloud has one batch per version.
+# By version, not by batch id: an upload job does not know the batch id, and its run must queue with a run that the
+# watch started for the same batch. AosCloud has one batch per version. A secret cannot be used in this line, and the
+# group name is public: a run with the input service_id queues on its own.
 concurrency:
-  group: verify-${{ inputs.service_id || vars.AOS_SERVICE_ID }}-${{ inputs.version }}
+  group: verify-${{ inputs.service_id || 'service' }}-${{ inputs.version }}
   cancel-in-progress: false
 
 jobs:
@@ -101,7 +104,7 @@ jobs:
         id: wait
         env:
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
-          SERVICE_ID: ${{ inputs.service_id || vars.AOS_SERVICE_ID }}
+          SERVICE_ID: ${{ inputs.service_id || secrets.AOS_SERVICE_ID }}
           INPUT_UNITS: ${{ inputs.units }}
           OVERRIDE_UNITS: ${{ vars.AOS_TEST_UNITS }}
           BATCH_INPUT: ${{ inputs.batch_id }}
@@ -121,7 +124,7 @@ jobs:
           elif [ -n "$OVERRIDE_UNITS" ]; then units_from=AOS_TEST_UNITS; fi
           batch_arg=()
           if [ -n "$BATCH_INPUT" ]; then batch_arg=(--batch-id "$BATCH_INPUT"); fi
-          if [ -z "$SERVICE_ID" ]; then echo "::error::AOS_SERVICE_ID is empty: set the variable, or pass service_id"; exit 1; fi
+          if [ -z "$SERVICE_ID" ]; then echo "::error::AOS_SERVICE_ID is empty: put the secret in the environment aos-verification, or pass service_id"; exit 1; fi
           if [ -z "$USER_PEM" ]; then
             echo "::error::AOS_USER_PEM is empty: put it in the environment aos-verification (see the README, Parameters)"
             exit 1
@@ -136,6 +139,7 @@ jobs:
           code=$?
           set -e
           {
+            echo "service_id=$SERVICE_ID"
             echo "batch_id=$batch"
             echo "units=$(cat "$found" 2>/dev/null)"
             echo "found_by=$found_by"
@@ -151,7 +155,7 @@ jobs:
         id: builtin
         if: steps.wait.outputs.code == '0'
         env:
-          SERVICE_ID: ${{ inputs.service_id || vars.AOS_SERVICE_ID }}
+          SERVICE_ID: ${{ inputs.service_id || secrets.AOS_SERVICE_ID }}
           BATCH_ID: ${{ steps.wait.outputs.batch_id }}
           AOS_TEST_UNITS: ${{ steps.wait.outputs.units }}
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
@@ -168,7 +172,7 @@ jobs:
         id: tests
         if: "!cancelled() && steps.wait.outputs.code == '0'"
         env:
-          SERVICE_ID: ${{ inputs.service_id || vars.AOS_SERVICE_ID }}
+          SERVICE_ID: ${{ steps.wait.outputs.service_id }}
           BATCH_ID: ${{ steps.wait.outputs.batch_id }}
           AOS_TEST_UNITS: ${{ steps.wait.outputs.units }}
           WATCH_SECONDS: ${{ vars.AOS_WATCH_SECONDS || '60' }}

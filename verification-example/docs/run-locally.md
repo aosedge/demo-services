@@ -363,11 +363,11 @@ and the job does 7 to 9 by itself: [Add the job to your pipeline](../README.md#t
 | `wait` | 0 | the batch waits and the version runs on every Unit; the batch id is printed | run the built-in checks |
 | `wait` | 1 | the version failed to start on a Unit; the batch id is printed | reject it |
 | `wait` | 2 | timed out, no batch, the batch is already decided, no test Units, or an error that waiting cannot fix (a setting, a TLS error, an HTTP 4xx answer) | decide nothing; read the message, and see the [FAQ](faq.md#decisions) |
-| `wait` | 3 | timed out while AosCloud could not be reached | decide nothing; run it again |
+| `wait` | 3 | timed out while AosCloud could not be reached or a test Unit was offline | decide nothing; run it again |
 | `tests/run_tests.sh` | 0 | every check passed | approve |
 | `tests/run_tests.sh` | 1 | a check failed; the report says which | reject |
 | `tests/run_tests.sh` | 2 | a value is missing (`SERVICE_ID`, `VERSION`, `BATCH`, `UNIT_ID`) | export it and run it again |
-| `tests/run_tests.sh` | 3 | AosCloud could not be read | decide nothing; run it again |
+| `tests/run_tests.sh` | 3 | AosCloud could not be read, or a test Unit is offline | decide nothing; run it again |
 | `decide` | 0 | the decision was sent; the new state is printed, or `sent` when the answer has no body | check the batch in the UI |
 | `decide` | 2 | refused: the batch is not waiting, has no architectures or not the one in `--arch`, AosCloud was not reachable, or it answered 4xx | read the message; run `decide` again only if nothing was sent |
 | `decide` | 3 | the decision was sent, and the answer was lost or HTTP 5xx: it may have been applied | look at the batch in the UI before you do anything else |

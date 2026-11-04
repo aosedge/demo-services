@@ -10,7 +10,8 @@
 # Writes report/report.html and report/junit.xml (REPORT_DIR changes the folder).
 # RUN_PART: all (default), or builtin and then yours: the job runs them in two steps, so your tests have no key at all.
 # Exit 0 = every check passed: approve. 1 = a check failed: reject. 2 = a setting is missing.
-# 3 = AosCloud could not be read: decide nothing, an outage says nothing about the version. builtin always exits 0.
+# 3 = AosCloud could not be read, or a test Unit is offline: decide nothing, neither says anything about the version.
+# builtin always exits 0.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 python=${PYTHON:-python}
@@ -46,7 +47,7 @@ echo "Built-in checks of version $VERSION"
 status=$("$python" "$here/../verify_batch.py" status --service-id "$SERVICE_ID" --version "$VERSION" \
          --batch-id "$batch" "${unit_args[@]}")
 if [ $? -eq 2 ]; then
-  record builtin A1 "read the batch and the Units" ERROR "AosCloud could not be read: see the message above"
+  record builtin A1 "read the batch and the Units" ERROR "AosCloud could not be read, or a Unit is offline: see the message above"
 else
   while IFS=$'\t' read -r code name result detail; do
     [ -n "$code" ] && record builtin "$code" "$name" "$result" "$detail"
@@ -74,7 +75,7 @@ if [ "$watch" -gt 0 ]; then
   if [ "$stopped" -eq 0 ]; then
     record builtin C3/C4 "still running (late failure, restarts)" PASS "active on every Unit for $watch s"
   elif [ "$lost" -eq 1 ]; then
-    record builtin C3/C4 "still running (late failure, restarts)" ERROR "AosCloud could not be read in round $stopped of $rounds"
+    record builtin C3/C4 "still running (late failure, restarts)" ERROR "AosCloud could not be read, or a Unit went offline, in round $stopped of $rounds"
   else
     record builtin C3/C4 "still running (late failure, restarts)" FAIL "the version stopped running in round $stopped of $rounds"
   fi
@@ -121,6 +122,6 @@ fi
   --batch-id "$batch" --units "$units" --watch "$watch" \
   --found-by "${FOUND_BY:-version}" --units-from "${UNITS_FROM:-the values you gave}" || failed=1
 if [ $failed -eq 1 ]; then echo "a check failed: reject"; exit 1; fi
-if [ $unread -eq 1 ]; then echo "AosCloud could not be read: decide nothing, and run it again"; exit 3; fi
+if [ $unread -eq 1 ]; then echo "AosCloud could not be read, or a Unit is offline: decide nothing, and run it again"; exit 3; fi
 echo "all checks passed: approve"
 exit 0

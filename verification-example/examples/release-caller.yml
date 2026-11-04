@@ -21,6 +21,5 @@ jobs:
     needs: upload
     uses: ./.github/workflows/verify-release.yml
     with:
-      service_id: ${{ vars.AOS_SERVICE_ID }}
       version: ${{ needs.upload.outputs.version }}
     secrets: inherit

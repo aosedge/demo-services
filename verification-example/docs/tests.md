@@ -22,7 +22,7 @@ come from the workflow), and takes no arguments.
    **verification-report**.
 
 **Exit 0 approves the version. Exit 1 (a check failed) rejects it.** Exit 2 means a value is missing. Exit 3 means
-AosCloud could not be read: nothing is decided, because an outage says nothing about the version.
+AosCloud could not be read or a test Unit is offline: nothing is decided, because neither says anything about the version.
 
 ![The test Unit runs the new version (Unit → Subjects & Services → Service Instances)](img/09-sp-unit-service-instances.png)
 
@@ -69,6 +69,6 @@ pip install pytest requests
 python -m pytest -q
 ```
 
-You should see `157 passed`. Without `bash` (plain Windows), the 48 tests that use `bash` are skipped.
+You should see `164 passed`. Without `bash` (plain Windows), the 48 tests that use `bash` are skipped.
 
 **Next →** [Example checks](checks.md): 12 scenarios we ran on production, with the code

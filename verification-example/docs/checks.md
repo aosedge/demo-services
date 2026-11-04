@@ -123,9 +123,11 @@ python verify_batch.py check --service-id "$SERVICE_ID" --unit "$UNIT_ID"
 **How.** `wait` stops after `--timeout` (in the job: `AOS_WAIT_TIMEOUT`, default 1800 s).
 
 **What you see.** The last Unit states, for example `{'…': 'installed', '…': 'waiting'}`, then
-`timed out after 1800 s: decide nothing`.
+`timed out after 1800 s: decide nothing`. For an offline Unit: `Unit … is offline: what AosCloud shows for it is old, so
+it does not count`, even if AosCloud still shows the version active.
 
-**The decision.** Exit 2, nothing sent; the batch keeps waiting. Bring the Unit online and run it again.
+**The decision.** Exit 2, or exit 3 if a Unit is offline; nothing sent, and the batch keeps waiting. Bring the Unit
+online and run it again.
 
 ## C1. The Service's own tests
 
@@ -188,7 +190,8 @@ step of the built-in checks has the certificate; your tests run in another step,
 
 **What you see.** `PASS C3/C4 still running`, or `FAIL C3/C4`: "the version stopped running in round … of …".
 
-**The decision.** A failure in any round rejects the version. If AosCloud cannot be reached, nothing is decided.
+**The decision.** A failure in any round rejects the version. If AosCloud cannot be reached or a Unit goes offline,
+nothing is decided.
 
 ## C4. Restarts and memory
 
