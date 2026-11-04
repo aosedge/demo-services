@@ -1,0 +1,81 @@
+# Ask AosCloud on a schedule whether a new version waits on the Verification Set, and start one verification run for it.
+# AosCloud sends no notification to a pipeline, so this job asks; nobody has to press anything.
+name: watch-verification
+
+on:
+  schedule:
+    # Every 10 minutes. Use */5 if you need it faster: GitHub's minimum is 5, and it is not exact.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: watch-verification
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # the secrets live in this environment; required reviewers on it would stop every run of this job (see the FAQ)
+    environment: aos-verification
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install requests
+        run: python -m pip install requests==2.32.3
+
+      # The only step with the private key. It reads AosCloud, and it deletes the key when it ends.
+      - name: 0. Ask AosCloud for a waiting batch
+        id: discover
+        env:
+          AOS_API_URL: ${{ vars.AOS_API_URL }}
+          SERVICE_ID: ${{ vars.AOS_SERVICE_ID }}
+          TEST_UNITS: ${{ vars.AOS_TEST_UNITS }}
+          USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          ROOT_CA: ${{ secrets.AOS_ROOT_CA_PEM }}
+        run: |
+          if [ -z "$USER_PEM" ] || [ -z "$ROOT_CA" ]; then
+            echo "::error::AOS_USER_PEM or AOS_ROOT_CA_PEM is empty: put them in the environment aos-verification"
+            exit 1
+          fi
+          units=()
+          set -f
+          for unit in $TEST_UNITS; do units+=(--unit "$unit"); done
+          set +f
+          dir="$RUNNER_TEMP/aos" && mkdir -p "$dir" && chmod 700 "$dir"
+          trap 'rm -rf "$dir"' EXIT
+          (umask 077 && printf '%s\n' "$USER_PEM" > "$dir/user.pem" && printf '%s\n' "$ROOT_CA" > "$dir/aos-root-ca.crt")
+          export AOS_CERT="$dir/user.pem" AOS_CA="$dir/aos-root-ca.crt"
+          python verify_batch.py discover "${units[@]}"
+
+      # No key here. A run with this batch in its title, in any state, means the batch was handled: a run that
+      # timed out is not repeated every 10 minutes. Start it again by hand, with the version.
+      - name: Start one verification run for the batch
+        if: steps.discover.outputs.batch_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BATCH_ID: ${{ steps.discover.outputs.batch_id }}
+          VERSION: ${{ steps.discover.outputs.version }}
+          UNITS: ${{ steps.discover.outputs.units }}
+        run: |
+          runs=$(gh run list --workflow verify-release.yml --limit 200 --json displayTitle,status)
+          seen=$(jq -r --arg batch "$BATCH_ID" --arg version "$VERSION" '
+            [.[] | (.displayTitle | split(" ")) as $t
+             | select($t[1] == $batch or ($t[1] == "manual" and $t[2] == $version)) | .status] | first // empty' <<<"$runs")
+          if [ -n "$seen" ]; then
+            echo "batch $BATCH_ID, version $VERSION already has a run ($seen): nothing to start"
+            exit 0
+          fi
+          echo "starting verify-release for batch $BATCH_ID, version $VERSION, Units $UNITS"
+          gh workflow run verify-release.yml --ref "$GITHUB_REF_NAME" -f version="$VERSION" -f batch_id="$BATCH_ID" -f units="$UNITS"
