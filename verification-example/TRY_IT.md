@@ -61,6 +61,7 @@ If you also have a login: **SP UI → Verification batches** shows the new Servi
 | What you see | What to do |
 |---|---|
 | No workflows in the Actions tab, or no **Run workflow** button | Actions are not enabled yet: step 3. |
+| Actions enabled, no banner, but "No workflows found" | GitHub has not registered the files yet. Make one small commit on your default branch that touches `.github/workflows/` (a comment line is enough) and wait a minute. |
 | `Missing secrets: ...` | Add the secrets it names: step 2. Check the spelling, and add them as secrets, not variables. |
 | `The user of AOS_USER_PEM needs the permission deployment_bundles_create` | This certificate may not upload. Tell us. |
 | `already exists` in step 3 | Someone uploaded the same Service version at that moment. Run it again. |

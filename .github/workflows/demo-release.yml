@@ -1,4 +1,5 @@
 # Copy of verification-example/.github/workflows for the showcase. Difference: the job runs in verification-example/.
+# In a fork, GitHub lists these workflows only after Actions are enabled there: TRY_IT.md, step 3.
 # DEMO ONLY, to try the flow from a fork with one button (TRY_IT.md). A real pipeline uploads from its own build and
 # never picks a version like this.
 # Reads the highest Service version in AosCloud, builds the next one (patch + 1) of the demo Service, signs it, uploads

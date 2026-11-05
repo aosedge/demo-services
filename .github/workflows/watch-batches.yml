@@ -1,4 +1,5 @@
 # Copy of verification-example/.github/workflows for the showcase. Difference: the job runs in verification-example/. The schedule runs every 5 minutes for the showcase: turn it off when the showcase ends.
+# In a fork, GitHub lists these workflows only after Actions are enabled there: TRY_IT.md, step 3.
 # Ask AosCloud on a schedule whether a new Service version waits on the Verification Set, and start one verification run for it.
 # AosCloud sends no notification to a pipeline, so this job asks; nobody has to press anything.
 name: watch-batches
