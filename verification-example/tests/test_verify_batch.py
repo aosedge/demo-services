@@ -1658,3 +1658,121 @@ def test_aos_verify_recognises_the_message_of_verify_batch():
     phrase = 'no Verification Set Unit'
     assert phrase in (ROOT / 'verify_batch.py').read_text(encoding='utf-8')
     assert f"*'{phrase}'*)" in (ROOT / 'aos-verify').read_text(encoding='utf-8')
+
+
+# demo-release.yml and the pause switch of the watch
+DEMO = ROOT / '.github' / 'workflows' / 'demo-release.yml'
+SERVICE_ID_FOR_NEXT = 'service-next'
+
+
+def batch_of(version, service=SERVICE_ID_FOR_NEXT):
+    return {'id': f'batch-{version}', 'state': 'Valid', 'update_items': [{'identity_id': service, 'version': version}]}
+
+
+@pytest.mark.parametrize('versions, expected', [
+    (['4.9.0', '4.11.0', '4.10.0'], '4.11.1'),
+    (['4.11.1', '4.11.0'], '4.11.2'),
+    (['5.0.0-rc1', '4.11.0'], '5.0.1'),
+    (['not-semver', '1.2.3'], '1.2.4'),
+    ([], '1.0.0'),
+])
+def test_next_version_is_the_highest_plus_one_patch(versions, expected, monkeypatch, capsys):
+    batches = [batch_of(v) for v in versions] + [batch_of('99.0.0', 'another-service')]
+    monkeypatch.setattr(verify_batch, 'pages', lambda path, **params: iter(batches))
+    monkeypatch.setattr(verify_batch, 'get', lambda *a, **k: pytest.fail('next-version must only list'))
+    assert verify_batch.main(['next-version', '--service-id', SERVICE_ID_FOR_NEXT]) == 0
+    assert capsys.readouterr().out.strip() == expected
+
+
+def test_next_version_stops_on_an_error_with_code_2(monkeypatch, capsys):
+    def refused(path, **params):
+        raise verify_batch.Stop('HTTP 403')
+    monkeypatch.setattr(verify_batch, 'pages', refused)
+    assert verify_batch.main(['next-version', '--service-id', SERVICE_ID_FOR_NEXT]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == '' and 'nothing was changed' in captured.err
+
+
+def job_of(text: str, name: str) -> str:
+    return re.search(rf'^  {name}:\n(.*?)(?=^  \w+:\n|\Z)', text, re.M | re.S)[1]
+
+
+@pytest.mark.parametrize('value, event, paused', [
+    ('off', 'schedule', True), ('on', 'schedule', False), ('', 'schedule', False), ('off', 'workflow_dispatch', False),
+])
+def test_the_pause_switch_stops_only_a_scheduled_watch(value, event, paused, tmp_path):
+    output, summary = tmp_path / 'output', tmp_path / 'summary'
+    output.touch(), summary.touch()
+    done = subprocess.run(['bash', '-e', '-c', step('Is the watch paused', WATCH)], capture_output=True, text=True, check=True,
+                          env={'PATH': os.environ['PATH'], 'AOS_WATCH': value, 'EVENT': event,
+                               'GITHUB_OUTPUT': str(output), 'GITHUB_STEP_SUMMARY': str(summary)})
+    assert ('watch paused' in done.stdout) == paused and ('paused=yes' in output.read_text()) == paused
+    assert ('watch paused' in summary.read_text()) == paused
+
+
+def test_the_paused_watch_has_no_secret_and_skips_the_job_that_has():
+    text = WATCH.read_text(encoding='utf-8')
+    assert 'secrets.' not in job_of(text, 'switch') and 'environment:' not in job_of(text, 'switch')
+    assert "needs: switch\n    if: needs.switch.outputs.paused != 'yes'" in text
+
+
+def test_demo_release_is_manual_and_says_demo_only():
+    text = DEMO.read_text(encoding='utf-8')
+    assert re.search(r'^on:\n  workflow_dispatch:\n\n', text, re.M) and 'schedule' not in text and 'pull_request' not in text
+    assert 'name: demo-release (demo only)' in text and text.startswith('#') and 'DEMO ONLY' in text.splitlines()[0]
+    assert 'aos-signer==2.0.2' in text and 'gh workflow run verify-batch.yml --ref "$GITHUB_REF_NAME" -f version="$VERSION"' in text
+    assert 'batch_id' not in workflow_step('4. Start', DEMO) and 'secrets.' not in workflow_step('4. Start', DEMO)
+    assert 'The decision is in that run.' in workflow_step('4. Start', DEMO)
+    assert ' approve' not in text.lower() and '--reject' not in text
+
+
+def run_signer_step(name, signer_output, signer_code, tmp_path):
+    """A signer step of demo-release.yml, with stand-ins for aos-signer and openssl."""
+    bin_dir, temp = tmp_path / 'bin', tmp_path / 'temp'
+    bin_dir.mkdir(), (temp / 'aos').mkdir(parents=True)
+    for tool, body in (('aos-signer', f'cat <<\'OUT\'\n{signer_output}\nOUT\nexit {signer_code}\n'), ('openssl', 'exit 0\n')):
+        (bin_dir / tool).write_text('#!/bin/bash\n' + body), (bin_dir / tool).chmod(0o755)
+    (temp / 'aos' / 'bundle').mkdir()
+    return subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', step(name, DEMO)], capture_output=True, text=True, cwd=ROOT,
+                          env={'PATH': f"{bin_dir}:{os.environ['PATH']}", 'RUNNER_TEMP': str(temp), 'USER_PEM': 'pem',
+                               'VERSION': '4.11.1', 'SERVICE_ID': 'a-service'})
+
+
+SIGNER_OUT = ('\x1b[36mUpload info: user=someone+demo@example.com, domain=aoscloud.io\x1b[0m\n'
+              'Uploading...   DONE\nowner someone@example.com of 11111111-2222-3333-4444-555555555555')
+
+
+def test_the_upload_step_hides_the_user_and_the_ids_and_deletes_the_key(tmp_path):
+    done = run_signer_step('3. Upload', SIGNER_OUT, 0, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert 'example.com' not in done.stdout + done.stderr and '11111111-2222' not in done.stdout + done.stderr
+    assert 'domain=aoscloud.io' in done.stdout and 'uploaded Service version 4.11.1' in done.stdout
+    assert not list((tmp_path / 'temp' / 'aos').glob('user.*'))
+
+
+def test_a_refused_upload_stops_the_job_and_says_why(tmp_path):
+    done = run_signer_step('3. Upload', 'User does not have "deployment_bundles_create" permission.', 1, tmp_path)
+    assert done.returncode == 1 and '::error::' in done.stdout and 'deployment_bundles_create' in done.stdout
+    assert 'uploaded Service version' not in done.stdout
+
+
+def test_the_bundle_template_holds_no_secret_and_the_build_fills_every_token():
+    config = (ROOT / 'demo-service' / 'config.yaml').read_text(encoding='utf-8')
+    assert verify_batch.AN_UUID.search(config) is None and 'tlsKey' not in config and '@' not in config
+    assert 'id: __AOS_SERVICE_ID__' in config and 'version: __DEMO_VERSION__' in config
+    build = workflow_step('2. Build', DEMO)
+    app = (ROOT / 'demo-service' / 'verification-demo' / 'src_any' / 'app.py').read_text(encoding='utf-8')
+    for token in re.findall(r"^BAKED_\w+ = '(__\w+__)'", app, re.M):
+        assert token in build
+    assert '__AOS_SERVICE_ID__' in build
+
+
+def test_try_it_has_the_five_steps_and_the_readme_links_it():
+    page = (ROOT / 'TRY_IT.md').read_text(encoding='utf-8')
+    for name in ('AOS_USER_PEM', 'AOS_ROOT_CA_PEM', 'AOS_SERVICE_ID', 'AOS_API_URL', 'I understand my workflows', 'demo-release',
+                 'verify-batch', 'If something goes wrong'):
+        assert name in page
+    assert verify_batch.AN_UUID.search(page) is None and '@' not in page
+    readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+    assert readme.index('TRY_IT.md') > readme.index('| – | Result |') and readme.index('TRY_IT.md') < readme.index('## How the job knows')
+    assert '**Two pipelines on one Service: pause one.**' in (ROOT / 'docs' / 'faq.md').read_text(encoding='utf-8')

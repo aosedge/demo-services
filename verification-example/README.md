@@ -17,6 +17,8 @@ A GitHub Actions job finds a new Service version waiting in AosCloud, checks it 
 | ⑦ | Decide | `verify-batch.yml` | `auto`: the job. `report-only`: a person | Job log; report |
 | – | Result | AosCloud | Verified / Invalid | SP UI: Verification batches |
 
+**Try it yourself, in a browser:** fork the repository, add 4 secrets, press one button. See [Run it yourself in 5 steps](https://github.com/aosedge/demo-services/blob/main/verification-example/TRY_IT.md).
+
 ## How the job knows it is time
 
 | Question | Answer | Where it comes from |
@@ -312,7 +314,28 @@ permissions:
   contents: read
 
 jobs:
+  # The pause switch: the repository variable AOS_WATCH. Not set or on: the watch runs. off: a scheduled run stops here,
+  # with no secret and no call to AosCloud. A manual run always goes on, because a person asked for it. Use it when
+  # another pipeline verifies the same Service (FAQ, Two pipelines on one Service).
+  switch:
+    runs-on: ubuntu-latest
+    outputs:
+      paused: ${{ steps.switch.outputs.paused }}
+    steps:
+      - name: Is the watch paused
+        id: switch
+        env:
+          AOS_WATCH: ${{ vars.AOS_WATCH }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$AOS_WATCH" = off ] && [ "$EVENT" = schedule ]; then
+            echo "watch paused: the variable AOS_WATCH is off" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "paused=yes" >> "$GITHUB_OUTPUT"
+          fi
+
   watch:
+    needs: switch
+    if: needs.switch.outputs.paused != 'yes'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # the secrets live in this environment; required reviewers on it would stop every run of this job (see the FAQ)

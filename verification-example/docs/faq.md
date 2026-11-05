@@ -77,6 +77,12 @@ It can happen: the watch does not see a chained run, because GitHub lists it und
 asks during a chained run, the two queue, one after the other. The second finds the batch decided, stops with
 `no longer Waiting_validation`, sends nothing, and shows red. No harm is done.
 
+**Two pipelines on one Service: pause one.**
+Both would verify the same Verification batch, and each would send its decision. Set the repository variable `AOS_WATCH`
+to `off` in the repository you want to pause: its scheduled watch stops at once with `watch paused`, with no call to
+AosCloud. Not set or `on`, it runs. A run you start by hand still goes on. A fork does not need this: GitHub keeps
+schedules off in a fork until you turn them on.
+
 **Can a decision be overwritten?**
 AosCloud accepts a decision on a batch that is already decided, and the last one wins. The job reads the state right
 before its one call, but the server has no lock: a person who decides in the UI in that same moment can be overwritten.

@@ -63,6 +63,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 16px 32px;color:var(--muted);fon
 <p><img src="docs/img/flow.svg" alt="Automatic verification of a new Service version. Step 1: the upload job, an existing step, uploads the Service version. Step 2: AosCloud creates a Verification batch, state Waiting verification, and installs the new Service version only on the Units of the Verification Set. Steps 3 and 4: the Service version is installed, and the Units report. Step 0: watch-batches.yml polls AosCloud every 5 minutes: is a new Service version waiting for verification? AosCloud sends no notification to a pipeline, so the job asks. 5 minutes is the shortest GitHub schedule; GitHub may start runs late or skip them; for a guaranteed start use Start A. Two starts: Start A, chain: the upload job starts verify-batch right after the upload. Start B, watch: watch-batches starts verify-batch when it finds a waiting batch. verify-batch.yml: 5 Wait until the Service version is active on every Verification Set Unit; a timeout or an offline Unit means no decision. 6 Test: built-in checks and partner tests, report.html and junit.xml. 7 Decide: auto, the default, the job approves or rejects; report-only, a person decides in the SP UI. Verified goes on to the normal rollout; Invalid: the rollout stops." loading="lazy"></p>
 <h2 id="overview--step-by-step">Step by step</h2>
 <div class="table"><table><thead><tr><th>#</th><th>Step</th><th>Runs where</th><th>What is checked / decided</th><th>Where you see it</th></tr></thead><tbody><tr><td>①</td><td>Upload (existing step)</td><td>CI pipeline</td><td>New Service version sent</td><td>SP UI: Deployment bundles</td></tr><tr><td>②</td><td>Verification batch created</td><td>AosCloud</td><td>State: Waiting verification</td><td>SP UI: Verification batches</td></tr><tr><td>③④</td><td>Service version installed, then reported</td><td>Verification Set Units</td><td>Installed, active or failed</td><td>SP UI: Unit → Subjects &amp; Services</td></tr><tr><td>⓪</td><td>Watch asks every 5 min (or Start A)</td><td><code>watch-batches.yml</code></td><td>New Service version waiting?</td><td>Job log</td></tr><tr><td>⑤</td><td>Wait</td><td><code>verify-batch.yml</code></td><td>Test Units active</td><td>Job log</td></tr><tr><td>⑥</td><td>Test</td><td><code>verify-batch.yml</code></td><td>Built-in checks + partner tests</td><td><code>report.html</code></td></tr><tr><td>⑦</td><td>Decide</td><td><code>verify-batch.yml</code></td><td><code>auto</code>: the job. <code>report-only</code>: a person</td><td>Job log; report</td></tr><tr><td>–</td><td>Result</td><td>AosCloud</td><td>Verified / Invalid</td><td>SP UI: Verification batches</td></tr></tbody></table></div>
+<p><strong>Try it yourself, in a browser:</strong> fork the repository, add 4 secrets, press one button. See <a href="https://github.com/aosedge/demo-services/blob/main/verification-example/TRY_IT.md" target="_blank" rel="noopener">Run it yourself in 5 steps</a>.</p>
 <h2 id="overview--how-the-job-knows-it-is-time">How the job knows it is time</h2>
 <div class="table"><table><thead><tr><th>Question</th><th>Answer</th><th>Where it comes from</th></tr></thead><tbody><tr><td>Which Service version?</td><td>The highest Service version, if its Verification batch is Waiting verification. Older waiting batches are left alone</td><td><code>AOS_SERVICE_ID</code>; <code>GET verification-batch/</code></td></tr><tr><td>Which Units?</td><td>The Verification Set Units linked to the Service by the Subject: a Unit has to be in both</td><td><code>GET verification-batch/{id}/statistics/</code> ∩ <code>GET services/{id}/units/</code></td></tr><tr><td>Which tests?</td><td>The built-in checks, then the partner tests</td><td><code>tests/run_tests.sh</code>, <code>tests/your_tests.sh</code></td></tr><tr><td>Did the deployment succeed?</td><td>Each Unit: online, Service version installed, instance active. One failed Unit rejects the Service version; a Unit offline or never updated ends in a timeout and no decision</td><td><code>GET units/{id}/subjects-services/{service id}/</code></td></tr></tbody></table></div>
 <blockquote class="alert"><p><strong>Defaults:</strong> the job decides by itself (<code>AOS_DECISION=auto</code>). For a decision by a person, set <code>AOS_DECISION=report-only</code>: the job only checks and writes the report, and a person approves or rejects in the SP UI. Or <code>ask</code> (laptop only).</p>
@@ -343,7 +344,28 @@ permissions:
   contents: read
 
 jobs:
+  # The pause switch: the repository variable AOS_WATCH. Not set or on: the watch runs. off: a scheduled run stops here,
+  # with no secret and no call to AosCloud. A manual run always goes on, because a person asked for it. Use it when
+  # another pipeline verifies the same Service (FAQ, Two pipelines on one Service).
+  switch:
+    runs-on: ubuntu-latest
+    outputs:
+      paused: ${{ steps.switch.outputs.paused }}
+    steps:
+      - name: Is the watch paused
+        id: switch
+        env:
+          AOS_WATCH: ${{ vars.AOS_WATCH }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ &quot;$AOS_WATCH&quot; = off ] &amp;&amp; [ &quot;$EVENT&quot; = schedule ]; then
+            echo &quot;watch paused: the variable AOS_WATCH is off&quot; | tee -a &quot;$GITHUB_STEP_SUMMARY&quot;
+            echo &quot;paused=yes&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          fi
+
   watch:
+    needs: switch
+    if: needs.switch.outputs.paused != &#x27;yes&#x27;
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # the secrets live in this environment; required reviewers on it would stop every run of this job (see the FAQ)
@@ -674,6 +696,7 @@ export AOS_API_URL=https://api.aoscloud.io:10000/api/v11</code></pre></li></ul><
 <p><strong>A run timed out. Does the watch try again?</strong> No: when <code>verify-batch</code> already has a run for the batch, in any state, the watch starts no other, so a broken Unit does not start a job every 5 minutes. That also holds for a run that was cancelled or died on the runner. Fix the cause, then start <code>verify-batch</code> by hand with the Service version.</p>
 <p><strong>A new Service version arrives during the tests.</strong> The Units move on to it, so the older Service version stops running: its checks fail and its batch is rejected, even if it was good. The new Service version gets its own run. Nothing wrong gets approved.</p>
 <p><strong>Two runs for one Service version?</strong> It can happen: the watch does not see a chained run, because GitHub lists it under the calling workflow. If the watch asks during a chained run, the two queue, one after the other. The second finds the batch decided, stops with <code>no longer Waiting_validation</code>, sends nothing, and shows red. No harm is done.</p>
+<p><strong>Two pipelines on one Service: pause one.</strong> Both would verify the same Verification batch, and each would send its decision. Set the repository variable <code>AOS_WATCH</code> to <code>off</code> in the repository you want to pause: its scheduled watch stops at once with <code>watch paused</code>, with no call to AosCloud. Not set or <code>on</code>, it runs. A run you start by hand still goes on. A fork does not need this: GitHub keeps schedules off in a fork until you turn them on.</p>
 <p><strong>Can a decision be overwritten?</strong> AosCloud accepts a decision on a batch that is already decided, and the last one wins. The job reads the state right before its one call, but the server has no lock: a person who decides in the UI in that same moment can be overwritten.</p>
 <p><strong>I want a person to confirm.</strong> Required reviewers on the environment <code>aos-verification</code> would stop the watch at every run, too. Keep the watch in an environment of its own, with the same secrets and no reviewers: change the <code>environment:</code> line of <code>watch-batches.yml</code>.</p>
 <p><strong><code>no Verification Set Unit for arm64</code>.</strong> The batch needs a decision for an architecture that has no Verification Set Unit. The job will not approve what it did not test, so the watch run stays red and nothing starts until you add a Unit of that architecture to the Verification Set, or decide in the UI.</p>
