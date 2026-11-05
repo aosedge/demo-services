@@ -1,6 +1,6 @@
 # Run it from your terminal
 
-To try it, or to find out why the job failed. In GitHub you need none of this: [Put it in GitHub](../README.md#put-it-in-github).
+To try it, or to find out why the job failed. In GitHub you need none of this: [Set it up in GitHub](../README.md#set-it-up-in-github).
 Three blocks, in this order: setup, upload, run. If you start `run` first, it waits up to 2 min for your upload. It needs bash: Terminal on macOS and Linux, Git Bash on Windows (not tested on Windows yet).
 
 ## 1. Clone and set up
@@ -519,4 +519,4 @@ If your test Units do not cover every architecture of the batch, add `--arch` fo
 
 Delete `user.pem` when you are done: it holds your private key.
 
-**Next →** [Put it in GitHub](../README.md#put-it-in-github), then [Your tests](tests.md)
+**Next →** [Set it up in GitHub](../README.md#set-it-up-in-github), then [Your tests](tests.md)

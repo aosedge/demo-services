@@ -1456,9 +1456,9 @@ def test_the_60_second_look_is_called_observing_everywhere(tmp_path):
 
 
 # Impossible to miss: the decision mode, your tests, and why the watch asks every 5 minutes.
-BOX = ('Defaults: the job decides by itself (AOS_DECISION=auto). Want a person to decide? Set AOS_DECISION=report-only: '
-       'the job only checks and writes the report, you approve in the AosCloud UI. Or ask (laptop only).',
-       'Built-in checks run on every version (A1, B1, C2; C3/C4 unless AOS_WATCH_SECONDS=0). Add your own tests in '
+BOX = ('Defaults: the job decides by itself (AOS_DECISION=auto). For a decision by a person, set AOS_DECISION=report-only: '
+       'the job only checks and writes the report, and a person approves or rejects in the SP UI. Or ask (laptop only).',
+       'Built-in checks run on every Service version (A1, B1, C2; C3/C4 unless AOS_WATCH_SECONDS=0). Partner tests go in '
        'tests/your_tests.sh (start from tests/your_tests.sh.example): they run after the built-in checks. If any check or '
        'test fails, the verdict is reject; in auto mode the job sends it, in report-only a person decides.')
 WHY = ('AosCloud does not notify a pipeline when a new version waits (no webhook), so the watch asks every 5 '
@@ -1480,13 +1480,13 @@ def start_here_overview() -> str:
     return page[page.index('<section class="page" id="overview">'):page.index('<section class="page" id="prerequisites">')]
 
 
-def test_the_box_is_right_under_what_it_does_in_the_readme_and_start_here():
+def test_the_box_is_right_below_the_tables_in_the_readme_and_start_here():
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
     box = readme[readme.index('> [!IMPORTANT]'):readme.index('<details>')]
     for line in BOX:
         assert line in plain(box), line
         assert line in plain(start_here_overview()), line
-    assert readme.index('AosCloud API call.') < readme.index('> [!IMPORTANT]') < readme.index('](docs/img/flow.svg)')
+    assert readme.index('AosCloud API call.') < readme.index('](docs/img/flow.svg)') < readme.index('## Step by step') < readme.index('> [!IMPORTANT]')
     assert '<blockquote class="alert">' in start_here_overview() and '[!IMPORTANT]' not in start_here_overview()
 
 
