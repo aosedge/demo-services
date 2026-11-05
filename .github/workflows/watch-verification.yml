@@ -1,12 +1,12 @@
-# Copy of verification-example/.github/workflows for the showcase. Difference: the job runs in verification-example/. The schedule is off until the first showcase version is uploaded.
+# Copy of verification-example/.github/workflows for the showcase. Difference: the job runs in verification-example/. The schedule runs every 5 minutes for the showcase: turn it off when the showcase ends.
 # Ask AosCloud on a schedule whether a new version waits on the Verification Set, and start one verification run for it.
 # AosCloud sends no notification to a pipeline, so this job asks; nobody has to press anything.
 name: watch-verification
 
 on:
-  # schedule:
-    # Every 10 minutes. Use */5 if you need it faster: GitHub's minimum is 5, and it is not exact.
-    # - cron: "*/10 * * * *"
+  schedule:
+    # Every 5 minutes, for the showcase: GitHub's minimum, and it is not exact.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 concurrency:
