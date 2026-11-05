@@ -105,7 +105,7 @@ Reload the report too: it now says `Decision: approved, <time>, batch now Verifi
 | `--dry-run` | everything up to the decision; sends nothing |
 | `--yes` | the short form of `AOS_DECISION=auto`: approves or rejects without asking, as the job does ([Automatic decision](../README.md#automatic-decision)) |
 | `--no-open` | does not open the report |
-| `--poll SECONDS`, `--timeout SECONDS` | how long to ask for a batch (default 120, or `AOS_DISCOVER_TIMEOUT`), how long to wait for the version (default 1800) |
+| `--poll SECONDS`, `--timeout SECONDS` | how long to ask for a batch (default 120, or `AOS_DISCOVER_TIMEOUT`), how long to wait for the version (default 1800, or `AOS_WAIT_TIMEOUT`) |
 
 ## If something is wrong
 

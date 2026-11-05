@@ -5,7 +5,7 @@
 # The built-in checks of the new version, then your tests, then an HTML report. Run it after wait (it reads AosCloud only).
 # Inputs (environment): SERVICE_ID, VERSION, BATCH (or BATCH_ID), UNIT_ID (or AOS_TEST_UNITS: several Unit ids,
 # separated by spaces), and the settings of verify_batch.py (AOS_API_URL, AOS_CERT, AOS_CA).
-# WATCH_SECONDS: how long to watch the version after the checks; default 60, 0 = off.
+# AOS_WATCH_SECONDS (or WATCH_SECONDS, which wins): how long to watch the version after the checks; default 60, 0 = off.
 # Your tests: tests/your_tests.sh, when it exists (start from tests/your_tests.sh.example).
 # Writes report/report.html and report/junit.xml (REPORT_DIR changes the folder).
 # RUN_PART: all (default), or builtin and then yours: the job runs them in two steps, so your tests have no key at all.
@@ -18,7 +18,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 python=${PYTHON:-python}
 batch=${BATCH_ID:-${BATCH:-}}
 units=${AOS_TEST_UNITS:-${UNIT_ID:-}}
-watch=${WATCH_SECONDS:-60}
+watch=${WATCH_SECONDS:-${AOS_WATCH_SECONDS:-60}}
 out=${REPORT_DIR:-report}
 part=${RUN_PART:-all}
 version_failed=${VERSION_FAILED:-}
@@ -92,7 +92,7 @@ if [ "$watch" -gt 0 ]; then
 elif [ -n "$version_failed" ]; then
   record builtin C3/C4 "still running, no restarts" SKIP "not run: the version already failed on a test Unit"
 else
-  record builtin C3/C4 "still running, no restarts" SKIP "off (WATCH_SECONDS=0)"
+  record builtin C3/C4 "still running, no restarts" SKIP "60-second observation was off, AOS_WATCH_SECONDS=0"
 fi
 
 fi

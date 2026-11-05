@@ -27,6 +27,8 @@ usage() {
 AOS_DECISION, from setup or the environment: auto (it decides by itself; --yes is the short form), ask (it asks first; the
 default here), report-only (it sends nothing; you decide in the UI).
 AOS_DISCOVER_TIMEOUT: how long run waits for a batch, in seconds; default 120. --poll says the same for one run.
+AOS_WAIT_TIMEOUT: how long it waits for the version on the Units, in seconds; default 1800. --timeout says the same.
+AOS_WATCH_SECONDS: how long it keeps observing the version after the checks; default 60, 0 = off.
 ./aos-verify secrets [--repo ORG/REPO]
     prints the gh commands that fill the GitHub secrets; it never prints the key
 
@@ -500,7 +502,7 @@ run_wait() {
 }
 
 cmd_wait() {
-  WAIT_TIMEOUT=1800
+  WAIT_TIMEOUT=${AOS_WAIT_TIMEOUT:-1800}
   while [ $# -gt 0 ]; do
     case "$1" in
       --timeout) WAIT_TIMEOUT=${2:-1800}; shift 2 || exit 2 ;;
@@ -649,7 +651,7 @@ finish() {  # finish approve|reject <why>
 }
 
 cmd_run() {
-  DRY_RUN=no WAIT_TIMEOUT=1800 OPEN_REPORT=yes
+  DRY_RUN=no WAIT_TIMEOUT=${AOS_WAIT_TIMEOUT:-1800} OPEN_REPORT=yes
   local poll='' yes=no
   while [ $# -gt 0 ]; do
     case "$1" in

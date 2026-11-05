@@ -731,3 +731,14 @@ def test_secrets_never_prints_the_service_id_and_gives_it_from_a_file(box):
     assert f"AOS_SERVICE_ID --repo a/b --env aos-verification < '{box.tree}/.aos-verify/service_id'" in done.stdout
     assert (box.tree / '.aos-verify/service_id').read_text() == SERVICE
     assert 'gh variable set AOS_DECISION --repo a/b --env aos-verification --body report-only' in done.stdout
+
+
+def test_the_settings_the_report_names_work_on_a_laptop(box):
+    box.setup()
+    Cloud.state.update(waiting=True, offline=True)
+    done = box('run', '--yes', '--poll', '0', AOS_WAIT_TIMEOUT='1')
+    assert done.returncode == 3 and 'timed out after 1 s' in done.stderr
+    Cloud.state.update(offline=False)
+    done = box('run', '--poll', '0', '--dry-run', WATCH_SECONDS='', AOS_WATCH_SECONDS='0')
+    assert 'SKIP C3/C4' in done.stdout and '60-second observation was off, AOS_WATCH_SECONDS=0' in report_of(box)
+

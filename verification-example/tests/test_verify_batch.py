@@ -1304,8 +1304,8 @@ def test_the_report_explains_itself(tmp_path):
 def test_the_status_column_has_only_the_four_values(tmp_path):
     write_report(tmp_path)
     page = (tmp_path / 'r/report.html').read_text(encoding='utf-8').split('Scenarios covered')[1]
-    statuses = {row.split('</td><td>')[2] for row in page.split('<tr>')[2:]}
-    assert statuses <= {'Checked now', 'Covered by the waiting logic', 'Not run', 'Needs AosCloud 6.2'} and len(statuses) == 4
+    statuses = set(re.findall(r'<span class="s \w+">([^<]+)</span>', page))
+    assert statuses == {'Checked now', 'Covered by the waiting logic', 'Not run', 'Needs AosCloud 6.2', 'Next version'}
 
 
 @pytest.mark.parametrize('found_by, says, status', [
@@ -1315,7 +1315,7 @@ def test_the_status_column_has_only_the_four_values(tmp_path):
 def test_the_report_says_who_found_the_batch(tmp_path, found_by, says, status):
     write_report(tmp_path, found_by=found_by)
     page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
-    assert says in page and f'<td>Found automatically (discover)</td><td>{status}</td>' in page
+    assert says in page and re.search(f'<td>Found automatically \\(discover\\)</td><td><span[^>]*>{status}</span>', page)
 
 
 @pytest.mark.parametrize('decision, more, says', [
@@ -1393,3 +1393,54 @@ def test_the_job_decides_by_itself_unless_told_otherwise():
     assert text.count('verify_batch.py decide') == 2 and text.count('--report-dir report') == 2
     assert "env.AOS_DECISION != 'auto'" in text.split('- name: 3. No decision')[1].split('run: |')[0]
     assert text.index('- name: Keep the report') > text.index('- name: 3. No decision')
+
+
+def scenario_row(page, code):
+    """The cells of one row of Scenarios covered, without the tags inside them."""
+    rows = page.split('Scenarios covered')[1].split('<tr>')[2:]
+    row = next(r for r in rows if r.startswith(f'<td>{code}</td>'))
+    return [re.sub('<[^>]+>', '', cell) for cell in row.split('</td>')[:5]]
+
+
+def test_a2_is_checked_and_e2_waits_for_the_next_version(tmp_path):
+    write_report(tmp_path)
+    page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
+    assert scenario_row(page, 'A2')[2] == 'Checked now' and scenario_row(page, 'E2')[2] == 'Next version'
+
+
+@pytest.mark.parametrize('code, change', [
+    ('⓪', '—'), ('A1', '—'), ('A2', '—'), ('A3', '—'), ('A4', '—'), ('B1', 'AOS_WAIT_TIMEOUT'), ('B2', 'AOS_WAIT_TIMEOUT'),
+    ('C1', 'your_tests.sh'), ('C2', '—'), ('C3', 'AOS_WATCH_SECONDS'), ('C4', 'AOS_WATCH_SECONDS, your_tests.sh'),
+    ('D1', '—'), ('D2', '—'), ('E1', 'your_tests.sh'), ('E2', '—')])
+def test_the_report_says_what_you_can_change(tmp_path, code, change):
+    write_report(tmp_path)
+    page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
+    assert 'You can change it' in page and scenario_row(page, code)[4] == change
+
+
+def test_each_status_has_its_colour(tmp_path):
+    write_report(tmp_path)
+    page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
+    for name, kind in (('Checked now', 'pass'), ('Covered by the waiting logic', 'skip'), ('Needs AosCloud 6.2', 'skip'),
+                       ('Not run', 'amber'), ('Next version', 'skip')):
+        assert f'<span class="s {kind}">{name}</span>' in page
+    assert '.s.pass{background:#DDF3E6' in page and '.s.skip{background:#ECEFF3' in page and '.s.amber{background:#FDF0D5' in page
+
+
+@needs_bash
+def test_an_observation_that_is_off_is_not_called_the_watch(tmp_path):
+    run, calls, report = run_tests_sh(tmp_path, extra={'WATCH_SECONDS': '', 'AOS_WATCH_SECONDS': '0'})
+    assert run.returncode == 0 and not any(' wait ' in c for c in calls)
+    says = '60-second observation was off, AOS_WATCH_SECONDS=0'
+    for code in ('C3', 'C4'):
+        row = scenario_row(report, code)
+        assert row[2] == 'Not run' and row[3] == says and 'watch' not in row[3].replace('AOS_WATCH_SECONDS', '')
+    assert says in report.split('Scenarios covered')[0]
+
+
+@needs_bash
+def test_an_observation_skipped_for_a_failed_version_says_that_not_off(tmp_path):
+    _, _, report = run_tests_sh(tmp_path, status=1, extra={'VERSION_FAILED': 'yes'})
+    assert scenario_row(report, 'C3')[3] == 'not run: the version already failed on a test Unit'
+    assert 'AOS_WATCH_SECONDS=0' not in report
+

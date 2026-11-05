@@ -360,8 +360,8 @@ reviewers (repository Settings → Environments) or set `AOS_DECISION` to `repor
 | `AOS_SERVICE_ID` | secret | your Service id; it is not secret, but GitHub masks a secret in the log |
 | `AOS_TEST_UNITS` | variable | optional: test only these Units of the Verification Set; ids separated by spaces. A Unit you leave out is not checked. The job stops if one is outside the Set, or if an architecture of the batch has none |
 | `AOS_DECISION` | variable | `auto` (default), `ask` or `report-only`: [Automatic decision](#automatic-decision) |
-| `AOS_WATCH_SECONDS` | variable | how long the built-in checks watch the version on the test Units; default `60`, `0` turns the watch off. See [Example checks](docs/checks.md#c3-late-failure) |
-| `AOS_WAIT_TIMEOUT` | variable | seconds to wait for the version on the Units; default `1800`. The job stops after 60 minutes |
+| `AOS_WATCH_SECONDS` | variable (on a laptop: environment) | how long the built-in checks watch the version on the test Units; default `60`, `0` turns the watch off. See [Example checks](docs/checks.md#c3-late-failure) |
+| `AOS_WAIT_TIMEOUT` | variable (on a laptop: environment) | seconds to wait for the version on the Units; default `1800`. The job stops after 60 minutes |
 | `version` | workflow input | the version to verify; to start the job by hand, this is the only input you need |
 | `service_id`, `batch_id`, `units` | workflow inputs | optional: the Service (default `AOS_SERVICE_ID`), the batch (default found by the version), the test Units, separated by spaces |
 

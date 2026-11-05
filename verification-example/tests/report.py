@@ -32,7 +32,13 @@ SCENARIOS = [
     ('D1', 'Resource conflict'), ('D2', 'Other Services on the same Unit'),
     ('E1', 'Bad configuration'), ('E2', 'Recovery: the fixed version'),
 ]
-CHECKED, WAITING_LOGIC, NOT_RUN, NEEDS_62 = 'Checked now', 'Covered by the waiting logic', 'Not run', 'Needs AosCloud 6.2'
+CHECKED, WAITING_LOGIC, NOT_RUN, NEEDS_62, NEXT = ('Checked now', 'Covered by the waiting logic', 'Not run',
+                                                   'Needs AosCloud 6.2', 'Next version')
+STATUS_CLASS = {CHECKED: 'pass', WAITING_LOGIC: 'skip', NOT_RUN: 'amber', NEEDS_62: 'skip', NEXT: 'skip'}
+OBSERVATION_OFF = '60-second observation was off, AOS_WATCH_SECONDS=0'
+# What you can change for each scenario; a scenario that is not here has nothing to change.
+CHANGE_IT = {'B1': 'AOS_WAIT_TIMEOUT', 'B2': 'AOS_WAIT_TIMEOUT', 'C1': 'your_tests.sh', 'C3': 'AOS_WATCH_SECONDS',
+             'C4': 'AOS_WATCH_SECONDS, your_tests.sh', 'E1': 'your_tests.sh'}
 BY_HAND = 'To decide by hand: ./aos-verify decide approve|reject, or SP UI → Verification batches.'
 STATE_NAMES = {'Valid': 'Verified', 'Waiting_validation': 'Waiting verification'}
 META = 'report.json'
@@ -76,12 +82,14 @@ def coverage(rows: list[dict], watch: int, found: tuple[str, str]) -> dict[str, 
     yours = [r for r in rows if r['part'] == 'yours' and r['result'] != 'SKIP']
     late = builtin.get('C3/C4', 'FAIL')
     watched = watch > 0 and late != 'SKIP'
-    off = (NOT_RUN, 'the watch did not run in this run')
+    # The check says why it did not run: it was switched off, or the version had already failed.
+    off = (NOT_RUN, next((r['detail'] for r in rows if r['code'] == 'C3/C4' and r['result'] == 'SKIP' and r['detail']),
+                         OBSERVATION_OFF))
     no_tests = (NOT_RUN, 'none added: add them to tests/your_tests.sh')
     return {
         '⓪': found,
         'A1': (CHECKED, builtin.get('A1', 'FAIL')),
-        'A2': (WAITING_LOGIC, 'The batch exists, so AosCloud processed the upload.'),
+        'A2': (CHECKED, 'The batch exists, so AosCloud processed the upload.'),
         'A3': (WAITING_LOGIC, 'Did not happen in this run. If it does: a version that already exists gets no new '
                               'batch, and nothing is decided.'),
         'A4': (CHECKED, 'This report, junit.xml and the job log; the batch keeps its state in AosCloud.'),
@@ -95,7 +103,7 @@ def coverage(rows: list[dict], watch: int, found: tuple[str, str]) -> dict[str, 
         'D1': (NEEDS_62, 'AosCloud 6.1 cannot show this.'),
         'D2': (NEEDS_62, 'AosCloud 6.1 cannot show this.'),
         'E1': (CHECKED, f'only if your tests hold a config test; {len(yours)} of your tests ran') if yours else no_tests,
-        'E2': (NOT_RUN, 'Did not happen in this run. The next version goes through the same steps.'),
+        'E2': (NEXT, 'Did not happen in this run. The next version goes through the same steps.'),
     }
 
 
@@ -152,8 +160,10 @@ def render(args, rows: list[dict], when: str, decided: dict | None = None) -> st
     status, how = found_how(args.found_by)
     found = (status, f'{how}: batch {short(args.batch_id)}, version {args.version}, Units from {args.units_from}')
     cover = coverage(rows, args.watch, found)
-    scenario_rows = ''.join(f'<tr><td>{code}</td><td>{html.escape(name)}</td><td>{html.escape(cover[code][0])}</td>'
-                            f'<td>{html.escape(cover[code][1])}</td></tr>' for code, name in SCENARIOS)
+    scenario_rows = ''.join(f'<tr><td>{code}</td><td>{html.escape(name)}</td>'
+                            f'<td><span class="s {STATUS_CLASS[cover[code][0]]}">{html.escape(cover[code][0])}</span></td>'
+                            f'<td>{html.escape(cover[code][1])}</td><td>{html.escape(CHANGE_IT.get(code, "—"))}</td></tr>'
+                            for code, name in SCENARIOS)
     groups = ' · '.join(f'<b>{letter}</b> = {html.escape(name)}' for letter, name in GROUPS)
     badges = [('PASS', 'checked, good'), ('FAIL', 'checked, bad, leads to reject'), ('SKIP', 'not run')]
     if unread:
@@ -188,6 +198,8 @@ th,td{{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-al
 th{{background:var(--pale);color:var(--navy)}}
 .r{{display:inline-block;min-width:48px;text-align:center;border-radius:5px;padding:1px 6px;font-weight:700;font-size:13px}}
 .r.pass{{background:#DDF3E6;color:#14603A}}.r.fail{{background:#FBE1DE;color:#8F1D13}}.r.skip{{background:#ECEFF3;color:var(--muted)}}.r.error{{background:#ECEFF3;color:var(--ink)}}
+.s{{display:inline-block;border-radius:5px;padding:1px 6px;font-weight:600;font-size:13px}}
+.s.pass{{background:#DDF3E6;color:#14603A}}.s.skip{{background:#ECEFF3;color:var(--muted)}}.s.amber{{background:#FDF0D5;color:#7A4B00}}
 .summary{{margin:10px 0 2px;font-weight:700}}
 .decision{{margin:2px 0 12px}}
 .legend{{color:var(--muted);font-size:13px;margin:6px 0}}
@@ -208,7 +220,7 @@ th{{background:var(--pale);color:var(--navy)}}
 <h2>Your tests</h2>
 {table(yours, False)}
 <h2>Scenarios covered</h2>
-<div class="t"><table><thead><tr><th>#</th><th>Scenario</th><th>Status</th><th>In this run</th></tr></thead>
+<div class="t"><table><thead><tr><th>#</th><th>Scenario</th><th>Status</th><th>In this run</th><th>You can change it</th></tr></thead>
 <tbody>{scenario_rows}</tbody></table></div>
 </main>
 </body>

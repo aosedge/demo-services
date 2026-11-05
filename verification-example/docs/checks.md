@@ -8,7 +8,7 @@ yet. Most are already built into `verify_batch.py` and `tests/run_tests.sh`; the
 
 `./aos-verify test` (`bash tests/run_tests.sh`, after `wait`) runs the built-in checks A1, B1, C2 and the watch (C3/C4, 60 s) with no setup, then
 your tests if `tests/your_tests.sh` exists. Each check is one row in `report/report.html`; the report ends with a
-"Scenarios covered" table with a status for each scenario in that run: Checked now, Covered by the waiting logic, Not run, or Needs AosCloud 6.2. The commands below run as they are in
+"Scenarios covered" table with a status for each scenario in that run (Checked now, Covered by the waiting logic, Not run, Next version, or Needs AosCloud 6.2) and what you can change for it. The commands below run as they are in
 the folder of the example, after `./aos-verify setup` and `./aos-verify discover`, once you have loaded the values
 (`SERVICE_ID`, `UNIT_ID`, `VERSION`, `BATCH`) into your terminal:
 
@@ -20,7 +20,7 @@ source .venv/bin/activate && source .aos-verify.env && source .aos-verify/state
 |---|---|---|---|---|---|
 | ⓪ | Found automatically (discover) | nobody starts the job, or it starts on an old batch | `discover`: the highest version, Units from the Verification Set | Scenarios covered: batch …, version …, Units from the Verification Set | read-only on production and on staging, 04.11: right batch, stale ones left alone. The scheduled watch ran only against a mock so far |
 | A1 | Exactly this Service and version | a decision on the wrong batch | `wait`, then the built-in checks read it again | Built-in checks: A1 | seen on production, 30.10: the batch of the uploaded version found |
-| A2 | Upload processed | the bundle is refused, and nobody notices | `aos-signer upload` output; SP UI Deployment bundles; `wait` says `no batch yet` | Scenarios covered: Covered by the waiting logic | Done: seen on production, 30.10; Error with the reason: seen on production, 28.10 |
+| A2 | Upload processed | the bundle is refused, and nobody notices | `aos-signer upload` output; SP UI Deployment bundles; `wait` says `no batch yet` | Scenarios covered: Checked now | Done: seen on production, 30.10; Error with the reason: seen on production, 28.10 |
 | A3 | Same version uploaded again | a decision on an old version | `wait`: no batch, exit 2, nothing decided | Scenarios covered: Covered by the waiting logic | seen on production, 28.10 |
 | A4 | Evidence for every release | nobody can say later why a version was approved | the report, `junit.xml`, the job log, the batch in the UI | the report itself | seen on production, 30.10: batch Verified in the UI |
 | B1 | On every test Unit | approved before the version runs everywhere | `wait`, then the built-in checks read it again | Built-in checks: B1 | seen on production, 30.10: active on the test Unit about 15 s after the upload |
