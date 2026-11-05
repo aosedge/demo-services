@@ -36,15 +36,17 @@ The scheduled `watch-batches` stays off in a fork: GitHub keeps schedules off th
 
 **Actions → demo-release (demo only) → Run workflow → Run workflow**. Leave the branch as `main`.
 
-In about 40 seconds the run is green. Its summary shows:
+In about 30 seconds the run is green (rehearsal: 29 s). Its summary shows:
 
 - the Service version it uploaded: the highest in AosCloud, plus 1 in the last number;
 - the link to the `verify-batch` run;
 - "The decision is in that run."
 
+![demo-release, green](docs/img/try-it-demo-release.png)
+
 ## 5. Open the verify-batch run
 
-Follow the link, or open **Actions → verify-batch**. The title is `verify-batch manual <version>`. About 1 to 2 minutes:
+Follow the link, or open **Actions → verify-batch**. The title is `verify-batch manual <version>`. About 1.5 minutes (rehearsal: 1 min 22 s):
 
 | Step | What you see |
 |---|---|
@@ -53,6 +55,8 @@ Follow the link, or open **Actions → verify-batch**. The title is `verify-batc
 | ⑦ Decide | `7a. Approve` runs: `approved, now Valid` |
 
 The report is under **Artifacts** at the bottom of the run page: `verification-report`, with `report.html` inside.
+
+![verify-batch, green, with the report](docs/img/try-it-verify-batch.png)
 
 If you also have a login: **SP UI → Verification batches** shows the new Service version as **Verified**.
 
