@@ -32,7 +32,7 @@
 <circle cx="56" cy="274" r="11" fill="#1E7F4F"/>
 <text x="56" y="278.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">0</text>
 <text x="74" y="279" font-size="13.5" font-weight="700" fill="#1E7F4F" text-anchor="start">New: watch-verification.yml</text>
-<text x="170" y="300" font-size="12" font-weight="500" fill="#14243F" text-anchor="middle">every 10 min; */5 if you need it faster</text>
+<text x="170" y="300" font-size="12" font-weight="500" fill="#14243F" text-anchor="middle">finds any upload; every 10 min, best effort</text>
 <text x="170" y="320" font-size="12" font-weight="400" fill="#14243F" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify_batch.py discover</text>
 <text x="170" y="340" font-size="12" font-weight="400" fill="#4F5F75" text-anchor="middle">is a new version of my Service waiting?</text>
 <line x1="308" y1="282" x2="497" y2="282" stroke="#1E7F4F" stroke-width="2.5" marker-end="url(#ag)"/>
@@ -42,7 +42,7 @@
 <g filter="url(#sh)"><rect x="32" y="372" width="276" height="52" rx="10" fill="#173D7A" stroke="#173D7A" stroke-width="1"/></g>
 <text x="170" y="393" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">starts verify-release</text>
 <text x="170" y="412" font-size="11.5" font-weight="400" fill="#D2EDFF" text-anchor="middle">one run per batch; the title carries its id</text>
-<text x="170" y="440" font-size="11.5" font-weight="500" fill="#4F5F75" text-anchor="middle">or your upload job calls it, same job</text>
+<text x="170" y="440" font-size="11.5" font-weight="500" fill="#4F5F75" text-anchor="middle">or the chain: your upload job, right after upload</text>
 <circle cx="198" cy="458" r="11" fill="#173D7A"/>
 <text x="198" y="462.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">5</text>
 <line x1="170" y1="470" x2="497" y2="470" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>

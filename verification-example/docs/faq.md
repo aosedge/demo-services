@@ -33,9 +33,11 @@ it then goes on to the fleet through your normal rollout. A batch that waits is 
 ## The watch: timing and old batches
 
 **Why 10 minutes?**
-It is a balance: the version waits at most about 10 minutes for its tests, and the job does not run all the time. GitHub's
-minimum is 5 minutes, and a schedule can run late. Use `*/5` in the `cron` line if you need it faster. Every run costs
-runner time: at 10 minutes, about 4,300 minutes a month if each run counts as one minute. Check your plan if the
+It is a balance: a version waits about 10 minutes for the watch to find it, and the job does not run all the time.
+GitHub runs a schedule on a best-effort basis: a run can start late or be skipped, so the wait is sometimes longer. The
+chained start needs no schedule: your upload job calls the verification right after the upload, in the same workflow
+([`examples/release-caller.yml`](../examples/release-caller.yml)). GitHub's minimum is 5 minutes. `*/5` in the `cron` line asks more often, but it does not make the schedule reliable. Every run costs runner
+time: at 10 minutes, about 4,300 minutes a month if each run counts as one minute. Check your plan if the
 repository is private. In a public repository GitHub turns a schedule off after 60 days without activity.
 
 **Why not instant?**

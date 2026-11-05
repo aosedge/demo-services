@@ -22,7 +22,7 @@ runs: upload → the version active on the test Unit in about 15 s → tests →
 AosCloud 6.1 and 6.2 send no notification to a pipeline; a webhook would replace the watch. So the pipeline asks, on a
 schedule, with the SP certificate alone. Nobody presses anything.
 
-![1, your upload job uploads a version. 2, AosCloud makes a batch that waits. 3 and 4, the version goes to the test Units, and they report installed and active, or failed. 0, new: every 10 minutes the watch asks AosCloud whether a new version waits, and gets the batch id, the version and the Unit ids; it starts one verify-release run per batch. 5, wait checks each Unit. 6, the built-in checks and your tests run. 7, one PATCH approves or rejects, only if the batch still waits](docs/img/sequence.svg)
+![1, your upload job uploads a version. 2, AosCloud makes a batch that waits. 3 and 4, the version goes to the test Units, and they report installed and active, or failed. 0, new: about every 10 minutes, best effort, the watch asks AosCloud whether a new version waits, and gets the batch id, the version and the Unit ids; it starts one verify-release run per batch; or your upload job starts it right after the upload. 5, wait checks each Unit. 6, the built-in checks and your tests run. 7, one PATCH approves or rejects, only if the batch still waits](docs/img/sequence.svg)
 
 | Who | Tells whom | What | Where you see it |
 |---|---|---|---|
@@ -37,9 +37,12 @@ schedule, with the SP certificate alone. Nobody presses anything.
 - **Which tests:** `tests/run_tests.sh` in your repository: the built-in checks, then your tests.
 - **Did the deployment reach the whole Set?** `wait` asks every test Unit: online, installed, with an active instance. One failed Unit rejects the version; a Unit that is offline or never gets it ends in a timeout and no decision.
 
-A chained start fits when the upload runs in the same workflow: it calls the verification right after the upload. The
-scheduled watch catches every other upload. Both end in the same `verify-release`, in one queue per version, and
-cannot double-decide: a second run waits for the first, finds the batch decided, and sends nothing.
+Two automatic starts, no buttons:
+
+- **The chained start:** your upload job calls the verification right after the upload, in the same workflow.
+- **The watch:** it asks AosCloud itself and finds any upload, wherever it came from. GitHub runs a schedule on a best-effort basis, so the watch can be late.
+
+Both end in the same `verify-release`, in one queue per version, and cannot double-decide: a second run waits for the first, finds the batch decided, and sends nothing.
 
 Note: `discover` ran read-only on production 6.1.97 and on staging 6.2.31 on 04.11.2026, and the upload-to-decision
 steps ran on production on 30.10.2026. The scheduled watch itself has so far run only against a mock.

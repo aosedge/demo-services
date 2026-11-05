@@ -1,5 +1,5 @@
-# Copy of verification-example/.github/workflows for the dry run on GitHub Actions. Differences: the job runs in
-# verification-example/, it NEVER DECIDES (steps 3a and 3b of the example are replaced by a message), and wait gives up after 180 s.
+# Copy of verification-example/.github/workflows for the showcase. Differences: the job runs in verification-example/,
+# and AOS_API_URL is a secret here.
 # Verify a new Service version on the Verification Set, then approve or reject it in AosCloud.
 # Three ways in, one job: watch-verification.yml starts it for a batch it found (workflow_dispatch), your upload job
 # calls it right after the upload (workflow_call), or you start it by hand with the version alone (workflow_dispatch).
@@ -27,6 +27,8 @@ on:
         type: string
         required: false
     secrets:
+      AOS_API_URL:
+        required: false
       # not required here: they come from the environment aos-verification (see the README, Parameters)
       # AOS_USER_PEM: one PEM file with the SP user certificate, the intermediate certificates and the key
       # (openssl pkcs12 -in aos-user-sp.p12 -nodes -out user.pem; without -clcerts, see the README)
@@ -70,7 +72,7 @@ jobs:
     permissions:
       contents: read
     env:
-      AOS_API_URL: ${{ vars.AOS_API_URL }}
+      AOS_API_URL: ${{ secrets.AOS_API_URL }}
       VERSION: ${{ inputs.version }}
     steps:
       # First, and from the event file: the header of a step prints its env before any mask can apply.
@@ -115,7 +117,7 @@ jobs:
           OVERRIDE_UNITS: ${{ vars.AOS_TEST_UNITS }}
           BATCH_INPUT: ${{ inputs.batch_id }}
           ACTOR: ${{ github.actor }}
-          WAIT_TIMEOUT: ${{ vars.AOS_WAIT_TIMEOUT || '180' }}
+          WAIT_TIMEOUT: ${{ vars.AOS_WAIT_TIMEOUT || '1800' }}
         run: |
           # the input first, then the optional override; both empty: wait takes the Units from AosCloud
           units=()
@@ -201,12 +203,30 @@ jobs:
           path: verification-example/report/
           if-no-files-found: ignore
 
-      - name: 3. No decision in this dry run
-        if: always()
+      - name: 3a. Approve
+        if: steps.wait.outputs.code == '0' && steps.tests.outputs.code == '0'
         env:
-          WAIT_CODE: ${{ steps.wait.outputs.code }}
-          TESTS_CODE: ${{ steps.tests.outputs.code }}
-        run: echo "dry run, nothing sent to AosCloud; wait code ${WAIT_CODE:-none}, tests code ${TESTS_CODE:-none}"
+          USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          BATCH_ID: ${{ steps.wait.outputs.batch_id }}
+        run: |
+          export AOS_CERT="$RUNNER_TEMP/aos/user.pem"
+          trap 'rm -f "$AOS_CERT"' EXIT
+          (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
+          python verify_batch.py decide --batch-id "$BATCH_ID" --approve
+
+      - name: 3b. Reject
+        if: >-
+          always() && steps.wait.outputs.batch_id != '' &&
+          (steps.wait.outputs.code == '1' || steps.tests.outputs.code == '1')
+        env:
+          USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          BATCH_ID: ${{ steps.wait.outputs.batch_id }}
+        run: |
+          export AOS_CERT="$RUNNER_TEMP/aos/user.pem"
+          trap 'rm -f "$AOS_CERT"' EXIT
+          (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
+          python verify_batch.py decide --batch-id "$BATCH_ID" --reject
+          echo "Rejected: the new version failed on a test Unit or in the tests." && exit 1
 
       - name: Remove the certificates
         if: always()
