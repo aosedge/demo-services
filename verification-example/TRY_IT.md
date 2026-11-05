@@ -51,7 +51,7 @@ Follow the link, or open **Actions → verify-batch**. The title is `verify-batc
 | Step | What you see |
 |---|---|
 | ⑤ Wait | The Verification batch appears, the Unit installs the new Service version, and the instance is active |
-| ⑥ Test | The built-in checks pass; the partner tests are skipped, as the demo has none. A watch of 60 s is part of it |
+| ⑥ Test | The built-in checks pass; the partner tests are skipped, as the demo has none. A 60-second observation is part of it |
 | ⑦ Decide | `7a. Approve` runs: `approved, now Valid` |
 
 The report is under **Artifacts** at the bottom of the run page: `verification-report`, with `report.html` inside.

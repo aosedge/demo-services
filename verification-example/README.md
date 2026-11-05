@@ -18,6 +18,7 @@ A GitHub Actions job finds a new Service version waiting in AosCloud, checks it 
 | – | Result | AosCloud | Verified / Invalid | SP UI: Verification batches |
 
 **Try it yourself, in a browser:** fork the repository, add 4 secrets, press one button. See [Run it yourself in 5 steps](https://github.com/aosedge/demo-services/blob/main/verification-example/TRY_IT.md).
+The scheduled watch is paused in this repository while the try-it kit is out; use demo-release.
 
 ## How the job knows it is time
 
