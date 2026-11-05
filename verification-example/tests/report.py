@@ -5,7 +5,7 @@
 
     python tests/report.py --results report/results.tsv --out report --service-id ID --version X.Y.Z
                            --batch-id ID --units "UNIT_ID ..." --observe SECONDS
-                           [--found-by watch|run|version] [--units-from TEXT]
+                           [--found-by watch|run|version] [--units-from TEXT] [--decision-mode MODE]
     python tests/report.py --out report --batch-id ID --decision approved|rejected|not-sent|report-only|unknown
                            [--state STATE] [--why TEXT]
 
@@ -39,6 +39,7 @@ OBSERVATION_OFF = '60-second observation was off, AOS_WATCH_SECONDS=0'
 # What you can change for each scenario; a scenario that is not here has nothing to change.
 CHANGE_IT = {'B1': 'AOS_WAIT_TIMEOUT', 'B2': 'AOS_WAIT_TIMEOUT', 'C1': 'your_tests.sh', 'C3': 'AOS_WATCH_SECONDS',
              'C4': 'AOS_WATCH_SECONDS, your_tests.sh', 'E1': 'your_tests.sh'}
+NO_TESTS_YET = 'no tests/your_tests.sh (start from tests/your_tests.sh.example)'
 BY_HAND = 'To decide by hand: ./aos-verify decide approve|reject, or SP UI → Verification batches.'
 STATE_NAMES = {'Valid': 'Verified', 'Waiting_validation': 'Waiting verification'}
 META = 'report.json'
@@ -146,6 +147,14 @@ def table(rows: list[dict], with_code: bool) -> str:
     return f'<div class="t"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
+def your_tests_section(yours: list[dict]) -> str:
+    """The table of your tests, or, when you have none yet, what to do about it."""
+    if all(r['result'] == 'SKIP' and r['detail'] == NO_TESTS_YET for r in yours):
+        return ('<p class="todo"><b>No tests of yours yet: add tests/your_tests.sh</b> (start from '
+                'tests/your_tests.sh.example): they run after ours, and a failing test leads to reject.</p>')
+    return table(yours, False)
+
+
 def render(args, rows: list[dict], when: str, decided: dict | None = None) -> str:
     failed = any(r['result'] == 'FAIL' for r in rows)
     unread = any(r['result'] == 'ERROR' for r in rows)
@@ -170,8 +179,10 @@ def render(args, rows: list[dict], when: str, decided: dict | None = None) -> st
         badges.append(('ERROR', 'AosCloud could not be read: no decision'))
     legend = ' · '.join(f'{badge(name)} = {html.escape(text)}' for name, text in badges)
     units = ', '.join(short(u) for u in args.units.split()) or '-'
-    facts = [('Service', short(args.service_id)), ('Version', args.version), ('Batch', short(args.batch_id)),
-             ('Test Units', units), ('Time', when)]
+    facts = [('Service', short(args.service_id)), ('Version', args.version), ('Batch', short(args.batch_id))]
+    if getattr(args, 'decision_mode', ''):
+        facts.append(('Decision mode', args.decision_mode))
+    facts += [('Test Units', units), ('Time', when)]
     return f'''<!doctype html>
 <html lang="en">
 <head>
@@ -203,6 +214,7 @@ th{{background:var(--pale);color:var(--navy)}}
 .summary{{margin:10px 0 2px;font-weight:700}}
 .decision{{margin:2px 0 12px}}
 .legend{{color:var(--muted);font-size:13px;margin:6px 0}}
+.todo{{background:#FDF0D5;color:#7A4B00;border-radius:8px;padding:8px 12px;margin:6px 0}}
 </style>
 </head>
 <body>
@@ -218,7 +230,7 @@ th{{background:var(--pale);color:var(--navy)}}
 {table(builtin, True)}
 <p class="legend">{legend}</p>
 <h2>Your tests</h2>
-{table(yours, False)}
+{your_tests_section(yours)}
 <h2>Scenarios covered</h2>
 <div class="t"><table><thead><tr><th>#</th><th>Scenario</th><th>Status</th><th>In this run</th><th>You can change it</th></tr></thead>
 <tbody>{scenario_rows}</tbody></table></div>
@@ -263,7 +275,7 @@ def write_decision(args) -> int:
     decided = {'decision': args.decision, 'state': args.state, 'why': args.why,
                'when': stamp(datetime.now(timezone.utc))}
     report = SimpleNamespace(**{k: meta[k] for k in ('service_id', 'version', 'batch_id', 'units', 'observe', 'found_by',
-                                                     'units_from')})
+                                                     'units_from')}, decision_mode=meta.get('decision_mode', ''))
     (args.out / 'report.html').write_text(render(report, meta['rows'], meta['when'], decided), encoding='utf-8')
     print(f'report: {args.out / "report.html"} (with the decision)')
     return 0
@@ -280,6 +292,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--observe', type=int, default=0)
     parser.add_argument('--found-by', default='version')
     parser.add_argument('--units-from', default='the values you gave')
+    parser.add_argument('--decision-mode', default='')
     parser.add_argument('--decision', choices=['approved', 'rejected', 'not-sent', 'report-only', 'unknown'])
     parser.add_argument('--state')
     parser.add_argument('--why')
@@ -297,7 +310,7 @@ def main(argv: list[str] | None = None) -> int:
     # What the decision needs to render this report again, with the ids shortened: the folder is kept as an artifact.
     meta = {'service_id': short(args.service_id), 'version': args.version, 'batch_id': short(args.batch_id),
             'units': ' '.join(short(u) for u in args.units.split()), 'observe': args.observe, 'found_by': args.found_by,
-            'units_from': args.units_from, 'when': when, 'rows': rows}
+            'units_from': args.units_from, 'decision_mode': args.decision_mode, 'when': when, 'rows': rows}
     (args.out / META).write_text(json.dumps(meta, ensure_ascii=False), encoding='utf-8')
     print(f'report: {args.out / "report.html"} (and junit.xml)')
     return 0

@@ -13,6 +13,18 @@ someone approves or rejects it. This example does that from GitHub Actions: it w
 built-in checks (and your tests, when you add them), writes an HTML report, and approves or rejects the version with one
 AosCloud API call.
 
+> [!IMPORTANT]
+> **Defaults:** the job decides by itself (`AOS_DECISION=auto`). Want a person to decide? Set `AOS_DECISION=report-only`: the job only checks and writes the report, you approve in the AosCloud UI. Or `ask` (laptop only).
+>
+> Our built-in checks always run (A1, B1, C2, C3/C4). Add your own tests in `tests/your_tests.sh` (start from `tests/your_tests.sh.example`): they run after ours, and a failing test leads to reject.
+
+<details>
+<summary>Why every 5 minutes?</summary>
+
+AosCloud does not notify a pipeline when a new version waits (no webhook in 6.1/6.2), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows; GitHub may start a scheduled run later or skip one under load, so the real delay can be longer. Each run takes about 20 s and only reads. To change it, edit one line in `watch-verification.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-release` right after your upload job (the chain), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
+
+</details>
+
 ![Your upload job uploads a new version; AosCloud holds it in a Verification batch (Waiting verification) and sends it only to the test Units of the Verification Set; the verification job waits, runs your tests and decides once: approve makes it Verified, on to your normal rollout; reject makes it Invalid, and it stops here](docs/img/flow.svg)
 
 Tested end to end from a terminal on production AosCloud 6.1.97 on 30.10.2026, with the same three steps the job
@@ -23,7 +35,7 @@ runs: upload → the version active on the test Unit in about 15 s → tests →
 AosCloud 6.1 and 6.2 send no notification to a pipeline; a webhook would replace the watch. So the pipeline asks, on a
 schedule, with the SP certificate alone. Nobody presses anything.
 
-![1, your upload job uploads a version. 2, AosCloud makes a batch that waits. 3 and 4, the version goes to the test Units, and they report installed and active, or failed. 0, new: about every 10 minutes, best effort, the watch asks AosCloud whether a new version waits, and gets the batch id, the version and the Unit ids; it starts one verify-release run per batch; or your upload job starts it right after the upload. 5, wait checks each Unit. 6, the built-in checks and your tests run. 7, one PATCH approves or rejects, only if the batch still waits](docs/img/sequence.svg)
+![1, your upload job uploads a version. 2, AosCloud makes a batch that waits. 3 and 4, the version goes to the test Units, and they report installed and active, or failed. 0, new: about every 5 minutes, best effort, the watch asks AosCloud whether a new version waits, and gets the batch id, the version and the Unit ids; it starts one verify-release run per batch; or your upload job starts it right after the upload. 5, wait checks each Unit. 6, the built-in checks and your tests run. 7, one PATCH approves or rejects, only if the batch still waits](docs/img/sequence.svg)
 
 | Who | Tells whom | What | Where you see it |
 |---|---|---|---|
@@ -240,6 +252,8 @@ wins over that for one run, and `./aos-verify run --yes` is the short form of `a
 
 With `report-only` the job is still green or red: green when all checks pass, red when one fails.
 
+The mode in use is on the first line of `./aos-verify run`, on the first line of the GitHub job summary, and in the header of the report.
+
 > **Next**
 > - [Your tests](docs/tests.md): what `tests/run_tests.sh` checks, the report, and how to add your own tests
 > - [Example checks](docs/checks.md): 12 scenarios we ran on production, with the code
@@ -266,8 +280,14 @@ name: watch-verification
 
 on:
   schedule:
-    # Every 10 minutes. Use */5 if you need it faster: GitHub's minimum is 5, and it is not exact.
-    - cron: "*/10 * * * *"
+    # AosCloud does not notify a pipeline when a new version waits (no webhook in 6.1/6.2), so the watch asks
+    # every 5 minutes. 5 minutes is the shortest interval GitHub allows; GitHub may start a scheduled run
+    # later or skip one under load, so the real delay can be longer. Each run takes about 20 s and only reads.
+    # To change it, edit one line in watch-verification.yml: cron: "*/5 * * * *" → "*/10 * * * *" (every 10
+    # min), "*/30 * * * *", "0 * * * *" (hourly). GitHub cannot read this from a variable. Faster than 5 min,
+    # or exact timing: start verify-release right after your upload job (the chain), or use an external
+    # scheduler. A webhook from AosCloud would make it instant (feature request).
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -288,6 +308,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: Say why it asks on a schedule
+        run: echo "Why every 5 minutes? AosCloud does not notify a pipeline, so the watch asks; 5 minutes is the shortest interval GitHub allows. To change it, edit the cron line in watch-verification.yml." >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/setup-python@v5
         with:
@@ -321,7 +344,7 @@ jobs:
           python verify_batch.py discover "${units[@]}"
 
       # No key here. A run with this batch in its title, in any state, means the batch was handled: a run that
-      # timed out is not repeated every 10 minutes. Start it again by hand, with the version.
+      # timed out is not repeated every 5 minutes. Start it again by hand, with the version.
       - name: Start one verification run for the batch
         if: steps.discover.outputs.batch_id != ''
         env:
@@ -401,7 +424,7 @@ batch and Unit ids in its log; [what stays visible](docs/faq.md#security) matter
 
 - **Who may approve?** The SP. **A Unit never gets the version?** The job decides nothing.
 - **Valid or Verified?** The same. **What does the job never do?** Decide twice, or change a decided batch.
-- **Why 10 minutes? Why not instant? What about old batches?** See [Timing and old batches](docs/faq.md#the-watch-timing-and-old-batches).
+- **Why every 5 minutes? Why not instant? What about old batches?** See [Timing and old batches](docs/faq.md#the-watch-timing-and-old-batches).
 - More answers and tips, from proxies to `aos-signer` output in CI logs: [FAQ and tips](docs/faq.md).
 
 ## Licence

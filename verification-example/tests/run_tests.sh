@@ -134,7 +134,7 @@ fi
 
 "$python" "$here/report.py" --results "$results" --out "$out" --service-id "$SERVICE_ID" --version "$VERSION" \
   --batch-id "$batch" --units "$units" --observe "$observe" \
-  --found-by "${FOUND_BY:-version}" --units-from "${UNITS_FROM:-the values you gave}" || failed=1
+  --found-by "${FOUND_BY:-version}" --units-from "${UNITS_FROM:-the values you gave}" --decision-mode "${AOS_DECISION:-}" || failed=1
 if [ $failed -eq 1 ]; then echo "a check failed: reject"; exit 1; fi
 if [ $unread -eq 1 ]; then echo "AosCloud could not be read, or a Unit is offline: decide nothing, and run it again"; exit 3; fi
 echo "all checks passed: approve"

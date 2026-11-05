@@ -742,3 +742,26 @@ def test_the_settings_the_report_names_work_on_a_laptop(box):
     done = box('run', '--poll', '0', '--dry-run', WATCH_SECONDS='', AOS_WATCH_SECONDS='0')
     assert 'SKIP C3/C4' in done.stdout and '60-second observation was off, AOS_WATCH_SECONDS=0' in report_of(box)
 
+
+@pytest.mark.parametrize('mode', ['auto', 'ask', 'report-only'])
+def test_run_says_the_decision_mode_first_and_the_report_says_it_too(box, mode):
+    box.setup()
+    Cloud.state['waiting'] = True
+    done = box('run', '--poll', '0', '--dry-run', AOS_DECISION=mode)
+    assert done.stdout.splitlines()[0] == f'Decision mode: {mode} (change in .aos-verify.env, AOS_DECISION)'
+    assert f'<div><span>Decision mode</span>{mode}</div>' in report_of(box)
+
+
+def test_yes_shows_as_auto(box):
+    box.setup()
+    Cloud.state['waiting'] = True
+    done = box('run', '--poll', '0', '--dry-run', '--yes')
+    assert done.stdout.splitlines()[0] == 'Decision mode: auto (change in .aos-verify.env, AOS_DECISION)'
+    assert '<div><span>Decision mode</span>auto</div>' in report_of(box)
+
+
+def test_the_report_of_a_run_with_no_tests_of_yours_says_so_in_amber(box):
+    box.setup()
+    Cloud.state['waiting'] = True
+    box('run', '--poll', '0', '--dry-run')
+    assert '<p class="todo"><b>No tests of yours yet: add tests/your_tests.sh</b>' in report_of(box)

@@ -69,8 +69,10 @@ jobs:
     env:
       AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
       VERSION: ${{ inputs.version }}
-      # auto: all checks pass, approve; a check fails, reject. Set the variable to report-only and this job sends no
-      # decision: a person decides in the UI. There is no terminal here to ask in, so ask also sends nothing.
+      # Decision mode. Change it with the variable AOS_DECISION in the environment aos-verification:
+      #   auto         all checks pass, approve; a check fails, reject. The default
+      #   report-only  the report only, no decision sent: a person decides in the AosCloud UI
+      #   ask          for a laptop: there is no terminal here to ask in, so the job sends nothing
       AOS_DECISION: ${{ vars.AOS_DECISION || 'auto' }}
     steps:
       # First, and from the event file: the header of a step prints its env before any mask can apply.
@@ -83,6 +85,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      # The first line of the job summary.
+      - name: Say the decision mode
+        run: |
+          {
+            echo "Decision mode: $AOS_DECISION (change with the AOS_DECISION variable)"
+            echo
+            echo "Why every 5 minutes? AosCloud does not notify a pipeline, so the watch asks; 5 minutes is the shortest interval GitHub allows. To change it, edit the cron line in watch-verification.yml."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/setup-python@v5
         with:

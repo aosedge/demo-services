@@ -71,6 +71,7 @@ report. A batch appears some seconds after the upload, so it asks AosCloud for u
 You should see, in about 2 minutes (from a test against a stand-in for AosCloud; ids shortened):
 
 ```text
+Decision mode: ask (change in .aos-verify.env, AOS_DECISION)
 1. Is a new version of verification-demo waiting?
       batch …a410, version 4.10.0, test Units: …318d
 2. Waiting for version 4.10.0 on the test Units
@@ -332,7 +333,7 @@ Unit …318d: installed 4.7.0; instances: 4.7.0 active
 | `HTTP 401` or `HTTP 403` | not the SP certificate of this AosCloud: pick the right `.p12` (step 3) |
 | `HTTP 404` | a wrong id (step 4); the Unit id is not its System UID |
 
-Now ask what the pipeline asks every 10 minutes: is a new version waiting?
+Now ask what the pipeline asks every 5 minutes: is a new version waiting?
 
 ```bash
 python verify_batch.py discover --dry-run

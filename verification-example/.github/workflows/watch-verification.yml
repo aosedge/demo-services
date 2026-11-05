@@ -4,8 +4,14 @@ name: watch-verification
 
 on:
   schedule:
-    # Every 10 minutes. Use */5 if you need it faster: GitHub's minimum is 5, and it is not exact.
-    - cron: "*/10 * * * *"
+    # AosCloud does not notify a pipeline when a new version waits (no webhook in 6.1/6.2), so the watch asks
+    # every 5 minutes. 5 minutes is the shortest interval GitHub allows; GitHub may start a scheduled run
+    # later or skip one under load, so the real delay can be longer. Each run takes about 20 s and only reads.
+    # To change it, edit one line in watch-verification.yml: cron: "*/5 * * * *" → "*/10 * * * *" (every 10
+    # min), "*/30 * * * *", "0 * * * *" (hourly). GitHub cannot read this from a variable. Faster than 5 min,
+    # or exact timing: start verify-release right after your upload job (the chain), or use an external
+    # scheduler. A webhook from AosCloud would make it instant (feature request).
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -26,6 +32,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: Say why it asks on a schedule
+        run: echo "Why every 5 minutes? AosCloud does not notify a pipeline, so the watch asks; 5 minutes is the shortest interval GitHub allows. To change it, edit the cron line in watch-verification.yml." >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/setup-python@v5
         with:
@@ -59,7 +68,7 @@ jobs:
           python verify_batch.py discover "${units[@]}"
 
       # No key here. A run with this batch in its title, in any state, means the batch was handled: a run that
-      # timed out is not repeated every 10 minutes. Start it again by hand, with the version.
+      # timed out is not repeated every 5 minutes. Start it again by hand, with the version.
       - name: Start one verification run for the batch
         if: steps.discover.outputs.batch_id != ''
         env:

@@ -36,13 +36,12 @@ Yes: set `AOS_DECISION` to `report-only`. The job writes the report and sends no
 
 ## The watch: timing and old batches
 
-**Why 10 minutes?**
-It is a balance: a version waits about 10 minutes for the watch to find it, and the job does not run all the time.
-GitHub runs a schedule on a best-effort basis: a run can start late or be skipped, so the wait is sometimes longer. The
-chained start needs no schedule: your upload job calls the verification right after the upload, in the same workflow
-([`examples/release-caller.yml`](../examples/release-caller.yml)). GitHub's minimum is 5 minutes. `*/5` in the `cron` line asks more often, but it does not make the schedule reliable. Every run costs runner
-time: at 10 minutes, about 4,300 minutes a month if each run counts as one minute. Check your plan if the
-repository is private. In a public repository GitHub turns a schedule off after 60 days without activity.
+**Why every 5 minutes?**
+AosCloud does not notify a pipeline when a new version waits (no webhook in 6.1/6.2), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows; GitHub may start a scheduled run later or skip one under load, so the real delay can be longer. Each run takes about 20 s and only reads. To change it, edit one line in `watch-verification.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-release` right after your upload job (the chain), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
+
+The chain is in [`examples/release-caller.yml`](../examples/release-caller.yml). Every run costs runner time: at 5 minutes,
+about 8,600 minutes a month if each run counts as one minute. Check your plan if the repository is private. In a public
+repository GitHub turns a schedule off after 60 days without activity.
 
 **Why not instant?**
 AosCloud 6.1 and 6.2 send no notification to a pipeline, so the job has to ask. A webhook would make it instant: that
@@ -56,7 +55,7 @@ others as `stale, left alone`. Decide them in the UI if you want the list clean.
 
 **A run timed out. Does the watch try again?**
 No: when `verify-release` already has a run for the batch, in any state, the watch starts no other, so a broken Unit
-does not start a job every 10 minutes. That also holds for a run that was cancelled or died on the runner. Fix the
+does not start a job every 5 minutes. That also holds for a run that was cancelled or died on the runner. Fix the
 cause, then start `verify-release` by hand with the version.
 
 **A new version arrives during the tests.**

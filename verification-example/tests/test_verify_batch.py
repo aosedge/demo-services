@@ -4,12 +4,14 @@
 
     pip install pytest requests && python -m pytest -q
 """
+import html
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import textwrap
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -989,9 +991,9 @@ def test_both_starts_end_in_one_concurrency_group():
     assert 'uses: ./.github/workflows/verify-release.yml' in caller and 'version:' in caller
 
 
-def test_the_watch_asks_every_10_minutes_and_can_write_actions():
+def test_the_watch_asks_every_5_minutes_and_can_write_actions():
     text = WATCH.read_text(encoding='utf-8')
-    assert 'cron: "*/10 * * * *"' in text and 'workflow_dispatch:' in text
+    assert re.findall(r'^\s+- cron: (.*)$', text, re.M) == ['"*/5 * * * *"'] and 'workflow_dispatch:' in text
     assert 'actions: write' in text and 'contents: read' in text
 
 
@@ -1452,3 +1454,125 @@ def test_the_60_second_look_is_called_observing_everywhere(tmp_path):
     # Started with the version here, so the job that finds a batch had no part in it. Only the name of the setting stays.
     assert 'watch' not in report.replace('AOS_WATCH_SECONDS', '').lower()
 
+
+# Impossible to miss: the decision mode, your tests, and why the watch asks every 5 minutes.
+BOX = ('Defaults: the job decides by itself (AOS_DECISION=auto). Want a person to decide? Set AOS_DECISION=report-only: '
+       'the job only checks and writes the report, you approve in the AosCloud UI. Or ask (laptop only).',
+       'Our built-in checks always run (A1, B1, C2, C3/C4). Add your own tests in tests/your_tests.sh (start from '
+       'tests/your_tests.sh.example): they run after ours, and a failing test leads to reject.')
+WHY = ('AosCloud does not notify a pipeline when a new version waits (no webhook in 6.1/6.2), so the watch asks every 5 '
+       'minutes. 5 minutes is the shortest interval GitHub allows; GitHub may start a scheduled run later or skip one '
+       'under load, so the real delay can be longer. Each run takes about 20 s and only reads. To change it, edit one '
+       'line in watch-verification.yml: cron: "*/5 * * * *" → "*/10 * * * *" (every 10 min), "*/30 * * * *", "0 * * * *" '
+       '(hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start verify-release right '
+       'after your upload job (the chain), or use an external scheduler. A webhook from AosCloud would make it instant '
+       '(feature request).')
+
+
+def plain(text: str) -> str:
+    """The words a person reads, from Markdown or HTML."""
+    return html.unescape(re.sub(r'<[^>]+>', '', text.replace('`', '').replace('**', '')))
+
+
+def start_here_overview() -> str:
+    page = (ROOT / 'START_HERE.html').read_text(encoding='utf-8')
+    return page[page.index('<section class="page" id="overview">'):page.index('<section class="page" id="prerequisites">')]
+
+
+def test_the_box_is_right_under_what_it_does_in_the_readme_and_start_here():
+    readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+    box = readme[readme.index('> [!IMPORTANT]'):readme.index('<details>')]
+    for line in BOX:
+        assert line in plain(box), line
+        assert line in plain(start_here_overview()), line
+    assert readme.index('AosCloud API call.') < readme.index('> [!IMPORTANT]') < readme.index('![Your upload job')
+    assert '<blockquote class="alert">' in start_here_overview() and '[!IMPORTANT]' not in start_here_overview()
+
+
+def test_why_every_5_minutes_says_the_same_everywhere():
+    readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+    assert WHY in plain(readme[readme.index('<details>'):readme.index('</details>')])
+    assert WHY in plain((ROOT / 'docs/faq.md').read_text(encoding='utf-8'))
+    assert WHY in plain(start_here_overview())
+    assert '<details><summary>Why every 5 minutes?</summary>' in start_here_overview()
+    text = WATCH.read_text(encoding='utf-8')
+    above = text[text.index('schedule:'):text.index('- cron:')]
+    assert WHY in ' '.join(line.strip().lstrip('# ') for line in above.splitlines()[1:])
+
+
+@pytest.mark.parametrize('name', ['README.md', 'START_HERE.html', 'docs/faq.md', 'docs/run-locally.md', 'docs/img/sequence.svg'])
+def test_every_5_minutes_is_the_default_in_the_docs(name):
+    text = re.sub(r'\s*\n\s*#?\s*', ' ', plain((ROOT / name).read_text(encoding='utf-8')))
+    # the only 10 left is the example of how to change it
+    text = text.replace('"*/10 * * * *" (every 10 min)', '')
+    assert not re.search(r'\*/10|(every|why|about) 10 min', text, re.I)
+
+
+def summary_of(workflow: Path, step: str, tmp_path, **env) -> list[str]:
+    """Run one step that writes the job summary; its lines."""
+    text = workflow.read_text(encoding='utf-8')
+    block = text.split(f'- name: {step}\n')[1].split('\n\n')[0]
+    script = textwrap.dedent(block.split('run: ', 1)[1].removeprefix('|\n'))
+    out = tmp_path / 'summary'
+    subprocess.run(['bash', '-c', script], check=True, env={**os.environ, 'GITHUB_STEP_SUMMARY': str(out), **env})
+    return out.read_text(encoding='utf-8').splitlines()
+
+
+@pytest.mark.parametrize('mode', ['auto', 'report-only'])
+def test_the_job_summary_starts_with_the_decision_mode(tmp_path, mode):
+    lines = summary_of(ROOT / '.github/workflows/verify-release.yml', 'Say the decision mode', tmp_path, AOS_DECISION=mode)
+    assert lines[0] == f'Decision mode: {mode} (change with the AOS_DECISION variable)'
+    assert lines[2].startswith('Why every 5 minutes? AosCloud does not notify a pipeline')
+
+
+def test_the_decision_mode_is_said_before_anything_can_fail_and_the_values_are_next_to_it():
+    text = (ROOT / '.github/workflows/verify-release.yml').read_text(encoding='utf-8')
+    assert text.index('- name: Say the decision mode') < text.index('- name: Install requests')
+    assert text.count('GITHUB_STEP_SUMMARY') == 1
+    above = text[:text.index('AOS_DECISION: ${{')].rsplit('VERSION: ${{', 1)[1]
+    for value in ('auto', 'report-only', 'ask'):
+        assert re.search(rf'#\s+{value}\s+\S', above), value
+
+
+def test_the_watch_says_why_in_its_summary(tmp_path):
+    assert summary_of(WATCH, 'Say why it asks on a schedule', tmp_path)[0].startswith('Why every 5 minutes?')
+    text = WATCH.read_text(encoding='utf-8')
+    # after the checkout: the showcase copy of this file runs in a folder that exists only then
+    assert text.index('actions/checkout') < text.index('Say why it asks on a schedule')
+
+
+def test_the_report_header_says_the_decision_mode_and_keeps_it_after_the_decision(tmp_path):
+    sys.path.insert(0, str(ROOT / 'tests'))
+    import report  # noqa: E402  pylint: disable=import-outside-toplevel
+    args = report_args(tmp_path, '--results', str(tmp_path / 'results.tsv'), '--service-id', 'service-abcdef',
+                       '--version', NEW, '--decision-mode', 'auto')
+    assert report.main(args) == 0
+    fact = '<div><span>Decision mode</span>auto</div>'
+    assert fact in (tmp_path / 'r/report.html').read_text(encoding='utf-8')
+    assert report.main(report_args(tmp_path, '--decision', 'approved', '--state', 'Valid')) == 0
+    page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
+    assert fact in page and 'Decision: approved' in page
+    assert page.index('<span>Version</span>') < page.index(fact) < page.index('<span>Test Units</span>')
+
+
+def test_a_report_without_a_mode_does_not_invent_one(tmp_path):
+    write_report(tmp_path)
+    assert 'Decision mode' not in (tmp_path / 'r/report.html').read_text(encoding='utf-8')
+
+
+AMBER = '<p class="todo"><b>No tests of yours yet: add tests/your_tests.sh</b>'
+
+
+@pytest.mark.parametrize('line, amber', [
+    ('yours\t\tyour tests\tSKIP\tno tests/your_tests.sh (start from tests/your_tests.sh.example)\n', True),
+    ('yours\t\tyour tests\tSKIP\tnot run: the version already failed on a test Unit\n', False),
+    ('yours\t\thealth\tPASS\tok\n', False),
+    ('yours\t\thealth\tFAIL\tbroken\n', False)])
+def test_your_tests_section_is_amber_only_when_you_have_none(tmp_path, line, amber):
+    (tmp_path / 'results.tsv').write_text('builtin\tA1\tthe batch\tPASS\tok\n' + line)
+    write_report(tmp_path)
+    page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
+    section = page[page.index('<h2>Your tests</h2>'):page.index('<h2>Scenarios covered</h2>')]
+    assert (AMBER in section) is amber
+    assert ('tests/your_tests.sh.example): they run after ours, and a failing test leads to reject.' in section) is amber
+    assert ('<table>' in section) is not amber

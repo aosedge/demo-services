@@ -519,7 +519,7 @@ cmd_wait() {
 
 run_checks() {
   AOS_TEST_UNITS=$UNITS BATCH_ID=$BATCH_ID VERSION=$VERSION SERVICE_ID=$SERVICE_ID PYTHON="$HERE/$PY" \
-    FOUND_BY=run UNITS_FROM='the Verification Set' bash tests/run_tests.sh
+    AOS_DECISION=$DECISION FOUND_BY=run UNITS_FROM='the Verification Set' bash tests/run_tests.sh
 }
 
 # The decision, or that none was sent, into the report of this batch. It never changes the outcome.
@@ -665,6 +665,7 @@ cmd_run() {
   done
   load
   if [ "$yes" = yes ]; then DECISION=auto; fi
+  say "Decision mode: $DECISION (change in $ENV_FILE, AOS_DECISION)"
   poll=${poll:-${AOS_DISCOVER_TIMEOUT:-120}}
   case "$poll" in
     '' | *[!0-9]*) fail "AOS_DISCOVER_TIMEOUT must be a number of seconds, not '$poll'" './aos-verify run --poll 120' ;;

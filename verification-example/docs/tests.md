@@ -45,7 +45,7 @@ check health curl -fsS --max-time 10 "http://$UNIT_HOST:8080/health"
 ```
 
 The rule: print one line per test, `PASS <name>` or `FAIL <name>: <why>`, and exit 0 only when every test passed.
-`tests/run_tests.sh` puts these lines into the report, in their own section. Your tests get `SERVICE_ID`, `VERSION`,
+`tests/run_tests.sh` puts these lines into the report, in their own section; until you add the file, an amber line there says so. Your tests get `SERVICE_ID`, `VERSION`,
 `BATCH_ID` and `UNIT_ID` (or `AOS_TEST_UNITS`) in their environment, but not `AOS_CERT`; in the job they run in a step
 with no secret. An HTTP check needs a
 network path from the runner to the test Unit.
