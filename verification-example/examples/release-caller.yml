@@ -19,7 +19,7 @@ jobs:
       - run: aos-signer sign && aos-signer upload   # your existing step
   verify:
     needs: upload
-    uses: ./.github/workflows/verify-release.yml
+    uses: ./.github/workflows/verify-batch.yml
     with:
       version: ${{ needs.upload.outputs.version }}
     secrets: inherit

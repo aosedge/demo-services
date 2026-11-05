@@ -726,8 +726,8 @@ def test_an_odd_batch_id_goes_nowhere(cloud, capsys, github_output):
 
 # the steps of the workflows, run with bash and stand-ins for python and gh
 
-WORKFLOW = ROOT / '.github' / 'workflows' / 'verify-release.yml'
-WATCH = ROOT / '.github' / 'workflows' / 'watch-verification.yml'
+WORKFLOW = ROOT / '.github' / 'workflows' / 'verify-batch.yml'
+WATCH = ROOT / '.github' / 'workflows' / 'watch-batches.yml'
 
 
 def step(name: str, workflow: Path = WORKFLOW) -> str:
@@ -782,7 +782,7 @@ def test_the_wait_step_never_ends_green_without_a_decision(tmp_path, code, stdou
 
 
 @needs_bash
-def test_verify_release_with_units_passes_them_on(tmp_path):
+def test_verify_batch_with_units_passes_them_on(tmp_path):
     run, output, _ = run_wait_step(tmp_path, 0, BATCH, units='unit-1 unit-2', batch_input='batch-1')
     args = (tmp_path / 'args').read_text().splitlines()
     assert run.returncode == 0 and args.count('--unit') == 2 and 'unit-2' in args
@@ -790,7 +790,7 @@ def test_verify_release_with_units_passes_them_on(tmp_path):
 
 
 @needs_bash
-def test_verify_release_without_units_lets_wait_find_them(tmp_path):
+def test_verify_batch_without_units_lets_wait_find_them(tmp_path):
     run, output, _ = run_wait_step(tmp_path, 0, BATCH, units='  ')
     args = (tmp_path / 'args').read_text().splitlines()
     assert run.returncode == 0 and '--unit' not in args and '--batch-id' not in args
@@ -827,7 +827,7 @@ def test_a_star_in_the_units_is_not_expanded(tmp_path):
 
 
 @needs_bash
-def test_verify_release_stops_on_an_empty_service_id(tmp_path):
+def test_verify_batch_stops_on_an_empty_service_id(tmp_path):
     run, output, _ = run_wait_step(tmp_path, 0, BATCH, service='')
     assert run.returncode != 0 and 'AOS_SERVICE_ID is empty' in run.stdout and output == ''
 
@@ -843,7 +843,7 @@ elif [ "$1 $2" = "workflow run" ]; then
   [ "${GH_FAIL:-}" = dispatch ] && exit 1
   version= batch=
   for a in "$@"; do case "$a" in version=*) version=${a#version=} ;; batch_id=*) batch=${a#batch_id=} ;; esac; done
-  jq --arg t "verify ${batch:-manual} $version" '. + [{displayTitle: $t, status: "queued"}]' "$GH_RUNS" > "$GH_RUNS.new"
+  jq --arg t "verify-batch ${batch:-manual} $version" '. + [{displayTitle: $t, status: "queued"}]' "$GH_RUNS" > "$GH_RUNS.new"
   mv "$GH_RUNS.new" "$GH_RUNS"
 fi
 """
@@ -875,7 +875,7 @@ needs_jq = pytest.mark.skipif(shutil.which('jq') is None or shutil.which('bash')
 def test_the_watch_starts_one_run_with_the_version_the_batch_and_the_units(tmp_path):
     run, calls = run_start_step(tmp_path)
     assert run.returncode == 0, run.stderr
-    assert dispatches(calls) == [f'gh workflow run verify-release.yml --ref the-branch -f version={NEW} -f batch_id=batch-aaaa '
+    assert dispatches(calls) == [f'gh workflow run verify-batch.yml --ref the-branch -f version={NEW} -f batch_id=batch-aaaa '
                                  f'-f units=unit-1 unit-2']
     assert '--limit 200' in calls[0]
 
@@ -890,19 +890,19 @@ def test_two_discovers_on_one_batch_start_one_run(tmp_path):
 @needs_jq
 @pytest.mark.parametrize('status', ['queued', 'in_progress', 'completed'])
 def test_the_watch_skips_an_existing_run_in_any_state(tmp_path, status):
-    run, calls = run_start_step(tmp_path, [{'displayTitle': f'verify batch-aaaa {NEW}', 'status': status}])
+    run, calls = run_start_step(tmp_path, [{'displayTitle': f'verify-batch batch-aaaa {NEW}', 'status': status}])
     assert run.returncode == 0 and status in run.stdout and dispatches(calls) == []
 
 
 @needs_jq
 def test_the_watch_skips_a_run_started_by_hand_for_the_version(tmp_path):
-    _, calls = run_start_step(tmp_path, [{'displayTitle': f'verify manual {NEW}', 'status': 'completed'}])
+    _, calls = run_start_step(tmp_path, [{'displayTitle': f'verify-batch manual {NEW}', 'status': 'completed'}])
     assert dispatches(calls) == []
 
 
 @needs_jq
-@pytest.mark.parametrize('title', ['verify batch-bbbb 4.5.0', 'verify batch-aaaa-2 4.5.0', 'verify manual 4.5.0',
-                                   f'verify batch-bbbb {NEW}', 'some other title'])
+@pytest.mark.parametrize('title', ['verify-batch batch-bbbb 4.5.0', 'verify-batch batch-aaaa-2 4.5.0', 'verify-batch manual 4.5.0',
+                                   f'verify-batch batch-bbbb {NEW}', 'some other title'])
 def test_the_watch_does_not_skip_for_another_batch(tmp_path, title):
     _, calls = run_start_step(tmp_path, [{'displayTitle': title, 'status': 'completed'}])
     assert len(dispatches(calls)) == 1
@@ -983,12 +983,12 @@ def test_the_discover_step_deletes_the_key_and_calls_discover(tmp_path):
 
 def test_both_starts_end_in_one_concurrency_group():
     text = WORKFLOW.read_text(encoding='utf-8')
-    assert "group: verify-${{ inputs.service_id || 'service' }}-${{ inputs.version }}" in text
+    assert "group: verify-batch-${{ inputs.service_id || 'service' }}-${{ inputs.version }}" in text
     assert 'vars.AOS_SERVICE_ID' not in text + WATCH.read_text(encoding='utf-8')
-    assert 'cancel-in-progress: false' in text and "run-name: verify ${{ inputs.batch_id || 'manual' }} " in text
+    assert 'cancel-in-progress: false' in text and "run-name: verify-batch ${{ inputs.batch_id || 'manual' }} " in text
     caller = (ROOT / 'examples' / 'release-caller.yml').read_text(encoding='utf-8')
     assert 'service_id' not in caller and 'secrets: inherit' in caller
-    assert 'uses: ./.github/workflows/verify-release.yml' in caller and 'version:' in caller
+    assert 'uses: ./.github/workflows/verify-batch.yml' in caller and 'version:' in caller
 
 
 def test_the_watch_asks_every_5_minutes_and_can_write_actions():
@@ -1387,7 +1387,7 @@ def test_what_wait_saw_fail_stays_a_fail_even_if_aoscloud_reads_well_later(tmp_p
 
 
 def test_the_job_decides_by_itself_unless_told_otherwise():
-    text = (ROOT / '.github/workflows/verify-release.yml').read_text(encoding='utf-8')
+    text = (ROOT / '.github/workflows/verify-batch.yml').read_text(encoding='utf-8')
     assert "AOS_DECISION: ${{ vars.AOS_DECISION || 'auto' }}" in text
     approve, reject = text.split('- name: 3a. Approve')[1], text.split('- name: 3b. Reject')[1]
     assert "env.AOS_DECISION == 'auto'" in approve.split('run: |')[0]
@@ -1458,13 +1458,14 @@ def test_the_60_second_look_is_called_observing_everywhere(tmp_path):
 # Impossible to miss: the decision mode, your tests, and why the watch asks every 5 minutes.
 BOX = ('Defaults: the job decides by itself (AOS_DECISION=auto). Want a person to decide? Set AOS_DECISION=report-only: '
        'the job only checks and writes the report, you approve in the AosCloud UI. Or ask (laptop only).',
-       'Our built-in checks always run (A1, B1, C2, C3/C4). Add your own tests in tests/your_tests.sh (start from '
-       'tests/your_tests.sh.example): they run after ours, and a failing test leads to reject.')
+       'Built-in checks run on every version (A1, B1, C2; C3/C4 unless AOS_WATCH_SECONDS=0). Add your own tests in '
+       'tests/your_tests.sh (start from tests/your_tests.sh.example): they run after the built-in checks. If any check or '
+       'test fails, the verdict is reject; in auto mode the job sends it, in report-only a person decides.')
 WHY = ('AosCloud does not notify a pipeline when a new version waits (no webhook in 6.1/6.2), so the watch asks every 5 '
-       'minutes. 5 minutes is the shortest interval GitHub allows; GitHub may start a scheduled run later or skip one '
-       'under load, so the real delay can be longer. Each run takes about 20 s and only reads. To change it, edit one '
-       'line in watch-verification.yml: cron: "*/5 * * * *" → "*/10 * * * *" (every 10 min), "*/30 * * * *", "0 * * * *" '
-       '(hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start verify-release right '
+       'minutes. 5 minutes is the shortest interval GitHub allows. GitHub runs scheduled jobs on a best-effort basis: they '
+       'can start late or be skipped, sometimes for long periods (in our test repository, delays of over an hour). Each run takes about 20 s and only reads. To change it, edit one '
+       'line in watch-batches.yml: cron: "*/5 * * * *" → "*/10 * * * *" (every 10 min), "*/30 * * * *", "0 * * * *" '
+       '(hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start verify-batch right '
        'after your upload job (the chain), or use an external scheduler. A webhook from AosCloud would make it instant '
        '(feature request).')
 
@@ -1520,13 +1521,13 @@ def summary_of(workflow: Path, step: str, tmp_path, **env) -> list[str]:
 
 @pytest.mark.parametrize('mode', ['auto', 'report-only'])
 def test_the_job_summary_starts_with_the_decision_mode(tmp_path, mode):
-    lines = summary_of(ROOT / '.github/workflows/verify-release.yml', 'Say the decision mode', tmp_path, AOS_DECISION=mode)
+    lines = summary_of(ROOT / '.github/workflows/verify-batch.yml', 'Say the decision mode', tmp_path, AOS_DECISION=mode)
     assert lines[0] == f'Decision mode: {mode} (change with the AOS_DECISION variable)'
     assert lines[2].startswith('Why every 5 minutes? AosCloud does not notify a pipeline')
 
 
 def test_the_decision_mode_is_said_before_anything_can_fail_and_the_values_are_next_to_it():
-    text = (ROOT / '.github/workflows/verify-release.yml').read_text(encoding='utf-8')
+    text = (ROOT / '.github/workflows/verify-batch.yml').read_text(encoding='utf-8')
     assert text.index('- name: Say the decision mode') < text.index('- name: Install requests')
     assert text.count('GITHUB_STEP_SUMMARY') == 1
     above = text[:text.index('AOS_DECISION: ${{')].rsplit('VERSION: ${{', 1)[1]
@@ -1574,5 +1575,14 @@ def test_your_tests_section_is_amber_only_when_you_have_none(tmp_path, line, amb
     page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
     section = page[page.index('<h2>Your tests</h2>'):page.index('<h2>Scenarios covered</h2>')]
     assert (AMBER in section) is amber
-    assert ('tests/your_tests.sh.example): they run after ours, and a failing test leads to reject.' in section) is amber
+    assert ('they run after the built-in checks. If any check or test fails, the verdict is reject; in auto mode the job '
+            'sends it, in report-only a person decides.' in section) is amber
+    assert 'after ours' not in section
     assert ('<table>' in section) is not amber
+
+
+def test_the_old_workflow_names_are_gone():
+    old = re.compile('verify[-_]' + 'release|watch-' + 'verification')
+    files = [p for p in ROOT.rglob('*') if p.is_file() and '.git' not in p.parts and p.suffix not in ('.png', '.jpg', '.mp4')
+             and '__pycache__' not in p.parts and '.pytest_cache' not in p.parts and '.venv' not in p.parts and 'report' not in p.parts]
+    assert [str(p) for p in files if old.search(p.name) or old.search(p.read_text(encoding='utf-8', errors='ignore'))] == []

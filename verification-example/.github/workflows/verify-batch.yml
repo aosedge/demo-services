@@ -1,9 +1,9 @@
 # Verify a new Service version on the Verification Set, then approve or reject it in AosCloud.
-# Three ways in, one job: watch-verification.yml starts it for a batch it found (workflow_dispatch), your upload job
+# Three ways in, one job: watch-batches.yml starts it for a batch it found (workflow_dispatch), your upload job
 # calls it right after the upload (workflow_call), or you start it by hand with the version alone (workflow_dispatch).
-name: verify-release
-# watch-verification.yml looks for the batch id in this title, to start one run per batch
-run-name: verify ${{ inputs.batch_id || 'manual' }} ${{ inputs.version }}
+name: verify-batch
+# watch-batches.yml looks for the batch id in this title, to start one run per batch
+run-name: verify-batch ${{ inputs.batch_id || 'manual' }} ${{ inputs.version }}
 
 on:
   workflow_call:
@@ -55,7 +55,7 @@ on:
 # watch started for the same batch. AosCloud has one batch per version. A secret cannot be used in this line, and the
 # group name is public: a run with the input service_id queues on its own.
 concurrency:
-  group: verify-${{ inputs.service_id || 'service' }}-${{ inputs.version }}
+  group: verify-batch-${{ inputs.service_id || 'service' }}-${{ inputs.version }}
   cancel-in-progress: false
 
 jobs:
@@ -92,7 +92,7 @@ jobs:
           {
             echo "Decision mode: $AOS_DECISION (change with the AOS_DECISION variable)"
             echo
-            echo "Why every 5 minutes? AosCloud does not notify a pipeline, so the watch asks; 5 minutes is the shortest interval GitHub allows. To change it, edit the cron line in watch-verification.yml."
+            echo "Why every 5 minutes? AosCloud does not notify a pipeline, so the watch asks; 5 minutes is the shortest interval GitHub allows. To change it, edit the cron line in watch-batches.yml."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/setup-python@v5

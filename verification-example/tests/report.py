@@ -151,7 +151,8 @@ def your_tests_section(yours: list[dict]) -> str:
     """The table of your tests, or, when you have none yet, what to do about it."""
     if all(r['result'] == 'SKIP' and r['detail'] == NO_TESTS_YET for r in yours):
         return ('<p class="todo"><b>No tests of yours yet: add tests/your_tests.sh</b> (start from '
-                'tests/your_tests.sh.example): they run after ours, and a failing test leads to reject.</p>')
+                'tests/your_tests.sh.example): they run after the built-in checks. If any check or test fails, the verdict '
+                'is reject; in auto mode the job sends it, in report-only a person decides.</p>')
     return table(yours, False)
 
 

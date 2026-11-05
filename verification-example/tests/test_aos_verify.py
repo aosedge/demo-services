@@ -495,7 +495,7 @@ def test_the_script_is_executable_and_has_no_newer_bash():
 
 
 def test_the_workflows_take_the_api_url_as_a_secret_or_a_variable():
-    for name in ('verify-release.yml', 'watch-verification.yml'):
+    for name in ('verify-batch.yml', 'watch-batches.yml'):
         text = (ROOT / '.github/workflows' / name).read_text(encoding='utf-8')
         assert 'AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}' in text
 

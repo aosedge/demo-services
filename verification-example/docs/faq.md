@@ -37,11 +37,13 @@ Yes: set `AOS_DECISION` to `report-only`. The job writes the report and sends no
 ## The watch: timing and old batches
 
 **Why every 5 minutes?**
-AosCloud does not notify a pipeline when a new version waits (no webhook in 6.1/6.2), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows; GitHub may start a scheduled run later or skip one under load, so the real delay can be longer. Each run takes about 20 s and only reads. To change it, edit one line in `watch-verification.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-release` right after your upload job (the chain), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
+AosCloud does not notify a pipeline when a new version waits (no webhook in 6.1/6.2), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub runs scheduled jobs on a best-effort basis: they can start late or be skipped, sometimes for long periods (in our test repository, delays of over an hour). Each run takes about 20 s and only reads. To change it, edit one line in `watch-batches.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-batch` right after your upload job (the chain), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
 
-The chain is in [`examples/release-caller.yml`](../examples/release-caller.yml). Every run costs runner time: at 5 minutes,
-about 8,600 minutes a month if each run counts as one minute. Check your plan if the repository is private. In a public
-repository GitHub turns a schedule off after 60 days without activity.
+The chain is in [`examples/release-caller.yml`](../examples/release-caller.yml).
+
+What it costs: in a public repository, standard GitHub-hosted runners are free, but GitHub turns a schedule off after 60
+days without activity. In a private repository every run uses runner minutes: at 5 minutes, about 8,600 minutes a month if
+each run counts as one minute, so check your plan or use a longer interval.
 
 **Why not instant?**
 AosCloud 6.1 and 6.2 send no notification to a pipeline, so the job has to ask. A webhook would make it instant: that
@@ -54,9 +56,9 @@ ever. The watch takes only the highest version of your Service, even if that one
 others as `stale, left alone`. Decide them in the UI if you want the list clean.
 
 **A run timed out. Does the watch try again?**
-No: when `verify-release` already has a run for the batch, in any state, the watch starts no other, so a broken Unit
+No: when `verify-batch` already has a run for the batch, in any state, the watch starts no other, so a broken Unit
 does not start a job every 5 minutes. That also holds for a run that was cancelled or died on the runner. Fix the
-cause, then start `verify-release` by hand with the version.
+cause, then start `verify-batch` by hand with the version.
 
 **A new version arrives during the tests.**
 The Units move on to it, so the older version stops running: its checks fail and its batch is rejected, even if it was
@@ -74,7 +76,7 @@ before its one call, but the server has no lock: a person who decides in the UI 
 **I want a person to confirm.**
 Required reviewers on the environment `aos-verification` would stop the watch at every run, too. Keep the watch in an
 environment of its own, with the same secrets and no reviewers: change the `environment:` line of
-`watch-verification.yml`.
+`watch-batches.yml`.
 
 **`no test Unit for arm64`.**
 The batch needs a decision for an architecture that has no test Unit. The job will not approve what it did not test,
