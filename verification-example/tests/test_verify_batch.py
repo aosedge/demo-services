@@ -728,6 +728,8 @@ def test_an_odd_batch_id_goes_nowhere(cloud, capsys, github_output):
 
 WORKFLOW = ROOT / '.github' / 'workflows' / 'verify-batch.yml'
 WATCH = ROOT / '.github' / 'workflows' / 'watch-batches.yml'
+# The partner zip leaves out the demo files (.gitattributes, export-ignore): their tests run in the repository only.
+needs_demo = pytest.mark.skipif(not (ROOT / 'TRY_IT.md').exists(), reason='the demo files are not in the partner zip')
 
 
 def step(name: str, workflow: Path = WORKFLOW) -> str:
@@ -951,6 +953,8 @@ def test_only_the_discover_step_of_the_watch_has_the_key():
 
 def test_workflow_expressions_never_go_straight_into_a_shell():
     for workflow in (WORKFLOW, WATCH, ROOT / '.github' / 'workflows' / 'demo-upload.yml'):
+        if not workflow.exists():
+            continue
         for line in workflow.read_text(encoding='utf-8').splitlines():
             if '${{' in line:
                 assert re.match(r'^\s*(- )?[A-Za-z_-]+: |^\s*if: ', line) and 'run:' not in line, line
@@ -1596,10 +1600,10 @@ def run_trim_step(tmp_path, workflow, url='https://api.example:10000/api/v11 ', 
     return done, genv.read_text()
 
 
-ALL_THREE = [WORKFLOW, WATCH, ROOT / '.github' / 'workflows' / 'demo-upload.yml']
+ALL_THREE = [WORKFLOW, WATCH, pytest.param(ROOT / '.github' / 'workflows' / 'demo-upload.yml', marks=needs_demo)]
 
 
-@pytest.mark.parametrize('workflow', ALL_THREE, ids=lambda p: p.stem)
+@pytest.mark.parametrize('workflow', ALL_THREE, ids=['verify-batch', 'watch-batches', 'demo-upload'])
 def test_a_service_id_with_a_new_line_and_a_url_with_a_space_work(tmp_path, workflow):
     done, genv = run_trim_step(tmp_path, workflow)
     assert done.returncode == 0, done.stdout + done.stderr
@@ -1612,14 +1616,14 @@ def test_a_service_id_with_a_new_line_and_a_url_with_a_space_work(tmp_path, work
     assert text.count('secrets.AOS_SERVICE_ID }}') == 1 and text.count('secrets.AOS_ROOT_CA_PEM }}') == 1
 
 
-@pytest.mark.parametrize('workflow', ALL_THREE, ids=lambda p: p.stem)
+@pytest.mark.parametrize('workflow', ALL_THREE, ids=['verify-batch', 'watch-batches', 'demo-upload'])
 def test_an_empty_or_blank_secret_stops_the_job_and_names_it(tmp_path, workflow):
     done, genv = run_trim_step(tmp_path, workflow, service=' \n', pem='')
     assert done.returncode == 1 and genv == ''
     assert 'AOS_USER_PEM AOS_SERVICE_ID.' in done.stdout and '::error::' in done.stdout
 
 
-@pytest.mark.parametrize('workflow', ALL_THREE, ids=lambda p: p.stem)
+@pytest.mark.parametrize('workflow', ALL_THREE, ids=['verify-batch', 'watch-batches', 'demo-upload'])
 def test_the_key_is_trimmed_wherever_it_is_written(workflow):
     text = workflow.read_text(encoding='utf-8')
     writes = re.findall(r'.*printf .%s\\n. "\$USER_PEM".*', text)
@@ -1635,6 +1639,7 @@ def test_the_wait_step_writes_the_key_without_the_pasted_ends(tmp_path):
 GNU_SED = subprocess.run(['sed', '--version'], capture_output=True, check=False).returncode == 0
 
 
+@needs_demo
 @pytest.mark.skipif(not GNU_SED, reason='the build step uses GNU sed -i, as on the GitHub runner')
 def test_the_demo_build_takes_the_trimmed_service_id(tmp_path):
     demo = ROOT / '.github' / 'workflows' / 'demo-upload.yml'
@@ -1863,6 +1868,7 @@ def test_the_paused_watch_has_no_secret_and_skips_the_job_that_has():
     assert "needs: switch\n    if: needs.switch.outputs.paused != 'yes'" in text
 
 
+@needs_demo
 def test_demo_upload_is_manual_and_says_demo_only():
     text = DEMO.read_text(encoding='utf-8')
     assert re.search(r'^on:\n  workflow_dispatch:\n\n', text, re.M) and 'schedule' not in text and 'pull_request' not in text
@@ -1889,6 +1895,7 @@ SIGNER_OUT = ('\x1b[36mUpload info: user=someone+demo@example.com, domain=aosclo
               'Uploading...   DONE\nowner someone@example.com of 11111111-2222-3333-4444-555555555555')
 
 
+@needs_demo
 def test_the_upload_step_hides_the_user_and_the_ids_and_deletes_the_key(tmp_path):
     done = run_signer_step('c. Upload', SIGNER_OUT, 0, tmp_path)
     assert done.returncode == 0, done.stderr
@@ -1897,12 +1904,14 @@ def test_the_upload_step_hides_the_user_and_the_ids_and_deletes_the_key(tmp_path
     assert not list((tmp_path / 'temp' / 'aos').glob('user.*'))
 
 
+@needs_demo
 def test_a_refused_upload_stops_the_job_and_says_why(tmp_path):
     done = run_signer_step('c. Upload', 'User does not have "deployment_bundles_create" permission.', 1, tmp_path)
     assert done.returncode == 1 and '::error::' in done.stdout and 'deployment_bundles_create' in done.stdout
     assert 'uploaded Service version' not in done.stdout
 
 
+@needs_demo
 def test_the_bundle_template_holds_no_secret_and_the_build_fills_every_token():
     config = (ROOT / 'demo-service' / 'config.yaml').read_text(encoding='utf-8')
     assert verify_batch.AN_UUID.search(config) is None and 'tlsKey' not in config and '@' not in config
@@ -1914,6 +1923,7 @@ def test_the_bundle_template_holds_no_secret_and_the_build_fills_every_token():
     assert '__AOS_SERVICE_ID__' in build
 
 
+@needs_demo
 def test_try_it_has_the_five_steps_and_the_readme_links_it():
     page = (ROOT / 'TRY_IT.md').read_text(encoding='utf-8')
     for name in ('AOS_USER_PEM', 'AOS_ROOT_CA_PEM', 'AOS_SERVICE_ID', 'AOS_API_URL', 'I understand my workflows', 'demo-upload',
@@ -1979,5 +1989,7 @@ def test_start_a_is_the_main_start_and_the_watch_the_fallback():
 
 def test_no_internal_words_reach_a_partner():
     for name in ('README.md', 'TRY_IT.md', 'docs/faq.md', 'docs/api.md', 'docs/who-tells-whom.md'):
+        if not (ROOT / name).exists():  # TRY_IT.md is not in the partner zip
+            continue
         text = (ROOT / name).read_text(encoding='utf-8')
         assert not re.search(r'[Tt]ell us|rehearsal|showcase', text), name

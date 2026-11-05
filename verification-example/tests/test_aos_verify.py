@@ -496,6 +496,8 @@ def test_the_script_is_executable_and_has_no_newer_bash():
 
 def test_the_workflows_take_the_api_url_as_a_secret_or_a_variable():
     for name in ('verify-batch.yml', 'watch-batches.yml', 'demo-upload.yml'):
+        if not (ROOT / '.github/workflows' / name).exists():  # demo-upload.yml is not in the partner zip
+            continue
         text = (ROOT / '.github/workflows' / name).read_text(encoding='utf-8')
         assert text.count('${{ secrets.AOS_API_URL || vars.AOS_API_URL }}') == 1
         assert 'PASTED_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}' in text
