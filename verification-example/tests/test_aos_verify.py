@@ -495,9 +495,26 @@ def test_the_script_is_executable_and_has_no_newer_bash():
 
 
 def test_the_workflows_take_the_api_url_as_a_secret_or_a_variable():
-    for name in ('verify-batch.yml', 'watch-batches.yml', 'demo-release.yml'):
+    for name in ('verify-batch.yml', 'watch-batches.yml', 'demo-upload.yml'):
+        if not (ROOT / '.github/workflows' / name).exists():  # demo-upload.yml is not in the partner zip
+            continue
         text = (ROOT / '.github/workflows' / name).read_text(encoding='utf-8')
-        assert 'AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}' in text
+        assert text.count('${{ secrets.AOS_API_URL || vars.AOS_API_URL }}') == 1
+        assert 'PASTED_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}' in text
+
+
+def test_a_pasted_service_id_and_url_with_a_new_line_or_a_space_work(box):
+    box.pki.p12(box.home / '.aos/security/aos-user-sp.p12')
+    done = box('setup', '--api-url', f'  {box.url} ', '--service', f'{SERVICE}\n')
+    assert done.returncode == 0, done.stdout + done.stderr
+    settings = (box.tree / '.aos-verify.env').read_text()
+    assert f"export SERVICE_ID='{SERVICE}'" in settings and f"export AOS_API_URL='{box.url}'" in settings
+    # a settings file edited by hand, with a space and a new line left in
+    env = box.tree / '.aos-verify.env'
+    env.write_text(settings.replace(f"'{SERVICE}'", f"'{SERVICE}\n'").replace(f"'{box.url}'", f"'{box.url} '"))
+    done = box('check')
+    assert done.returncode == 0 and 'connection OK' in done.stdout, done.stdout + done.stderr
+    assert f"--body '{box.url}'" in box('secrets', '--repo', 'my-org/my-repo').stdout
 
 
 def report_of(box):

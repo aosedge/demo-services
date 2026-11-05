@@ -12,7 +12,7 @@
     python verify_batch.py decide --batch-id ID (--approve | --reject) [--arch ARCH ...] [--report-dir DIR]
 
 discover, next-version, services, check and status only read. next-version: the highest Service version in AosCloud, patch + 1
-(demo-release.yml uses it; a real pipeline takes the version from its own build). services: the Services this certificate sees, one line each (id, codename,
+(demo-upload.yml uses it; a real pipeline takes the version from its own build). services: the Services this certificate sees, one line each (id, codename,
 title). discover: is there a new version to verify, and on which Units? It prints one
 JSON line {"batch_id", "version", "units"} when there is. check: the connection, the latest batch of the Service and what each Unit runs.
 status: the checks that wait already proved, read again, one tab-separated line each (code, name, PASS/FAIL, detail).
@@ -544,37 +544,42 @@ def send_decision(args, outcome: dict) -> int:
     return 0
 
 
+def trimmed(value: str) -> str:
+    """An id as pasted: a new line or a space at either end is not part of it."""
+    return value.strip()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n', 1)[0])
     commands = parser.add_subparsers(dest='command', required=True)
     f = commands.add_parser('discover', help='read only: the Verification batch to verify, and its Verification Set Units')
-    f.add_argument('--service-id', default=os.environ.get('SERVICE_ID'))
-    f.add_argument('--unit', action='append', default=[], help='use these Verification Set Units, not the ones AosCloud lists')
+    f.add_argument('--service-id', type=trimmed, default=os.environ.get('SERVICE_ID'))
+    f.add_argument('--unit', type=trimmed, action='append', default=[], help='use these Verification Set Units, not the ones AosCloud lists')
     f.add_argument('--dry-run', action='store_true', help='also list the Verification batches; start nothing, exit 0, write nothing')
     c = commands.add_parser('check', help='read only: the connection, the latest Verification batch, what the Units run')
-    c.add_argument('--service-id', default=os.environ.get('SERVICE_ID'))
-    c.add_argument('--unit', action='append', default=[], help='a Verification Set Unit (repeat it); default: from AosCloud')
+    c.add_argument('--service-id', type=trimmed, default=os.environ.get('SERVICE_ID'))
+    c.add_argument('--unit', type=trimmed, action='append', default=[], help='a Verification Set Unit (repeat it); default: from AosCloud')
     x = commands.add_parser('next-version', help='read only: the highest Service version, patch + 1 (demo only)')
-    x.add_argument('--service-id', required=True)
+    x.add_argument('--service-id', type=trimmed, required=True)
     commands.add_parser('services', help='read only: the Services this certificate sees')
     s = commands.add_parser('status', help='read only: the checks that wait proved, read again')
-    s.add_argument('--service-id', required=True)
-    s.add_argument('--version', required=True)
-    s.add_argument('--batch-id', required=True)
-    s.add_argument('--unit', action='append', default=[], help='a Verification Set Unit (repeat it)')
+    s.add_argument('--service-id', type=trimmed, required=True)
+    s.add_argument('--version', type=trimmed, required=True)
+    s.add_argument('--batch-id', type=trimmed, required=True)
+    s.add_argument('--unit', type=trimmed, action='append', default=[], help='a Verification Set Unit (repeat it)')
     n = commands.add_parser('service-name', help='read only: the codename of the Service')
-    n.add_argument('--service-id', required=True)
+    n.add_argument('--service-id', type=trimmed, required=True)
     w = commands.add_parser('wait', help='wait until the Verification batch waits and the Service version is on every Unit')
-    w.add_argument('--service-id', required=True)
-    w.add_argument('--version', required=True)
-    w.add_argument('--unit', action='append', default=[],
+    w.add_argument('--service-id', type=trimmed, required=True)
+    w.add_argument('--version', type=trimmed, required=True)
+    w.add_argument('--unit', type=trimmed, action='append', default=[],
                    help='a Verification Set Unit (repeat it); default: the Units of the Verification Set that have the Service')
-    w.add_argument('--batch-id', help='stop unless the Service version is in this Verification batch')
+    w.add_argument('--batch-id', type=trimmed, help='stop unless the Service version is in this Verification batch')
     w.add_argument('--units-file', help='write the Verification Set Units to this file, separated by spaces')
     w.add_argument('--timeout', type=float, default=1800, help='seconds (default 1800)')
     w.add_argument('--interval', type=float, default=15, help='seconds between checks (default 15)')
     d = commands.add_parser('decide', help='approve or reject the Verification batch, once')
-    d.add_argument('--batch-id', required=True)
+    d.add_argument('--batch-id', type=trimmed, required=True)
     choice = d.add_mutually_exclusive_group(required=True)
     choice.add_argument('--approve', action='store_true')
     choice.add_argument('--reject', action='store_true')

@@ -1,7 +1,7 @@
 # Copyright (c) 2018-2026 EPAM Systems Inc.
 """Demo Service for the verification flow.
 
-``DEMO_VERSION``, ``DEMO_MODE``, ``DEMO_FAIL_AFTER_S`` and ``DEMO_GREEDY_MB`` are baked in by ``demo-release.yml``
+``DEMO_VERSION``, ``DEMO_MODE``, ``DEMO_FAIL_AFTER_S`` and ``DEMO_GREEDY_MB`` are baked in by ``demo-upload.yml``
 (the ``__DEMO_*__`` tokens below). Environment variables of the same names override the baked values, which keeps
 the script runnable locally.
 

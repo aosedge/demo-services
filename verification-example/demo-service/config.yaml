@@ -1,4 +1,4 @@
-# Template of the demo Service bundle, filled in by .github/workflows/demo-release.yml. Demo only.
+# Template of the demo Service bundle, filled in by .github/workflows/demo-upload.yml. Demo only.
 # __AOS_SERVICE_ID__ and __DEMO_VERSION__ are replaced at build time. No publish section: the certificate is given to
 # aos-signer with -p, and the upload domain comes from it. Nothing secret lives in this file.
 schemaVersion: 2

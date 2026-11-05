@@ -62,7 +62,7 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     # the secrets live in this environment; add required reviewers there if a person must confirm
     environment: aos-verification
@@ -72,7 +72,6 @@ jobs:
     permissions:
       contents: read
     env:
-      AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
       VERSION: ${{ inputs.version }}
       # Decision mode. Change it with the variable AOS_DECISION in the environment aos-verification:
       #   auto         all checks pass, approve; a check fails, reject. The default
@@ -88,39 +87,42 @@ jobs:
             echo "::add-mask::$id"
           done
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      # The first line of the job summary.
-      - name: Say the decision mode
+      # A value pasted into GitHub often ends with a new line or a space. Trimmed once, here: the API URL and the Service
+      # id go to the next steps, the root CA to a file. The key never goes in the env: each step trims it as it writes it.
+      - name: Check and trim the secrets
+        env:
+          PASTED_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
+          PASTED_SERVICE_ID: ${{ inputs.service_id || secrets.AOS_SERVICE_ID }}
+          USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          ROOT_CA: ${{ secrets.AOS_ROOT_CA_PEM }}
         run: |
-          {
-            echo "Decision mode: $AOS_DECISION (change with the AOS_DECISION variable)"
-            echo
-            cat <<'SUMMARY'
-          Why every 5 minutes? AosCloud does not notify a pipeline when a new Service version waits (no webhook), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub may start runs late or skip them; for a guaranteed start use Start A. Each run takes about 20 s and only reads. To change it, edit one line in `watch-batches.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-batch` right after your upload job (Start A), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
-          SUMMARY
-          } >> "$GITHUB_STEP_SUMMARY"
+          api_url=$(printf '%s' "$PASTED_URL" | tr -d '[:space:]')
+          service_id=$(printf '%s' "$PASTED_SERVICE_ID" | tr -d '[:space:]')
+          missing=
+          if [ -z "$USER_PEM" ]; then missing="$missing AOS_USER_PEM"; fi
+          if [ -z "$ROOT_CA" ]; then missing="$missing AOS_ROOT_CA_PEM"; fi
+          if [ -z "$service_id" ]; then missing="$missing AOS_SERVICE_ID"; fi
+          if [ -z "$api_url" ]; then missing="$missing AOS_API_URL"; fi
+          if [ -n "$missing" ]; then
+            echo "::error::Empty:$missing. Put them in the environment aos-verification (see the README, Parameters)"
+            exit 1
+          fi
+          echo "::add-mask::$service_id"
+          { echo "AOS_API_URL=$api_url"; echo "SERVICE_ID=$service_id"; } >> "$GITHUB_ENV"
+          dir="$RUNNER_TEMP/aos" && mkdir -p "$dir" && chmod 700 "$dir"
+          printf '%s\n' "$ROOT_CA" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > "$dir/aos-root-ca.crt"
+          echo "AOS_CA=$dir/aos-root-ca.crt" >> "$GITHUB_ENV"
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
       - name: Install requests
         run: python -m pip install requests==2.32.3
-
-      - name: Write the root CA to a temporary folder
-        env:
-          ROOT_CA: ${{ secrets.AOS_ROOT_CA_PEM }}
-        run: |
-          if [ -z "$ROOT_CA" ]; then
-            echo "::error::AOS_ROOT_CA_PEM is empty: put it in the environment aos-verification (see the README, Parameters)"
-            exit 1
-          fi
-          dir="$RUNNER_TEMP/aos" && mkdir -p "$dir" && chmod 700 "$dir"
-          printf '%s\n' "$ROOT_CA" > "$dir/aos-root-ca.crt"
-          echo "AOS_CA=$dir/aos-root-ca.crt" >> "$GITHUB_ENV"
 
       # The private key exists only while steps 5, 6a and 7 run: each writes it and deletes it when it ends.
       # Step 6b, the partner tests, has no secret at all.
@@ -128,7 +130,6 @@ jobs:
         id: wait
         env:
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
-          SERVICE_ID: ${{ inputs.service_id || secrets.AOS_SERVICE_ID }}
           INPUT_UNITS: ${{ inputs.units }}
           OVERRIDE_UNITS: ${{ vars.AOS_TEST_UNITS }}
           BATCH_INPUT: ${{ inputs.batch_id }}
@@ -148,18 +149,14 @@ jobs:
           elif [ -n "$OVERRIDE_UNITS" ]; then units_from=AOS_TEST_UNITS; fi
           batch_arg=()
           if [ -n "$BATCH_INPUT" ]; then batch_arg=(--batch-id "$BATCH_INPUT"); fi
-          if [ -z "$SERVICE_ID" ]; then echo "::error::AOS_SERVICE_ID is empty: put the secret in the environment aos-verification, or pass service_id"; exit 1; fi
-          if [ -z "$USER_PEM" ]; then
-            echo "::error::AOS_USER_PEM is empty: put it in the environment aos-verification (see the README, Parameters)"
-            exit 1
-          fi
           export AOS_CERT="$RUNNER_TEMP/aos/user.pem"
           trap 'rm -f "$AOS_CERT"' EXIT
-          (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
+          (umask 077 && printf '%s\n' "$USER_PEM" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > "$AOS_CERT")
           set +e
           found="$RUNNER_TEMP/aos/units"
+          # what wait says goes to the log as always, and its last line to the job summary when nothing is decided
           batch=$(python verify_batch.py wait --service-id "$SERVICE_ID" --version "$VERSION" "${units[@]}" \
-                  "${batch_arg[@]}" --units-file "$found" --timeout "$WAIT_TIMEOUT")
+                  "${batch_arg[@]}" --units-file "$found" --timeout "$WAIT_TIMEOUT" 2> >(tee "$RUNNER_TEMP/aos/wait.log" >&2))
           code=$?
           set -e
           {
@@ -179,7 +176,6 @@ jobs:
         id: builtin
         if: steps.wait.outputs.code == '0' || steps.wait.outputs.code == '1'
         env:
-          SERVICE_ID: ${{ inputs.service_id || secrets.AOS_SERVICE_ID }}
           BATCH_ID: ${{ steps.wait.outputs.batch_id }}
           AOS_TEST_UNITS: ${{ steps.wait.outputs.units }}
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
@@ -189,7 +185,7 @@ jobs:
         run: |
           export AOS_CERT="$RUNNER_TEMP/aos/user.pem"
           trap 'rm -f "$AOS_CERT"' EXIT
-          (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
+          (umask 077 && printf '%s\n' "$USER_PEM" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > "$AOS_CERT")
           tests/run_tests.sh
 
       # No secret in this step: your tests cannot read the key. Code 0 approves, 1 rejects, 3 decides nothing.
@@ -221,7 +217,7 @@ jobs:
         run: |
           export AOS_CERT="$RUNNER_TEMP/aos/user.pem"
           trap 'rm -f "$AOS_CERT"' EXIT
-          (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
+          (umask 077 && printf '%s\n' "$USER_PEM" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > "$AOS_CERT")
           python verify_batch.py decide --batch-id "$BATCH_ID" --approve --report-dir report
 
       - name: 7b. Reject
@@ -234,7 +230,7 @@ jobs:
         run: |
           export AOS_CERT="$RUNNER_TEMP/aos/user.pem"
           trap 'rm -f "$AOS_CERT"' EXIT
-          (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
+          (umask 077 && printf '%s\n' "$USER_PEM" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > "$AOS_CERT")
           python verify_batch.py decide --batch-id "$BATCH_ID" --reject --report-dir report
           echo "Rejected: the new Service version failed on a Verification Set Unit or in the tests." && exit 1
 
@@ -249,11 +245,45 @@ jobs:
       # After the decision, so that the report says what was decided.
       - name: Keep the report
         if: always() && steps.tests.outcome != 'skipped'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: verification-report
           path: verification-example/report/
           if-no-files-found: ignore
+
+      # The whole report on the run page, the same as report.html. No report: the checks did not run, nothing was decided.
+      - name: Show the report on the run page
+        if: always()
+        env:
+          BATCH_ID: ${{ steps.wait.outputs.batch_id }}
+          CODE: ${{ steps.wait.outputs.code }}
+        run: |
+          if [ -f report/report.md ]; then
+            cat report/report.md >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          why=$(tail -n 1 "$RUNNER_TEMP/aos/wait.log" 2>/dev/null || true)
+          case "$CODE" in
+            2 | 3) head='No decision: timeout, or nothing to verify' ;;
+            *) head='No decision: the job stopped before the checks' ;;
+          esac
+          batch=${BATCH_ID:+…${BATCH_ID: -4}}
+          {
+            echo "### Verification report"
+            echo
+            echo "# $head"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Service version | $VERSION |"
+            echo "| Verification batch | ${batch:--} |"
+            echo "| Decision mode | $AOS_DECISION |"
+            echo "| Report time | $(date -u '+%Y-%m-%d %H:%M UTC') |"
+            echo
+            echo "${why:-See the log of the step that failed.}"
+            echo
+            echo "Nothing was sent to AosCloud. Start verify-batch again with the Service version when the cause is fixed."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove the certificates
         if: always()

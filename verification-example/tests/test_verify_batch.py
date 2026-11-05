@@ -728,6 +728,8 @@ def test_an_odd_batch_id_goes_nowhere(cloud, capsys, github_output):
 
 WORKFLOW = ROOT / '.github' / 'workflows' / 'verify-batch.yml'
 WATCH = ROOT / '.github' / 'workflows' / 'watch-batches.yml'
+# The partner zip leaves out the demo files (.gitattributes, export-ignore): their tests run in the repository only.
+needs_demo = pytest.mark.skipif(not (ROOT / 'TRY_IT.md').exists(), reason='the demo files are not in the partner zip')
 
 
 def step(name: str, workflow: Path = WORKFLOW) -> str:
@@ -749,6 +751,7 @@ def run_wait_step(tmp_path, code, stdout, units='unit-1', user_pem='PEM', batch_
     fake.mkdir(exist_ok=True)
     (fake / 'python').write_text(f"""#!/usr/bin/env bash
 test -s "$AOS_CERT" || exit 9
+cp "$AOS_CERT" "{tmp_path}/seen_pem"
 printf '%s\\n' "$@" > "{tmp_path}/args"
 prev=
 for a in "$@"; do
@@ -824,12 +827,6 @@ def test_a_star_in_the_units_is_not_expanded(tmp_path):
     (tmp_path / 'somefile').write_text('')
     run_wait_step(tmp_path, 0, BATCH, units='*')
     assert '*' in (tmp_path / 'args').read_text().splitlines()
-
-
-@needs_bash
-def test_verify_batch_stops_on_an_empty_service_id(tmp_path):
-    run, output, _ = run_wait_step(tmp_path, 0, BATCH, service='')
-    assert run.returncode != 0 and 'AOS_SERVICE_ID is empty' in run.stdout and output == ''
 
 
 # the watch
@@ -947,13 +944,17 @@ def test_your_tests_step_has_no_secret_and_only_the_verdict_decides():
 
 def test_only_the_discover_step_of_the_watch_has_the_key():
     text = WATCH.read_text(encoding='utf-8')
-    assert text.count('secrets.AOS_USER_PEM') == 1 and 'secrets.AOS_USER_PEM' in workflow_step('0. Ask', WATCH)
+    # twice: the trim step only checks that it is there, step 0 writes it
+    assert text.count('secrets.AOS_USER_PEM') == 2 and 'secrets.AOS_USER_PEM' in workflow_step('0. Ask', WATCH)
+    assert '$USER_PEM' not in workflow_step('Check and trim', WATCH).split('if [ -z "$USER_PEM" ]', 1)[1]
     assert 'GH_TOKEN' not in workflow_step('0. Ask', WATCH) and 'persist-credentials: false' in text
     assert 'secrets.' not in workflow_step('Start one', WATCH)
 
 
 def test_workflow_expressions_never_go_straight_into_a_shell():
-    for workflow in (WORKFLOW, WATCH):
+    for workflow in (WORKFLOW, WATCH, ROOT / '.github' / 'workflows' / 'demo-upload.yml'):
+        if not workflow.exists():
+            continue
         for line in workflow.read_text(encoding='utf-8').splitlines():
             if '${{' in line:
                 assert re.match(r'^\s*(- )?[A-Za-z_-]+: |^\s*if: ', line) and 'run:' not in line, line
@@ -966,22 +967,21 @@ def test_the_discover_step_deletes_the_key_and_calls_discover(tmp_path):
     (fake / 'python').write_text('#!/usr/bin/env bash\ntest -s "$AOS_CERT" && test -s "$AOS_CA" || exit 9\n'
                                  'echo "$*" > "$CALLED"\nexit "${FAKE_CODE:-0}"\n')
     (fake / 'python').chmod(0o755)
-    env = {'PATH': f"{fake}:{os.environ['PATH']}", 'RUNNER_TEMP': str(tmp_path), 'USER_PEM': 'PEM', 'ROOT_CA': 'CA',
-           'TEST_UNITS': 'unit-chosen', 'CALLED': str(tmp_path / 'called'), 'SERVICE_ID': 'service-chosen'}
+    (tmp_path / 'aos').mkdir()
+    (tmp_path / 'aos' / 'aos-root-ca.crt').write_text('CA')
+    env = {'PATH': f"{fake}:{os.environ['PATH']}", 'RUNNER_TEMP': str(tmp_path), 'USER_PEM': 'PEM',
+           'AOS_CA': str(tmp_path / 'aos' / 'aos-root-ca.crt'), 'TEST_UNITS': 'unit-chosen', 'CALLED': str(tmp_path / 'called'),
+           'SERVICE_ID': 'service-chosen'}
     run = subprocess.run(['bash', '-e', '-c', step('0. Ask', WATCH)], env=env, capture_output=True, text=True,
                          timeout=60, check=False)
     assert run.returncode == 0, run.stderr
     assert (tmp_path / 'called').read_text().strip() == 'verify_batch.py discover --unit unit-chosen'
     assert not (tmp_path / 'aos').exists()
+    (tmp_path / 'aos').mkdir()
+    (tmp_path / 'aos' / 'aos-root-ca.crt').write_text('CA')
     run = subprocess.run(['bash', '-e', '-c', step('0. Ask', WATCH)], env={**env, 'FAKE_CODE': '2'}, capture_output=True,
                          text=True, timeout=60, check=False)
     assert run.returncode == 2 and not (tmp_path / 'aos').exists()
-    run = subprocess.run(['bash', '-e', '-c', step('0. Ask', WATCH)], env={**env, 'USER_PEM': ''}, capture_output=True,
-                         text=True, timeout=60, check=False)
-    assert run.returncode != 0 and 'AOS_USER_PEM' in run.stdout
-    run = subprocess.run(['bash', '-e', '-c', step('0. Ask', WATCH)], env={**env, 'SERVICE_ID': ''}, capture_output=True,
-                         text=True, timeout=60, check=False)
-    assert run.returncode != 0 and 'AOS_SERVICE_ID' in run.stdout and not (tmp_path / 'aos').exists()
 
 
 def test_both_starts_end_in_one_concurrency_group():
@@ -1004,24 +1004,6 @@ def test_the_readme_shows_the_watch_as_it_is():
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
     assert '[`.github/workflows/watch-batches.yml`](.github/workflows/watch-batches.yml)' in readme
     assert '```yaml\n# Ask AosCloud on a schedule' not in readme and '<details>' not in readme
-
-
-@needs_bash
-def test_the_wait_step_stops_on_an_empty_user_pem(tmp_path):
-    run, output, pem_left = run_wait_step(tmp_path, 0, BATCH, user_pem='')
-    assert run.returncode != 0 and 'AOS_USER_PEM is empty' in run.stdout and output == '' and not pem_left
-
-
-@needs_bash
-@pytest.mark.parametrize('root_ca, passes', [('', False), ('CA', True)])
-def test_the_root_ca_step_stops_on_an_empty_secret(tmp_path, root_ca, passes):
-    env = {'PATH': os.environ['PATH'], 'RUNNER_TEMP': str(tmp_path), 'GITHUB_ENV': str(tmp_path / 'env'),
-           'ROOT_CA': root_ca}
-    run = subprocess.run(['bash', '-e', '-c', step('Write the root CA')], env=env, capture_output=True, text=True,
-                         timeout=60, check=False)
-    assert (run.returncode == 0) is passes
-    assert passes or 'AOS_ROOT_CA_PEM is empty' in run.stdout
-    assert (tmp_path / 'aos' / 'aos-root-ca.crt').exists() is passes
 
 
 # check and status: read only
@@ -1338,7 +1320,7 @@ def test_the_decision_is_written_into_the_report(tmp_path, decision, more, says)
     assert report.main(report_args(tmp_path, '--decision', decision, *more)) == 0
     page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
     assert says in page and 'not sent yet' not in page
-    assert 'PASS → approve' in page and 'batch …cdef' in page and '…cdef' in page
+    assert '<div class="verdict pass">PASS → ' in page and 'batch …cdef' in page and '…cdef' in page
 
 
 def test_a_decision_leaves_the_report_of_another_batch_alone(tmp_path):
@@ -1527,20 +1509,156 @@ def summary_of(workflow: Path, step: str, tmp_path, **env) -> list[str]:
     return out.read_text(encoding='utf-8').splitlines()
 
 
-@pytest.mark.parametrize('mode', ['auto', 'report-only'])
-def test_the_job_summary_starts_with_the_decision_mode(tmp_path, mode):
-    lines = summary_of(ROOT / '.github/workflows/verify-batch.yml', 'Say the decision mode', tmp_path, AOS_DECISION=mode)
-    assert lines[0] == f'Decision mode: {mode} (change with the AOS_DECISION variable)'
-    assert plain(lines[2]) == f'Why every 5 minutes? {WHY}'
-
-
-def test_the_decision_mode_is_said_before_anything_can_fail_and_the_values_are_next_to_it():
-    text = (ROOT / '.github/workflows/verify-batch.yml').read_text(encoding='utf-8')
-    assert text.index('- name: Say the decision mode') < text.index('- name: Install requests')
-    assert text.count('GITHUB_STEP_SUMMARY') == 1
+def test_the_decision_mode_values_are_next_to_it_and_only_the_watch_says_why():
+    text = WORKFLOW.read_text(encoding='utf-8')
     above = text[:text.index('AOS_DECISION: ${{')].rsplit('VERSION: ${{', 1)[1]
     for value in ('auto', 'report-only', 'ask'):
         assert re.search(rf'#\s+{value}\s+\S', above), value
+    assert 'Why every 5 minutes' not in text and 'Say the decision mode' not in text
+    shown = workflow_step('Show the report on the run page', WORKFLOW)
+    assert text.count('GITHUB_STEP_SUMMARY') == shown.count('GITHUB_STEP_SUMMARY') == 2
+    assert text.index('- name: Show the report') > text.index('- name: Keep the report') > text.index('- name: 7. No decision')
+    assert "if: always()" in shown
+
+
+def show_summary(tmp_path, code='0', wait_log=None, **env):
+    """Run the last step of verify-batch in tmp_path: what the run page shows."""
+    out, temp = tmp_path / 'summary', tmp_path / 'temp'
+    (temp / 'aos').mkdir(parents=True, exist_ok=True)
+    if wait_log is not None:
+        (temp / 'aos' / 'wait.log').write_text(wait_log)
+    subprocess.run(['bash', '-e', '-c', step('Show the report on the run page')], check=True, cwd=tmp_path,
+                   env={**os.environ, 'GITHUB_STEP_SUMMARY': str(out), 'RUNNER_TEMP': str(temp), 'CODE': code,
+                        'VERSION': NEW, 'AOS_DECISION': 'auto', 'BATCH_ID': env.get('batch', '')})
+    return out.read_text(encoding='utf-8')
+
+
+def test_the_run_page_shows_the_whole_report_after_the_decision(tmp_path):
+    report = write_report(tmp_path)
+    assert report.main(report_args(tmp_path, '--decision', 'approved', '--state', 'Valid')) == 0
+    (tmp_path / 'report').mkdir()
+    (tmp_path / 'report' / 'report.md').write_text((tmp_path / 'r' / 'report.md').read_text(encoding='utf-8'))
+    shown = show_summary(tmp_path)
+    assert shown.startswith('### Verification report\n\n# ✅ PASS → approved, now Verified\n')
+    for row in ('| Service | …cdef |', f'| Service version | {NEW} |', '| Verification batch | …cdef |',
+                '| Verification Set Units | …cdef |', '| Report time | '):
+        assert row in shown, row
+    assert shown.index('### Built-in checks') < shown.index('### Partner tests') < shown.index('### Scenarios covered')
+    assert '| A1 | the batch | **PASS** | ok |' in shown and '| C3 | Late failure | Checked now |' in shown
+    assert shown.rstrip().splitlines()[-1] == 'Full report.html and junit.xml: Artifacts at the bottom of this page'
+
+
+@pytest.mark.parametrize('decision, state, line', [
+    ('approved', 'Valid', 'PASS → approved, now Verified'), ('rejected', 'Invalid', 'FAIL → rejected, now Invalid'),
+    ('report-only', None, 'PASS → approve; report-only: not sent'), ('not-sent', None, 'PASS → approve; not sent'), (None, None, 'PASS → approve')])
+def test_the_summary_and_report_html_say_the_same(tmp_path, decision, state, line):
+    if decision == 'rejected':
+        (tmp_path / 'results.tsv').write_text('builtin\tA1\tthe batch\tPASS\tok\nbuiltin\tC2\tno crash\tFAIL\tcrashed\n')
+    report = write_report(tmp_path)
+    if decision:
+        assert report.main(report_args(tmp_path, '--decision', decision, *(['--state', state] if state else []))) == 0
+    page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
+    markdown = (tmp_path / 'r/report.md').read_text(encoding='utf-8')
+    assert f'">{line}</div>' in page and markdown.splitlines()[2].startswith('# ') and line in markdown.splitlines()[2]
+    for row in report.read_results(tmp_path / 'results.tsv'):
+        assert row['name'] in page and row['name'] in markdown
+    assert html.unescape(re.search(r'<p class="summary">(.*?)</p>', page)[1]) in markdown
+    assert html.unescape(re.search(r'<p class="decision">(.*?)</p>', page)[1]) in markdown
+    for code, _ in report.SCENARIOS:
+        assert f'| {code} |' in markdown
+
+
+def test_a_pipe_or_a_tag_in_a_result_does_not_break_the_summary(tmp_path):
+    (tmp_path / 'results.tsv').write_text('builtin\tA1\tthe batch\tPASS\tok\nyours\t\thealth\tFAIL\tgot <b>|500|</b>\n')
+    write_report(tmp_path)
+    markdown = (tmp_path / 'r/report.md').read_text(encoding='utf-8')
+    assert '| health | **FAIL** | got &lt;b&gt;\\|500\\|&lt;/b&gt; |' in markdown
+
+
+@pytest.mark.parametrize('code, head', [('2', 'No decision: timeout, or nothing to verify'),
+                                        ('3', 'No decision: timeout, or nothing to verify'),
+                                        ('', 'No decision: the job stopped before the checks')])
+def test_with_no_report_the_run_page_says_no_decision_and_why(tmp_path, code, head):
+    shown = show_summary(tmp_path, code=code, wait_log='waiting\ntimed out after 1800 s: Unit …318d still installs 4.6.0\n',
+                         batch='batch-abcdef')
+    assert f'\n# {head}\n' in shown and f'| Service version | {NEW} |' in shown and '| Verification batch | …cdef |' in shown
+    assert 'timed out after 1800 s: Unit …318d still installs 4.6.0' in shown and 'batch-abcdef' not in shown
+    assert 'Nothing was sent to AosCloud.' in shown
+
+
+# Values pasted into GitHub: a new line or a space at the end (walkthrough 06.11: sed: unterminated 's' command)
+PASTED_CA = '\n  -----BEGIN CERTIFICATE-----\r\nAAAA\r\n-----END CERTIFICATE-----  \n\n'
+CLEAN_CA = '-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n'
+
+
+def run_trim_step(tmp_path, workflow, url='https://api.example:10000/api/v11 ', service='service-abcdef\n', pem='KEY', ca=PASTED_CA):
+    genv, temp = tmp_path / 'github_env', tmp_path / 'temp'
+    genv.write_text(''), temp.mkdir(exist_ok=True)
+    done = subprocess.run(['bash', '-e', '-c', step('Check and trim the secrets', workflow)], capture_output=True, text=True,
+                          env={'PATH': os.environ['PATH'], 'GITHUB_ENV': str(genv), 'RUNNER_TEMP': str(temp), 'PASTED_URL': url,
+                               'PASTED_SERVICE_ID': service, 'USER_PEM': pem, 'ROOT_CA': ca}, check=False)
+    return done, genv.read_text()
+
+
+ALL_THREE = [WORKFLOW, WATCH, pytest.param(ROOT / '.github' / 'workflows' / 'demo-upload.yml', marks=needs_demo)]
+
+
+@pytest.mark.parametrize('workflow', ALL_THREE, ids=['verify-batch', 'watch-batches', 'demo-upload'])
+def test_a_service_id_with_a_new_line_and_a_url_with_a_space_work(tmp_path, workflow):
+    done, genv = run_trim_step(tmp_path, workflow)
+    assert done.returncode == 0, done.stdout + done.stderr
+    ca = tmp_path / 'temp' / 'aos' / 'aos-root-ca.crt'
+    assert genv.splitlines() == ['AOS_API_URL=https://api.example:10000/api/v11', 'SERVICE_ID=service-abcdef', f'AOS_CA={ca}']
+    assert ca.read_text() == CLEAN_CA and '::add-mask::service-abcdef\n' in done.stdout and 'KEY' not in genv
+    text = workflow.read_text(encoding='utf-8')
+    assert text.index('Check and trim the secrets') < text.index('Install requests')
+    # every later step takes the trimmed values: no step reads these two secrets again
+    assert text.count('secrets.AOS_SERVICE_ID }}') == 1 and text.count('secrets.AOS_ROOT_CA_PEM }}') == 1
+
+
+@pytest.mark.parametrize('workflow', ALL_THREE, ids=['verify-batch', 'watch-batches', 'demo-upload'])
+def test_an_empty_or_blank_secret_stops_the_job_and_names_it(tmp_path, workflow):
+    done, genv = run_trim_step(tmp_path, workflow, service=' \n', pem='')
+    assert done.returncode == 1 and genv == ''
+    assert 'AOS_USER_PEM AOS_SERVICE_ID.' in done.stdout and '::error::' in done.stdout
+
+
+@pytest.mark.parametrize('workflow', ALL_THREE, ids=['verify-batch', 'watch-batches', 'demo-upload'])
+def test_the_key_is_trimmed_wherever_it_is_written(workflow):
+    text = workflow.read_text(encoding='utf-8')
+    writes = re.findall(r'.*printf .%s\\n. "\$USER_PEM".*', text)
+    assert writes and all("| sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' >" in w for w in writes), writes
+
+
+@needs_bash
+def test_the_wait_step_writes_the_key_without_the_pasted_ends(tmp_path):
+    run, _, _ = run_wait_step(tmp_path, 0, BATCH, user_pem=PASTED_CA)
+    assert run.returncode == 0 and (tmp_path / 'seen_pem').read_text() == CLEAN_CA
+
+
+GNU_SED = subprocess.run(['sed', '--version'], capture_output=True, check=False).returncode == 0
+
+
+@needs_demo
+@pytest.mark.skipif(not GNU_SED, reason='the build step uses GNU sed -i, as on the GitHub runner')
+def test_the_demo_build_takes_the_trimmed_service_id(tmp_path):
+    demo = ROOT / '.github' / 'workflows' / 'demo-upload.yml'
+    _, genv = run_trim_step(tmp_path, demo)
+    service = dict(line.split('=', 1) for line in genv.splitlines())['SERVICE_ID']
+    bin_dir, temp = tmp_path / 'bin', tmp_path / 'temp'
+    bin_dir.mkdir()
+    for tool in ('aos-signer', 'openssl'):
+        (bin_dir / tool).write_text('#!/bin/bash\nexit 0\n'), (bin_dir / tool).chmod(0o755)
+    env = {'PATH': f"{bin_dir}:{os.environ['PATH']}", 'RUNNER_TEMP': str(temp), 'USER_PEM': 'pem', 'VERSION': '4.11.2'}
+    done = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', step('b. Build', demo)], capture_output=True, text=True,
+                          cwd=ROOT, env={**env, 'SERVICE_ID': service}, check=False)
+    assert done.returncode == 0, done.stderr
+    assert 'id: service-abcdef\n' in (temp / 'aos' / 'bundle' / 'config.yaml').read_text()
+    # what happened on 06.11, before the trim
+    shutil.rmtree(temp / 'aos' / 'bundle')
+    done = subprocess.run(['bash', '-e', '-c', step('b. Build', demo)], capture_output=True, text=True, cwd=ROOT,
+                          env={**env, 'SERVICE_ID': 'service-abcdef\n'}, check=False)
+    assert done.returncode != 0 and 'unterminated' in done.stderr
 
 
 def test_the_watch_says_why_in_its_summary(tmp_path):
@@ -1590,7 +1708,7 @@ def test_your_tests_section_is_amber_only_when_you_have_none(tmp_path, line, amb
 
 
 def test_the_old_workflow_names_are_gone():
-    old = re.compile('verify[-_]' + 'release|watch-' + 'verification')
+    old = re.compile('verify[-_]' + 'release|watch-' + 'verification|demo-' + 'release')
     files = [p for p in ROOT.rglob('*') if p.is_file() and '.git' not in p.parts and p.suffix not in ('.png', '.jpg', '.mp4')
              and '__pycache__' not in p.parts and '.pytest_cache' not in p.parts and '.venv' not in p.parts and 'report' not in p.parts]
     assert [str(p) for p in files if old.search(p.name) or old.search(p.read_text(encoding='utf-8', errors='ignore'))] == []
@@ -1666,8 +1784,8 @@ def test_aos_verify_recognises_the_message_of_verify_batch():
     assert f"*'{phrase}'*)" in (ROOT / 'aos-verify').read_text(encoding='utf-8')
 
 
-# demo-release.yml and the pause switch of the watch
-DEMO = ROOT / '.github' / 'workflows' / 'demo-release.yml'
+# demo-upload.yml and the pause switch of the watch
+DEMO = ROOT / '.github' / 'workflows' / 'demo-upload.yml'
 SERVICE_ID_FOR_NEXT = 'service-next'
 
 
@@ -1688,6 +1806,17 @@ def test_next_version_is_the_highest_plus_one_patch(versions, expected, monkeypa
     monkeypatch.setattr(verify_batch, 'get', lambda *a, **k: pytest.fail('next-version must only list'))
     assert verify_batch.main(['next-version', '--service-id', SERVICE_ID_FOR_NEXT]) == 0
     assert capsys.readouterr().out.strip() == expected
+
+
+def test_ids_and_versions_with_a_new_line_or_a_space_are_trimmed(monkeypatch, capsys):
+    monkeypatch.setattr(verify_batch, 'pages', lambda path, **params: iter([batch_of('4.11.1')]))
+    assert verify_batch.main(['next-version', '--service-id', f' {SERVICE_ID_FOR_NEXT}\n']) == 0
+    assert capsys.readouterr().out.strip() == '4.11.2'
+    monkeypatch.setenv('SERVICE_ID', f'{SERVICE_ID_FOR_NEXT}\n')
+    seen = {}
+    monkeypatch.setattr(verify_batch, 'discover', lambda args: seen.update(vars(args)) or 0)
+    assert verify_batch.main(['discover', '--unit', 'unit-1 ']) == 0
+    assert seen['service_id'] == SERVICE_ID_FOR_NEXT and seen['unit'] == ['unit-1']
 
 
 def test_next_version_stops_on_an_error_with_code_2(monkeypatch, capsys):
@@ -1739,10 +1868,11 @@ def test_the_paused_watch_has_no_secret_and_skips_the_job_that_has():
     assert "needs: switch\n    if: needs.switch.outputs.paused != 'yes'" in text
 
 
-def test_demo_release_is_manual_and_says_demo_only():
+@needs_demo
+def test_demo_upload_is_manual_and_says_demo_only():
     text = DEMO.read_text(encoding='utf-8')
     assert re.search(r'^on:\n  workflow_dispatch:\n\n', text, re.M) and 'schedule' not in text and 'pull_request' not in text
-    assert 'name: demo-release (demo only)' in text and text.startswith('#') and 'DEMO ONLY' in text.splitlines()[0]
+    assert 'name: demo-upload (demo only)' in text and text.startswith('#') and 'DEMO ONLY' in text.splitlines()[0]
     assert 'aos-signer==2.0.2' in text and 'gh workflow run verify-batch.yml --ref "$GITHUB_REF_NAME" -f version="$VERSION"' in text
     assert 'batch_id' not in workflow_step('d. Start', DEMO) and 'secrets.' not in workflow_step('d. Start', DEMO)
     assert 'The decision is in that run.' in workflow_step('d. Start', DEMO)
@@ -1750,7 +1880,7 @@ def test_demo_release_is_manual_and_says_demo_only():
 
 
 def run_signer_step(name, signer_output, signer_code, tmp_path):
-    """A signer step of demo-release.yml, with stand-ins for aos-signer and openssl."""
+    """A signer step of demo-upload.yml, with stand-ins for aos-signer and openssl."""
     bin_dir, temp = tmp_path / 'bin', tmp_path / 'temp'
     bin_dir.mkdir(), (temp / 'aos').mkdir(parents=True)
     for tool, body in (('aos-signer', f'cat <<\'OUT\'\n{signer_output}\nOUT\nexit {signer_code}\n'), ('openssl', 'exit 0\n')):
@@ -1765,6 +1895,7 @@ SIGNER_OUT = ('\x1b[36mUpload info: user=someone+demo@example.com, domain=aosclo
               'Uploading...   DONE\nowner someone@example.com of 11111111-2222-3333-4444-555555555555')
 
 
+@needs_demo
 def test_the_upload_step_hides_the_user_and_the_ids_and_deletes_the_key(tmp_path):
     done = run_signer_step('c. Upload', SIGNER_OUT, 0, tmp_path)
     assert done.returncode == 0, done.stderr
@@ -1773,12 +1904,14 @@ def test_the_upload_step_hides_the_user_and_the_ids_and_deletes_the_key(tmp_path
     assert not list((tmp_path / 'temp' / 'aos').glob('user.*'))
 
 
+@needs_demo
 def test_a_refused_upload_stops_the_job_and_says_why(tmp_path):
     done = run_signer_step('c. Upload', 'User does not have "deployment_bundles_create" permission.', 1, tmp_path)
     assert done.returncode == 1 and '::error::' in done.stdout and 'deployment_bundles_create' in done.stdout
     assert 'uploaded Service version' not in done.stdout
 
 
+@needs_demo
 def test_the_bundle_template_holds_no_secret_and_the_build_fills_every_token():
     config = (ROOT / 'demo-service' / 'config.yaml').read_text(encoding='utf-8')
     assert verify_batch.AN_UUID.search(config) is None and 'tlsKey' not in config and '@' not in config
@@ -1790,9 +1923,10 @@ def test_the_bundle_template_holds_no_secret_and_the_build_fills_every_token():
     assert '__AOS_SERVICE_ID__' in build
 
 
+@needs_demo
 def test_try_it_has_the_five_steps_and_the_readme_links_it():
     page = (ROOT / 'TRY_IT.md').read_text(encoding='utf-8')
-    for name in ('AOS_USER_PEM', 'AOS_ROOT_CA_PEM', 'AOS_SERVICE_ID', 'AOS_API_URL', 'I understand my workflows', 'demo-release',
+    for name in ('AOS_USER_PEM', 'AOS_ROOT_CA_PEM', 'AOS_SERVICE_ID', 'AOS_API_URL', 'I understand my workflows', 'demo-upload',
                  'verify-batch', 'If something goes wrong'):
         assert name in page
     assert verify_batch.AN_UUID.search(page) is None and '@' not in page
@@ -1855,5 +1989,7 @@ def test_start_a_is_the_main_start_and_the_watch_the_fallback():
 
 def test_no_internal_words_reach_a_partner():
     for name in ('README.md', 'TRY_IT.md', 'docs/faq.md', 'docs/api.md', 'docs/who-tells-whom.md'):
+        if not (ROOT / name).exists():  # TRY_IT.md is not in the partner zip
+            continue
         text = (ROOT / name).read_text(encoding='utf-8')
         assert not re.search(r'[Tt]ell us|rehearsal|showcase', text), name
