@@ -74,7 +74,7 @@ aos-signer upload
 ```
 
 **What you see.** `Deployment bundle successfully uploaded!`. While AosCloud still processes the bundle, `wait`
-prints `no Verification batch yet for <version>, waiting`.
+prints `no Verification batch yet for <Service version>, waiting`.
 
 **The decision.** Error: no batch, so `wait` times out with exit 2 and decides nothing. Read the reason in the UI.
 
@@ -85,7 +85,7 @@ prints `no Verification batch yet for <version>, waiting`.
 **How.** AosCloud refuses the upload (`already exists`), so there is no new Verification batch. The old batch is already decided,
 and `wait` does not touch it.
 
-**What you see.** `wait` prints `no Verification batch yet for <version>, waiting`, then `timed out`, or
+**What you see.** `wait` prints `no Verification batch yet for <Service version>, waiting`, then `timed out`, or
 `Verification batch … is no longer Waiting_validation: nothing to decide`.
 
 **The decision.** Exit 2, nothing sent. Upload the change as a new Service version.

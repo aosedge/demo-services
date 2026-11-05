@@ -470,12 +470,12 @@ check health curl -fsS --max-time 10 &quot;http://$UNIT_HOST:8080/health&quot;</
 <p><strong>What it checks.</strong> AosCloud accepted the bundle and created a Verification batch.</p>
 <p><strong>How.</strong> Read the end of the upload output. In the SP UI, Deployment bundles shows Done or Error with the reason.</p>
 <pre><code class="language-bash">aos-signer upload</code></pre>
-<p><strong>What you see.</strong> <code>Deployment bundle successfully uploaded!</code>. While AosCloud still processes the bundle, <code>wait</code> prints <code>no Verification batch yet for &lt;version&gt;, waiting</code>.</p>
+<p><strong>What you see.</strong> <code>Deployment bundle successfully uploaded!</code>. While AosCloud still processes the bundle, <code>wait</code> prints <code>no Verification batch yet for &lt;Service version&gt;, waiting</code>.</p>
 <p><strong>The decision.</strong> Error: no batch, so <code>wait</code> times out with exit 2 and decides nothing. Read the reason in the UI.</p>
 <h2 id="checks--a3-same-service-version-uploaded-again">A3. Same Service version uploaded again</h2>
 <p><strong>What it checks.</strong> A Service version number that already exists is not decided again.</p>
 <p><strong>How.</strong> AosCloud refuses the upload (<code>already exists</code>), so there is no new Verification batch. The old batch is already decided, and <code>wait</code> does not touch it.</p>
-<p><strong>What you see.</strong> <code>wait</code> prints <code>no Verification batch yet for &lt;version&gt;, waiting</code>, then <code>timed out</code>, or <code>Verification batch … is no longer Waiting_validation: nothing to decide</code>.</p>
+<p><strong>What you see.</strong> <code>wait</code> prints <code>no Verification batch yet for &lt;Service version&gt;, waiting</code>, then <code>timed out</code>, or <code>Verification batch … is no longer Waiting_validation: nothing to decide</code>.</p>
 <p><strong>The decision.</strong> Exit 2, nothing sent. Upload the change as a new Service version.</p>
 <h2 id="checks--a4-evidence-for-every-release">A4. Evidence for every release</h2>
 <p><strong>What it checks.</strong> You can show later what was checked and who approved.</p>

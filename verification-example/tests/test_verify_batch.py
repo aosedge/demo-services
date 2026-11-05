@@ -492,7 +492,7 @@ def test_4xx_after_the_patch_exits_2(cloud):
 @pytest.mark.parametrize('body', [None, 'not json', []])
 def test_a_success_without_a_json_body_still_exits_0(cloud, capsys, body):
     cloud.patch_answer = (204 if body is None else 200, body)
-    assert decide() == 0 and capsys.readouterr().out.strip() == f'batch {verify_batch.short(BATCH)} (amd64): approved, sent'
+    assert decide() == 0 and capsys.readouterr().out.strip() == f'Verification batch {verify_batch.short(BATCH)} (amd64): approved, sent'
 
 
 # discover: step 0, reads only
@@ -1264,10 +1264,10 @@ def test_wait_says_the_state_of_each_unit_in_words(cloud, capsys):
 
 def test_decide_names_the_state_as_the_ui_does(cloud, capsys):
     assert decide(approve=True) == 0
-    assert capsys.readouterr().out.strip() == f'batch {verify_batch.short(BATCH)} (amd64): approved, now Verified (Valid)'
+    assert capsys.readouterr().out.strip() == f'Verification batch {verify_batch.short(BATCH)} (amd64): approved, now Verified (Valid)'
     cloud.batch['state'] = 'Waiting_validation'
     assert decide(approve=False) == 0
-    assert capsys.readouterr().out.strip() == f'batch {verify_batch.short(BATCH)} (amd64): rejected, now Invalid'
+    assert capsys.readouterr().out.strip() == f'Verification batch {verify_batch.short(BATCH)} (amd64): rejected, now Invalid'
 
 
 def report_args(tmp_path, *more):
