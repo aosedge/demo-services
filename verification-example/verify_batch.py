@@ -222,7 +222,7 @@ def units_of_batch(batch_id: str, service_id: str, given: list[str]) -> tuple[li
     if bare or not units:
         return units, (f"Verification batch {short(batch_id)}: no Verification Set Unit for {', '.join(bare) or 'any architecture'}: the batch "
                        f'cannot be verified. Check the Verification Set and the Subject of the Service '
-                       f'(README, prerequisite 2)')
+                       f'(README, prerequisite B)')
     return units, None
 
 
@@ -294,7 +294,7 @@ def check(args) -> int:
         online = 'online' if is_online(unit) else 'OFFLINE, what follows is old'
         print(f'Unit {short(unit)}: {online}; installed {installed or "nothing"}; instances: {states}')
     if not units:
-        print('no Unit has this Service yet: check the Subject of the Service (README, prerequisite 2)')
+        print('no Unit has this Service yet: check the Subject of the Service (README, prerequisite B)')
     return 0
 
 

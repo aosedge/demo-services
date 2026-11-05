@@ -381,7 +381,7 @@ command that reads this line, like `$(…)`, gets them whole:
 ```
 
 If it says `no Verification Set Unit`, a Unit is missing from the Verification Set, or the Service is not linked to it
-([prerequisite 2](../README.md#2-verification-configured-oem)).
+([prerequisite B](../README.md#b-verification-configured-oem)).
 
 ### 7. Wait
 

@@ -21,7 +21,7 @@ The Service Provider, with the SP certificate.
 count, even if AosCloud still shows the new Service version active: that state is old. The Verification batch keeps waiting, with no time
 limit. Check that the
 Unit is online, in the Verification Set, and linked to the Service through the Subject
-([README, prerequisite 2](../README.md#2-verification-configured-oem)). Then run the job again with
+([README, prerequisite B](../README.md#b-verification-configured-oem)). Then run the job again with
 `workflow_dispatch`, with the same Service version. The watch does not start a batch a second time.
 
 **Valid or Verified?**
@@ -171,7 +171,7 @@ secret and no key file. Delete local copies of the PEM (`.aos-verify/user.pem`) 
 **The certificate leaked.**
 Delete the CI user, not only the certificate. Six permissions cannot be removed from an SP user, among them
 `user_certificates_download` and `users_new_token`, so whoever holds the certificate may already hold another way in.
-Then create a new user with the permissions the job needs ([README, Prerequisites 1](../README.md#1-a-service-that-your-pipeline-already-deploys-sp)), and store its PEM as the secret. Look at the batches decided
+Then create a new user with the permissions the job needs ([README, prerequisite A](../README.md#a-a-service-that-your-pipeline-already-deploys-sp)), and store its PEM as the secret. Look at the batches decided
 since the leak in SP UI → Verification batches.
 
 **What to hide in screenshots and videos?**

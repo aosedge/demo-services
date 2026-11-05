@@ -3,6 +3,12 @@
 This page lists every AosCloud API call that the job and the prerequisites use, each with a `curl` example and a
 short sample response. Start with the [README](../README.md#how-to-use-this-repository) if you have not set up the job yet.
 
+> **What the job needs from AosCloud.** Calls: `GET verification-batch/`, `GET verification-batch/{id}/`,
+> `GET verification-batch/{id}/statistics/`, `GET services/{id}/units/`, `GET units/{id}/`,
+> `GET units/{id}/subjects-services/{service id}/`, one `PATCH verification-batch/{id}/`. Permissions:
+> [README, prerequisite A](../README.md#a-a-service-that-your-pipeline-already-deploys-sp). Two gaps: no notification
+> when a batch waits, so the job polls; PATCH is accepted on a decided batch, so the last decision wins.
+
 > **Before you call the API**
 >
 > - Base URL: `$AOS_API_URL` = `https://api.aoscloud.io:10000/api/v11` (or your API host), API v11.
@@ -164,7 +170,7 @@ The job counts a Unit as **ready** when `installed_service_version` is the new S
 Service version has `run_state` `active`; an instance that is still starting is not ready yet. It counts a Unit as
 **failed** when an instance of the new Service version has `run_state` `failed`, or when `pending_service_version_status` is
 `error`, `resource conflict` or `rejected`. An empty `items` list means that
-the Unit is not linked to the Service through a Subject (prerequisite 2, steps 3 and 4).
+the Unit is not linked to the Service through a Subject (prerequisite B, steps 3 and 4).
 
 ### Approve or reject
 
