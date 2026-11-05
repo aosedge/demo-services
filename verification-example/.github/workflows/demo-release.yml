@@ -52,7 +52,7 @@ jobs:
           fi
 
       # The private key exists only while a step needs it: each step writes it and deletes it when it ends.
-      - name: 1. Read the next free Service version
+      - name: a. Read the next free Service version
         id: next
         env:
           AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
@@ -68,7 +68,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       # aos-signer prints the user name of the certificate, an e-mail address: its output never reaches the log as it is.
-      - name: 2. Build and sign the demo Service
+      - name: b. Build and sign the demo Service
         env:
           SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
@@ -92,7 +92,7 @@ jobs:
           if [ "$code" -ne 0 ]; then echo "::error::aos-signer sign failed"; exit "$code"; fi
           echo "built and signed Service version $VERSION"
 
-      - name: 3. Upload (this is the write that creates the Verification batch)
+      - name: c. Upload (this is the write that creates the Verification batch)
         env:
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
           VERSION: ${{ steps.next.outputs.version }}
@@ -115,7 +115,7 @@ jobs:
           echo "uploaded Service version $VERSION"
 
       # No key here. Start A with the version alone: verify-batch finds the Verification batch and the Units itself.
-      - name: 4. Start verify-batch
+      - name: d. Start verify-batch
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

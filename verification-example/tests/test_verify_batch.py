@@ -967,7 +967,7 @@ def test_the_discover_step_deletes_the_key_and_calls_discover(tmp_path):
                                  'echo "$*" > "$CALLED"\nexit "${FAKE_CODE:-0}"\n')
     (fake / 'python').chmod(0o755)
     env = {'PATH': f"{fake}:{os.environ['PATH']}", 'RUNNER_TEMP': str(tmp_path), 'USER_PEM': 'PEM', 'ROOT_CA': 'CA',
-           'TEST_UNITS': 'unit-chosen', 'CALLED': str(tmp_path / 'called')}
+           'TEST_UNITS': 'unit-chosen', 'CALLED': str(tmp_path / 'called'), 'SERVICE_ID': 'service-chosen'}
     run = subprocess.run(['bash', '-e', '-c', step('0. Ask', WATCH)], env=env, capture_output=True, text=True,
                          timeout=60, check=False)
     assert run.returncode == 0, run.stderr
@@ -979,6 +979,9 @@ def test_the_discover_step_deletes_the_key_and_calls_discover(tmp_path):
     run = subprocess.run(['bash', '-e', '-c', step('0. Ask', WATCH)], env={**env, 'USER_PEM': ''}, capture_output=True,
                          text=True, timeout=60, check=False)
     assert run.returncode != 0 and 'AOS_USER_PEM' in run.stdout
+    run = subprocess.run(['bash', '-e', '-c', step('0. Ask', WATCH)], env={**env, 'SERVICE_ID': ''}, capture_output=True,
+                         text=True, timeout=60, check=False)
+    assert run.returncode != 0 and 'AOS_SERVICE_ID' in run.stdout and not (tmp_path / 'aos').exists()
 
 
 def test_both_starts_end_in_one_concurrency_group():
@@ -999,7 +1002,8 @@ def test_the_watch_asks_every_5_minutes_and_can_write_actions():
 
 def test_the_readme_shows_the_watch_as_it_is():
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    assert WATCH.read_text(encoding='utf-8').strip() in readme
+    assert '[`.github/workflows/watch-batches.yml`](.github/workflows/watch-batches.yml)' in readme
+    assert '```yaml\n# Ask AosCloud on a schedule' not in readme and readme.count('<summary>Why every 5 minutes?</summary>') == 1
 
 
 @needs_bash
@@ -1085,6 +1089,7 @@ case "$1" in
       else printf 'C2\tno crash on start\tFAIL\tfailed instance\n'; fi
       exit "$FAKE_STATUS"
     fi
+    [ -n "$FAKE_WAIT_SAYS" ] && echo "$FAKE_WAIT_SAYS" >&2
     exit "$FAKE_WAIT" ;;
   *) exec "$REAL_PYTHON" "$@" ;;
 esac
@@ -1468,7 +1473,7 @@ WHY = ('AosCloud does not notify a pipeline when a new Service version waits (no
        'skip them; for a guaranteed start use Start A. Each run takes about 20 s and only reads. To change '
        'it, edit one line in watch-batches.yml: cron: "*/5 * * * *" → "*/10 * * * *" (every 10 min), "*/30 *'
        ' * * *", "0 * * * *" (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact '
-       'timing: start verify-batch right after your upload job (Start A, the chain), or use an external '
+       'timing: start verify-batch right after your upload job (Start A), or use an external '
        'scheduler. A webhook from AosCloud would make it instant (feature request).')
 
 
@@ -1697,17 +1702,34 @@ def job_of(text: str, name: str) -> str:
     return re.search(rf'^  {name}:\n(.*?)(?=^  \w+:\n|\Z)', text, re.M | re.S)[1]
 
 
-@pytest.mark.parametrize('value, event, paused', [
-    ('off', 'schedule', True), ('on', 'schedule', False), ('', 'schedule', False), ('off', 'workflow_dispatch', False),
+@pytest.mark.parametrize('value, event, fork, asked, says', [
+    ('off', 'schedule', 'false', None, 'the variable AOS_WATCH is off'),
+    ('on', 'schedule', 'false', None, None),
+    ('', 'schedule', 'false', None, None),
+    ('off', 'workflow_dispatch', 'false', None, None),
+    ('', 'schedule', 'true', None, 'scheduled watch is off in forks'),
+    ('', 'workflow_dispatch', 'true', None, None),
+    ('', 'schedule', '', 'true', 'scheduled watch is off in forks'),
+    ('', 'schedule', '', 'false', None),
+    ('', 'schedule', '', 'fails', 'scheduled watch is off in forks'),
 ])
-def test_the_pause_switch_stops_only_a_scheduled_watch(value, event, paused, tmp_path):
-    output, summary = tmp_path / 'output', tmp_path / 'summary'
-    output.touch(), summary.touch()
+def test_the_switch_stops_a_scheduled_watch_when_paused_or_in_a_fork(value, event, fork, asked, says, tmp_path):
+    output, summary, fake = tmp_path / 'output', tmp_path / 'summary', tmp_path / 'bin'
+    output.touch(), summary.touch(), fake.mkdir()
+    (fake / 'gh').write_text('#!/bin/bash\necho "$*" >> "$CALLS"\n[ "$ASKED" = fails ] && exit 1\necho "$ASKED"\n')
+    (fake / 'gh').chmod(0o755)
     done = subprocess.run(['bash', '-e', '-c', step('Is the watch paused', WATCH)], capture_output=True, text=True, check=True,
-                          env={'PATH': os.environ['PATH'], 'AOS_WATCH': value, 'EVENT': event,
+                          env={'PATH': f"{fake}:{os.environ['PATH']}", 'AOS_WATCH': value, 'EVENT': event, 'FORK': fork,
+                               'ASKED': str(asked), 'CALLS': str(tmp_path / 'calls'), 'GITHUB_REPOSITORY': 'someone/demo',
                                'GITHUB_OUTPUT': str(output), 'GITHUB_STEP_SUMMARY': str(summary)})
-    assert ('watch paused' in done.stdout) == paused and ('paused=yes' in output.read_text()) == paused
-    assert ('watch paused' in summary.read_text()) == paused
+    paused = says is not None
+    assert ('paused=yes' in output.read_text()) == paused and ('watch paused' in done.stdout) == paused
+    if says:
+        assert f'watch paused: {says}' in done.stdout and says in summary.read_text()
+    asked_github = (tmp_path / 'calls').exists()
+    assert asked_github == (event == 'schedule' and fork == '')
+    if asked_github:
+        assert (tmp_path / 'calls').read_text().strip() == 'api repos/someone/demo --jq .fork'
 
 
 def test_the_paused_watch_has_no_secret_and_skips_the_job_that_has():
@@ -1721,8 +1743,8 @@ def test_demo_release_is_manual_and_says_demo_only():
     assert re.search(r'^on:\n  workflow_dispatch:\n\n', text, re.M) and 'schedule' not in text and 'pull_request' not in text
     assert 'name: demo-release (demo only)' in text and text.startswith('#') and 'DEMO ONLY' in text.splitlines()[0]
     assert 'aos-signer==2.0.2' in text and 'gh workflow run verify-batch.yml --ref "$GITHUB_REF_NAME" -f version="$VERSION"' in text
-    assert 'batch_id' not in workflow_step('4. Start', DEMO) and 'secrets.' not in workflow_step('4. Start', DEMO)
-    assert 'The decision is in that run.' in workflow_step('4. Start', DEMO)
+    assert 'batch_id' not in workflow_step('d. Start', DEMO) and 'secrets.' not in workflow_step('d. Start', DEMO)
+    assert 'The decision is in that run.' in workflow_step('d. Start', DEMO)
     assert ' approve' not in text.lower() and '--reject' not in text
 
 
@@ -1743,7 +1765,7 @@ SIGNER_OUT = ('\x1b[36mUpload info: user=someone+demo@example.com, domain=aosclo
 
 
 def test_the_upload_step_hides_the_user_and_the_ids_and_deletes_the_key(tmp_path):
-    done = run_signer_step('3. Upload', SIGNER_OUT, 0, tmp_path)
+    done = run_signer_step('c. Upload', SIGNER_OUT, 0, tmp_path)
     assert done.returncode == 0, done.stderr
     assert 'example.com' not in done.stdout + done.stderr and '11111111-2222' not in done.stdout + done.stderr
     assert 'domain=aoscloud.io' in done.stdout and 'uploaded Service version 4.11.1' in done.stdout
@@ -1751,7 +1773,7 @@ def test_the_upload_step_hides_the_user_and_the_ids_and_deletes_the_key(tmp_path
 
 
 def test_a_refused_upload_stops_the_job_and_says_why(tmp_path):
-    done = run_signer_step('3. Upload', 'User does not have "deployment_bundles_create" permission.', 1, tmp_path)
+    done = run_signer_step('c. Upload', 'User does not have "deployment_bundles_create" permission.', 1, tmp_path)
     assert done.returncode == 1 and '::error::' in done.stdout and 'deployment_bundles_create' in done.stdout
     assert 'uploaded Service version' not in done.stdout
 
@@ -1760,7 +1782,7 @@ def test_the_bundle_template_holds_no_secret_and_the_build_fills_every_token():
     config = (ROOT / 'demo-service' / 'config.yaml').read_text(encoding='utf-8')
     assert verify_batch.AN_UUID.search(config) is None and 'tlsKey' not in config and '@' not in config
     assert 'id: __AOS_SERVICE_ID__' in config and 'version: __DEMO_VERSION__' in config
-    build = workflow_step('2. Build', DEMO)
+    build = workflow_step('b. Build', DEMO)
     app = (ROOT / 'demo-service' / 'verification-demo' / 'src_any' / 'app.py').read_text(encoding='utf-8')
     for token in re.findall(r"^BAKED_\w+ = '(__\w+__)'", app, re.M):
         assert token in build
@@ -1777,3 +1799,18 @@ def test_try_it_has_the_five_steps_and_the_readme_links_it():
     assert readme.index('TRY_IT.md') > readme.index('| – | Result |') and readme.index('TRY_IT.md') < readme.index('> [!IMPORTANT]')
     assert readme.index('## How the job knows') < readme.index('![Automatic verification')
     assert '**Two pipelines on one Service: pause one.**' in (ROOT / 'docs' / 'faq.md').read_text(encoding='utf-8')
+
+
+@needs_bash
+@pytest.mark.parametrize('says, result, code', [
+    ('stopped, decide nothing: GET units/…: HTTP 403: this certificate may not read it', 'ERROR C3/C4', 3),
+    ('stopped, decide nothing: TLS error: check AOS_CERT', 'ERROR C3/C4', 3),
+    ('batch …7890 is no longer Waiting_validation: nothing to decide', 'ERROR C3/C4', 3),
+    ('timed out after 60 s: decide nothing', 'FAIL C3/C4', 1),
+])
+def test_a_4xx_or_tls_error_in_the_observation_is_no_fail_and_no_reject(says, result, code, tmp_path):
+    run, _, report = run_tests_sh(tmp_path, observe='60', wait_code=2, extra={'FAKE_WAIT_SAYS': says})
+    assert run.returncode == code and result in run.stdout, run.stdout
+    if code == 3:
+        assert 'reject' not in run.stdout.lower().split('verdict')[-1] and 'FAIL → reject' not in report
+        assert 'FAIL C3/C4' not in run.stdout

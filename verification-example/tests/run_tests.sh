@@ -83,7 +83,8 @@ if [ "$observe" -gt 0 ]; then
     if [ "$code" -ne 0 ]; then
       echo "$said"
       stopped=$round
-      if [ "$code" -eq 3 ]; then lost=1; fi
+      # 2 without "timed out" is a 4xx, a TLS error or a batch decided elsewhere: AosCloud could not be read, not a failure
+      if [ "$code" -eq 3 ] || { [ "$code" -eq 2 ] && ! grep -q 'timed out' <<< "$said"; }; then lost=1; fi
       break
     fi
   done

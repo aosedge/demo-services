@@ -33,11 +33,12 @@ Nobody can read a secret back, and pull requests from other forks do not get it.
 
 Open the **Actions** tab of your fork and press **I understand my workflows, go ahead and enable them**.
 
-If the list of workflows stays empty: in your fork open `.github/workflows/demo-release.yml`, press the pencil (Edit this
+If the list of workflows stays empty: in your fork open `.github/workflows/demo-release.yml` (the folder at the top of the repository, not the one under
+`verification-example/`), press the pencil (Edit this
 file), add a space at the end of the first comment line, press **Commit changes** twice (commit directly to `main`), and
 reload the Actions tab after a minute.
 
-The scheduled `watch-batches` stays off in a fork: GitHub keeps schedules off there. You do not need it here.
+In a fork the scheduled `watch-batches` stops at once ("scheduled watch is off in forks"); a run you start by hand still works.
 
 ## 4. Press the button
 
@@ -59,7 +60,7 @@ Follow the link, or open **Actions → verify-batch**. The title is `verify-batc
 |---|---|
 | ⑤ Wait | The Verification batch appears, the Unit installs the new Service version, and the instance is active |
 | ⑥ Test | The built-in checks pass; the partner tests are skipped, as the demo has none. A 60-second observation is part of it |
-| ⑦ Decide | `7a. Approve` runs: `approved, now Valid` |
+| ⑦ Decide | `7a. Approve` runs: `approved, now Verified (Valid)` |
 
 The report is under **Artifacts** at the bottom of the run page: `verification-report`, with `report.html` inside.
 
@@ -77,7 +78,7 @@ If you also have a login: **SP UI → Verification batches** shows the new Servi
 | `The user of AOS_USER_PEM needs the permission deployment_bundles_create` | This certificate may not upload. Tell us. |
 | demo-release is green, but verify-batch is red with `no longer Waiting_validation` | Someone pressed the button in another fork at the same moment and got the same Service version; AosCloud keeps the first upload. Run demo-release again. |
 | `TLS error` or `HTTP 401` or `HTTP 403` | A secret has a wrong value, or the demo user was removed. Paste it again, or tell us. |
-| `Unit ... is offline` and a timeout, red, no decision | The demo Unit is off, so the job rightly decides nothing. Tell us. |
+| `Unit ... is offline`: the run keeps waiting, up to 30 minutes, then ends red with no decision | The demo Unit is off, so the job rightly decides nothing. Tell us. |
 | `no longer Waiting_validation`, red | Another pipeline decided first, or someone decided in the UI. No harm is done. |
 
 ## When you are done
