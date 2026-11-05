@@ -4,12 +4,14 @@
 """Find the Verification batch of a new Service version, wait for it, then approve or reject it.
 
     python verify_batch.py discover [--service-id ID] [--unit UNIT_ID ...] [--dry-run]
-    python verify_batch.py check  --service-id ID --unit UNIT_ID [--unit ...]
+    python verify_batch.py services
+    python verify_batch.py check  [--service-id ID] [--unit UNIT_ID ...]
     python verify_batch.py wait   --service-id ID --version X.Y.Z [--unit UNIT_ID ...]
     python verify_batch.py status --service-id ID --version X.Y.Z --batch-id ID --unit UNIT_ID [--unit ...]
     python verify_batch.py decide --batch-id ID (--approve | --reject) [--arch ARCH ...]
 
-discover, check and status only read. discover: is there a new version to verify, and on which Units? It prints one
+discover, services, check and status only read. services: the Services this certificate sees, one line each (id, codename,
+title). discover: is there a new version to verify, and on which Units? It prints one
 JSON line {"batch_id", "version", "units"} when there is. check: the connection, the latest batch of the Service and what each Unit runs.
 status: the checks that wait already proved, read again, one tab-separated line each (code, name, PASS/FAIL, detail).
 
@@ -236,11 +238,23 @@ def on_unit(unit_id: str, service_id: str) -> tuple[str | None, list]:
     return installed, instances
 
 
+def services(_args) -> int:
+    for service in pages('services/'):
+        print(f"{service.get('id')}\t{service.get('codename')}\t{service.get('title')}")
+    return 0
+
+
 def check(args) -> int:
+    if not args.service_id:
+        raise Stop('no Service id: pass --service-id or export SERVICE_ID')
     units = [unit for unit in args.unit if unit.strip()]
     page = get('verification-batch/', ordering='-created_at', limit=PAGE, offset=0)
     print('connection OK: the certificate, the root CA and the API address work')
     latest = next((b for b in items(page) if holds(b, args.service_id)), None)
+    if not units:  # the test Units of the latest batch, or else every Unit that has the Service
+        linked = [unit.get('id') for unit in pages(f'services/{args.service_id}/units/')]
+        units = units_of_batch(latest['id'], args.service_id, [])[0] if latest else []
+        units = units or linked
     if latest:
         version = next(i.get('version') for i in latest['update_items'] if i.get('identity_id') == args.service_id)
         print(f"Service {short(args.service_id)}: latest batch {short(latest.get('id'))}, version {version}, "
@@ -250,7 +264,10 @@ def check(args) -> int:
     for unit in units:
         installed, instances = on_unit(unit, args.service_id)
         states = ', '.join(f"{i.get('version')} {i.get('run_state')}" for i in instances) or 'no instance'
-        print(f'Unit {short(unit)}: installed {installed or "nothing"}; instances: {states}')
+        online = 'online' if is_online(unit) else 'OFFLINE, what follows is old'
+        print(f'Unit {short(unit)}: {online}; installed {installed or "nothing"}; instances: {states}')
+    if not units:
+        print('no Unit has this Service yet: check the Subject of the Service (README, prerequisite 2)')
     return 0
 
 
@@ -454,8 +471,9 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument('--unit', action='append', default=[], help='use these test Units, not the ones AosCloud lists')
     f.add_argument('--dry-run', action='store_true', help='also list the batches; start nothing, exit 0, write nothing')
     c = commands.add_parser('check', help='read only: the connection, the latest batch, what the Units run')
-    c.add_argument('--service-id', required=True)
-    c.add_argument('--unit', action='append', default=[], help='a test Unit (repeat it)')
+    c.add_argument('--service-id', default=os.environ.get('SERVICE_ID'))
+    c.add_argument('--unit', action='append', default=[], help='a test Unit (repeat it); default: from AosCloud')
+    commands.add_parser('services', help='read only: the Services this certificate sees')
     s = commands.add_parser('status', help='read only: the checks that wait proved, read again')
     s.add_argument('--service-id', required=True)
     s.add_argument('--version', required=True)
@@ -481,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
     outcome = {'discover': 'start nothing', 'wait': 'decide nothing',
                'decide': 'nothing sent'}.get(args.command, 'nothing was changed')
     try:
-        return {'discover': discover, 'check': check, 'status': status, 'wait': wait,
+        return {'discover': discover, 'services': services, 'check': check, 'status': status, 'wait': wait,
                 'decide': decide}[args.command](args)
     except (Stop, Unavailable) as e:
         print(f'stopped, {outcome}: {e}', file=sys.stderr)

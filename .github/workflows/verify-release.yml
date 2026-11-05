@@ -1,5 +1,4 @@
-# Copy of verification-example/.github/workflows for the showcase. Differences: the job runs in verification-example/,
-# and AOS_API_URL is a secret here.
+# Copy of verification-example/.github/workflows for the showcase. Difference: the job runs in verification-example/.
 # Verify a new Service version on the Verification Set, then approve or reject it in AosCloud.
 # Three ways in, one job: watch-verification.yml starts it for a batch it found (workflow_dispatch), your upload job
 # calls it right after the upload (workflow_call), or you start it by hand with the version alone (workflow_dispatch).
@@ -27,8 +26,6 @@ on:
         type: string
         required: false
     secrets:
-      AOS_API_URL:
-        required: false
       # not required here: they come from the environment aos-verification (see the README, Parameters)
       # AOS_USER_PEM: one PEM file with the SP user certificate, the intermediate certificates and the key
       # (openssl pkcs12 -in aos-user-sp.p12 -nodes -out user.pem; without -clcerts, see the README)
@@ -37,6 +34,8 @@ on:
       AOS_ROOT_CA_PEM:
         required: false
       AOS_SERVICE_ID:
+        required: false
+      AOS_API_URL:
         required: false
   workflow_dispatch:
     inputs:
@@ -66,13 +65,13 @@ jobs:
     timeout-minutes: 60
     # the secrets live in this environment; add required reviewers there if a person must confirm
     environment: aos-verification
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: verification-example
-    permissions:
-      contents: read
     env:
-      AOS_API_URL: ${{ secrets.AOS_API_URL }}
+      AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
       VERSION: ${{ inputs.version }}
     steps:
       # First, and from the event file: the header of a step prints its env before any mask can apply.

@@ -5,8 +5,8 @@ the example itself.
 
 ## What `tests/run_tests.sh` does
 
-It runs after `wait`, with the values you exported (`SERVICE_ID`, `VERSION`, `BATCH`, `UNIT_ID`; in the job they
-come from the workflow), and takes no arguments.
+It runs after `wait`, and takes no arguments. `./aos-verify run` and `./aos-verify test` give it its values
+(`SERVICE_ID`, `VERSION`, `BATCH`, `UNIT_ID`); in the job they come from the workflow.
 
 1. **The built-in checks**, read-only, against AosCloud:
 

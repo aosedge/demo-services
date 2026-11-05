@@ -38,7 +38,7 @@ jobs:
       - name: 0. Ask AosCloud for a waiting batch
         id: discover
         env:
-          AOS_API_URL: ${{ vars.AOS_API_URL }}
+          AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
           SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
           TEST_UNITS: ${{ vars.AOS_TEST_UNITS }}
           USER_PEM: ${{ secrets.AOS_USER_PEM }}

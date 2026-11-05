@@ -1,11 +1,148 @@
 # Run it from your terminal
 
-One story, step by step: you upload a new version, the built-in checks run against it, you open the report and approve it.
-It is what the GitHub job does, by hand, so you can try it in about 10 minutes or find out why the job failed. Click
-**Copy** on each block and paste it into one terminal. You edit two lines (steps 3 and 4); everything else runs as it
-is. The outputs of steps 5, 7 and 9 come from production runs; ids are shortened to `…` plus 4 characters.
+To try it, or to find out why the job failed. In GitHub you need none of this: [Put it in GitHub](../README.md#put-it-in-github).
+Three blocks. It needs bash: Terminal on macOS and Linux, Git Bash on Windows (not tested on Windows yet).
 
-## 1. Get the files
+## 1. Clone and set up
+
+```bash
+git clone -b verification-example https://github.com/aosedge/demo-services && cd demo-services/verification-example && ./aos-verify setup
+```
+
+It checks the tools, creates `.venv`, finds your SP certificate under `~/.aos/security` and makes the PEM file from it,
+copies the root CA from `aos-keys`, and asks two things: the API URL (Enter takes production), and which Service, if your
+SP has several. With several SP certificates it shows a numbered list; pick the one of the AosCloud you call. If it asks
+for a password, that is the password of the `.p12` file, not of your computer.
+
+You should see (a run on production; ids are shortened to `…` plus 4 characters):
+
+```text
+OK    tools: python 3.14, curl, jq, openssl
+OK    .venv: created, requests==2.32.3 installed
+OK    certificate: security/prod/aos-user-sp-prod.p12  (aoscloud.io, valid to Oct 25 08:26:35 2036 GMT)
+OK    .aos-verify/user.pem: 4 certificates and the key, readable only by you
+OK    .aos-verify/aos-root-ca.crt: copied from aos-keys
+AosCloud API URL [https://api.aoscloud.io:10000/api/v11]:
+OK    AosCloud: https://api.aoscloud.io:10000/api/v11
+OK    Service: verification-demo
+OK    .aos-verify.env: your settings, readable only by you, ignored by git
+
+connection OK: the certificate, the root CA and the API address work
+Service …ec65: latest batch …ef77, version 4.9.0, state Valid
+Unit …318d: online; installed 4.9.0; instances: 4.9.0 active
+
+Ready. Upload a new version as you do today, then: ./aos-verify run
+```
+
+Setup only reads AosCloud. Got the example as a zip? Unpack it, go into its folder, and run `./aos-verify setup`.
+
+## 2. Upload, as you do today
+
+From the folder of your Service, with your usual `aos-signer`. The version must be new.
+
+```bash
+aos-signer sign && aos-signer upload
+```
+
+You should see `Deployment bundle successfully uploaded!`. In the SP UI, Verification batches shows your version as
+**Waiting verification**.
+
+## 3. Run
+
+```bash
+./aos-verify run
+```
+
+This is what the GitHub job does: it finds the batch, waits for the version on the test Units, runs the built-in checks
+and your tests, writes the report and opens it, then asks before it sends the decision. A batch appears some seconds after
+the upload, so it asks AosCloud for up to 2 minutes (`--poll 0`: only once).
+
+You should see, in about 2 minutes (from a test against a stand-in for AosCloud; ids shortened):
+
+```text
+1. Is a new version of verification-demo waiting?
+      batch …a410, version 4.10.0, test Units: …318d
+2. Waiting for version 4.10.0 on the test Units
+test Units: …318d
+batch …a410: {'…318d': 'installed'}
+3. Built-in checks and your tests
+Built-in checks of version 4.10.0
+PASS A1 exactly this Service and version: batch …a410 holds version 4.10.0 of Service …ec65
+PASS B1 on every listed Unit: version 4.10.0 active on 1 of 1 Units
+PASS C2 no crash on start: no failed instance
+watching for 60 s (1 round(s) of 60 s)
+PASS C3/C4 still running (late failure, restarts): active on every Unit for 60 s
+SKIP your tests: no tests/your_tests.sh (start from tests/your_tests.sh.example)
+report: report/report.html (and junit.xml)
+all checks passed: approve
+
+Report: …/report/report.html
+4. Decision
+
+Verdict: approve (all checks passed). Version 4.10.0, batch …a410.
+approve version 4.10.0 in AosCloud? This writes one decision. [y/N] y
+batch …a410: approve amd64
+batch …a410: approved, now Valid
+Done: reload SP UI → Verification batches.
+```
+
+Reload the page in the UI: the batch shows **Verified**. For the next version: upload, and `./aos-verify run` again.
+
+| Option | What it does |
+|---|---|
+| `--dry-run` | everything up to the decision; sends nothing |
+| `--yes` | decides without asking, as the job does |
+| `--no-open` | does not open the report |
+| `--poll SECONDS`, `--timeout SECONDS` | how long to ask for a batch (default 120), how long to wait for the version (default 1800) |
+
+## If something is wrong
+
+Every failure prints one line and the command that fixes it. The usual ones:
+
+| You see | It means | Do this |
+|---|---|---|
+| `no SP certificate (.p12)` | it is not under `~/.aos/security` | `./aos-verify setup --p12 /path/to/your-sp.p12` |
+| `unknown ca` | the certificate of another AosCloud, or a PEM with no intermediate certificates | `./aos-verify setup`, and pick the SP certificate of this AosCloud |
+| `not the SP certificate of this AosCloud (403)` | an OEM certificate, or another AosCloud | `./aos-verify setup` |
+| `no waiting batch` | nothing new was uploaded, or the batch is already decided | upload a new version, then `./aos-verify run` |
+| `is offline`, `decide nothing` | a test Unit is not connected, so what AosCloud shows for it is old | `./aos-verify check`; when it says `online`, `./aos-verify run` |
+
+## Commands for debugging
+
+One step at a time. All except `decide` only read AosCloud. `discover` remembers the batch for the commands after it.
+
+| Command | What it does |
+|---|---|
+| `./aos-verify check` | the connection, the latest batch, what the Units run |
+| `./aos-verify discover` | is a new version waiting, and on which Units? |
+| `./aos-verify wait` | waits until the version runs on the test Units |
+| `./aos-verify test` | the built-in checks and your tests, then the report |
+| `./aos-verify report` | opens the report |
+| `./aos-verify decide approve` or `reject` | sends the decision for that batch, once |
+
+To use `curl` or the other commands of these docs in your terminal, load the same settings:
+
+```bash
+source .venv/bin/activate && source .aos-verify.env
+```
+
+`.aos-verify/` holds your private key, in `user.pem`. git ignores it; delete the folder when you no longer need it.
+
+## Exit codes of `./aos-verify run`
+
+| Code | Meaning |
+|---|---|
+| 0 | decided, or you answered no, or nothing waits, or a dry run with the verdict approve |
+| 1 | the verdict is reject (sent, or a dry run or your no) |
+| 2 | decide nothing: a setting, an HTTP 4xx answer, a timeout; or the decision was refused |
+| 3 | decide nothing: AosCloud could not be reached or a test Unit is offline; after the question: the decision may have been applied, so look at the batch in the UI |
+
+## Appendix: what setup does, by hand
+
+For those who want to see each step, or to run on a machine with no bash. It is the same flow, with nothing hidden. You edit
+two lines (steps 3 and 4). The outputs of steps 5, 7 and 9 come from production runs.
+
+### 1. Get the files
 
 Everything runs from the folder of this example.
 
@@ -23,7 +160,7 @@ Expand-Archive aos-verification-example.zip -DestinationPath .; cd aos-verificat
 
 Note: unpacked it with a double click? Then only `cd aos-verification-example`.
 
-## 2. Python
+### 2. Python
 
 The example needs Python 3.10 or later and one package, `requests`, in a folder of its own (`.venv`).
 
@@ -50,7 +187,7 @@ You should see `requests OK`.
 Note: the `[notice] A new release of pip` lines are harmless. With a custom prompt theme, `(.venv)` may not show in
 the prompt; the check above is what counts.
 
-## 3. Your certificate
+### 3. Your certificate
 
 AosCloud knows you by your certificate (mutual TLS): there is no password and no token. Find your certificates:
 
@@ -132,7 +269,7 @@ export AOS_API_URL=https://api.aoscloud.io:10000/api/v11 AOS_CERT="$PWD/user.pem
 $env:AOS_API_URL = "https://api.aoscloud.io:10000/api/v11"; $env:AOS_CERT = "$PWD\user.pem"; $env:AOS_CA = "$PWD\aos-root-ca.crt"
 ```
 
-## 4. Your values, once
+### 4. Your values, once
 
 Three values, in one line. This is the only line you edit; everything after it copies as it is.
 
@@ -153,7 +290,7 @@ export SERVICE_ID=<your service id> UNIT_ID=<your test unit id> VERSION=<the ver
 $env:SERVICE_ID = "<your service id>"; $env:UNIT_ID = "<your test unit id>"; $env:VERSION = "<the version you upload>"
 ```
 
-## 5. Check the connection (writes nothing)
+### 5. Check the connection (writes nothing)
 
 Before you upload anything: one read-only call proves the certificate, the root CA and both ids.
 
@@ -198,7 +335,7 @@ no waiting batch: the highest version 4.7.0 is Valid
 `--dry-run` starts nothing, and writes nothing. Batches of older versions that still wait are listed as
 `stale, left alone`: they are never chosen, so decide them in the UI.
 
-## 6. Upload the new version, as you do today
+### 6. Upload the new version, as you do today
 
 After the upload (6), run 7, 8 and 9 one after the other in this terminal: 7 waits and keeps the batch in `BATCH`,
 8 runs the built-in checks and writes the report, 9 decides that `BATCH`. In GitHub the job runs exactly these three for you.
@@ -232,7 +369,7 @@ You should see one JSON line with your batch, your version and the test Units:
 If it says `no test Unit`, a Unit is missing from the Verification Set, or the Service is not linked to it
 ([prerequisite 2](../README.md#2-verification-configured-oem)).
 
-## 7. Wait
+### 7. Wait
 
 `wait` finds the batch of your version, waits until the version runs on the test Unit, and keeps the batch id in
 `BATCH`.
@@ -258,7 +395,7 @@ BATCH=…ba9b
 
 In a production run the version was active on the test Unit about 15 s after the upload.
 
-## 8. Run the built-in checks
+### 8. Run the built-in checks
 
 The built-in checks read the batch and the Unit again (exactly this version, on every Unit, no crash), then watch the version
 for 60 s (late failure, restarts). Your own tests run after them, if you add them ([Your tests](tests.md)). The
@@ -312,7 +449,7 @@ start report\report.html
 
 What each check covers: [Example checks](checks.md).
 
-## 9. Decide
+### 9. Decide
 
 All checks passed: approve.
 
@@ -347,19 +484,14 @@ python verify_batch.py decide --batch-id $env:BATCH --reject
 
 If your test Units do not cover every architecture of the batch, add `--arch` for the ones you tested.
 
-## 10. The next version
-
-Set `VERSION` to the new version (the line of step 4) and repeat steps 6 to 9. In GitHub the watch notices each upload
-and the job does 7 to 9 by itself: [Add the job to your pipeline](../README.md#the-verification-job-in-3-steps).
-
-## Exit codes
+### Exit codes
 
 | Command | Code | Meaning | What to do |
 |---|---|---|---|
 | `discover` | 0 | a JSON line: this batch is to be verified; or no line: nothing waits | go on |
 | `discover` | 2 | no test Unit for the batch, or an error; start nothing. With `--dry-run` a batch with no test Unit also exits 0 | read the message |
 | `check` | 0 | connected; the latest batch and the Units are printed | go on |
-| `check` | 2 | TLS error, a wrong role or id | read the message; see the table in step 5 |
+| `check` | 2 | TLS error, a wrong role or id | read the message; see the table in step 5 of the appendix |
 | `wait` | 0 | the batch waits and the version runs on every Unit; the batch id is printed | run the built-in checks |
 | `wait` | 1 | the version failed to start on a Unit; the batch id is printed | reject it |
 | `wait` | 2 | timed out, no batch, the batch is already decided, no test Units, or an error that waiting cannot fix (a setting, a TLS error, an HTTP 4xx answer) | decide nothing; read the message, and see the [FAQ](faq.md#decisions) |
@@ -374,4 +506,4 @@ and the job does 7 to 9 by itself: [Add the job to your pipeline](../README.md#t
 
 Delete `user.pem` when you are done: it holds your private key.
 
-**Next →** [Add the job to your pipeline](../README.md#the-verification-job-in-3-steps), then [Your tests](tests.md)
+**Next →** [Put it in GitHub](../README.md#put-it-in-github), then [Your tests](tests.md)

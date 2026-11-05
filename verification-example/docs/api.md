@@ -12,9 +12,11 @@ short sample response. Start with the [README](../README.md#how-to-use-this-repo
 >   password.
 > - The role of the certificate decides what you may do: **SP** (Service Provider) or **OEM**.
 > - The **Swagger** links open the official reference. Your browser asks for your certificate first.
+> - **The short way:** `./aos-verify setup` once, then `source .aos-verify.env` sets `AOS_CERT`, `AOS_CA`, `AOS_API_URL` and
+>   `SERVICE_ID` in your terminal. By hand:
 > - One PEM file with the certificate, the intermediate certificates and the key, from your SP `.p12`, which
 >   `aos-keys` saves under `~/.aos/security/` (`find ~/.aos/security -name "*.p12"`; keep its path in `AOS_P12`,
->   as in [Run it from your terminal, step 3](run-locally.md#3-your-certificate)). `.p12` is a
+>   as in [Run it from your terminal, appendix, step 3](run-locally.md#3-your-certificate)). `.p12` is a
 >   password-protected bundle; Python `requests` and `curl` need PEM files (no `-clcerts`:
 >   without the intermediate certificates the server answers `unknown ca`). Press Enter if you are asked for a
 >   password:

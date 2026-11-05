@@ -1,5 +1,4 @@
-# Copy of verification-example/.github/workflows for the showcase. Differences: the job runs in verification-example/,
-# and AOS_API_URL is a secret here. The schedule is off until the first showcase version is uploaded.
+# Copy of verification-example/.github/workflows for the showcase. Difference: the job runs in verification-example/. The schedule is off until the first showcase version is uploaded.
 # Ask AosCloud on a schedule whether a new version waits on the Verification Set, and start one verification run for it.
 # AosCloud sends no notification to a pipeline, so this job asks; nobody has to press anything.
 name: watch-verification
@@ -43,7 +42,7 @@ jobs:
       - name: 0. Ask AosCloud for a waiting batch
         id: discover
         env:
-          AOS_API_URL: ${{ secrets.AOS_API_URL }}
+          AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
           SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
           TEST_UNITS: ${{ vars.AOS_TEST_UNITS }}
           USER_PEM: ${{ secrets.AOS_USER_PEM }}

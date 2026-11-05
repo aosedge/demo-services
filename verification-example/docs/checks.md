@@ -6,11 +6,15 @@ yet. Most are already built into `verify_batch.py` and `tests/run_tests.sh`; the
 
 ## What runs by default
 
-`bash tests/run_tests.sh`, after `wait`, runs the built-in checks A1, B1, C2 and the watch (C3/C4, 60 s) with no setup, then
+`./aos-verify test` (`bash tests/run_tests.sh`, after `wait`) runs the built-in checks A1, B1, C2 and the watch (C3/C4, 60 s) with no setup, then
 your tests if `tests/your_tests.sh` exists. Each check is one row in `report/report.html`; the report ends with a
 "Scenarios covered" table that says how each scenario was covered in that run. The commands below run as they are in
-the terminal of [Run it from your terminal](run-locally.md), after its step 4 (`SERVICE_ID`, `UNIT_ID`, `VERSION`)
-and, from C1 on, step 7 (`BATCH`).
+the folder of the example, after `./aos-verify setup` and `./aos-verify discover`, once you have loaded the values
+(`SERVICE_ID`, `UNIT_ID`, `VERSION`, `BATCH`) into your terminal:
+
+```bash
+source .venv/bin/activate && source .aos-verify.env && source .aos-verify/state
+```
 
 | # | Scenario | What can go wrong | Covered by | Row in the report | Result on production |
 |---|---|---|---|---|---|
@@ -229,8 +233,8 @@ check config_loaded config_ok
 
 **What it checks.** The fix goes through the same gate as every other version.
 
-**How.** Upload the fix with a new version number (higher than the rejected one), set `VERSION` to it, and repeat
-steps 6 to 9 of [Run it from your terminal](run-locally.md). In GitHub the upload starts the same job.
+**How.** Upload the fix with a new version number (higher than the rejected one), and run `./aos-verify run`
+([Run it from your terminal](run-locally.md)). In GitHub the same job runs for it.
 
 ```bash
 aos-signer upload

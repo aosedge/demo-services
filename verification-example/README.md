@@ -3,9 +3,10 @@
 Start here: open `START_HERE.html` (offline, all pages and the video).
 
 > **Where to start**
-> 1. [Prerequisites](#prerequisites): a Service, verification set up in AosCloud.
-> 2. [Run it from your terminal](docs/run-locally.md): try it by hand, about 10 minutes, step by step.
-> 3. [Add the job to your pipeline](#the-verification-job-in-3-steps): the same steps in GitHub, after each upload.
+> 1. [Put it in GitHub](#put-it-in-github): copy the files, add the secrets, done. This is the real use.
+> 2. [Try it on a laptop](docs/run-locally.md): one command sets it up, one command runs it.
+>
+> Both need the [Prerequisites](#prerequisites): a Service, verification set up in AosCloud.
 
 A new version of your Service goes to the test Units of your Verification Set first. AosCloud holds it there until
 someone approves or rejects it. This example does that from GitHub Actions: it waits for the version, runs the
@@ -49,22 +50,52 @@ steps ran on production on 30.10.2026. The scheduled watch itself has so far run
 
 ## What is in this repository
 
-Files: [`verify_batch.py`](verify_batch.py) (about 450 lines, Python 3.10+ and `requests`),
+Files: [`aos-verify`](aos-verify) (setup and one command, for a laptop), [`verify_batch.py`](verify_batch.py) (about 500 lines, Python 3.10+ and `requests`),
 [`tests/run_tests.sh`](tests/run_tests.sh) (the built-in checks, then your tests) with [`tests/report.py`](tests/report.py)
 (the HTML report) and [`tests/your_tests.sh.example`](tests/your_tests.sh.example),
 [`.github/workflows/watch-verification.yml`](.github/workflows/watch-verification.yml) (the watch),
 [`.github/workflows/verify-release.yml`](.github/workflows/verify-release.yml) (the job) and
-[`examples/release-caller.yml`](examples/release-caller.yml). Copy them into the repository of your Service.
+[`examples/release-caller.yml`](examples/release-caller.yml).
+
+## Put it in GitHub
+
+1. **Copy the two workflow files into your repository**, with the code they run. From the folder of this example:
+
+   ```bash
+   cp -R .github verify_batch.py tests /path/to/your-repo/
+   ```
+
+2. **Add the secrets.** One helper prints exactly what to paste. It makes the PEM from your `.p12`, finds the root CA and
+   your Service (the first time it asks, as `setup` does), and never prints the key:
+
+   ```bash
+   ./aos-verify secrets --repo your-org/your-repo
+   ```
+
+   ```text
+   gh api -X PUT repos/your-org/your-repo/environments/aos-verification
+   gh secret set AOS_USER_PEM --repo your-org/your-repo --env aos-verification < '…/.aos-verify/user.pem'
+   gh secret set AOS_ROOT_CA_PEM --repo your-org/your-repo --env aos-verification < '…/.aos-verify/aos-root-ca.crt'
+   gh secret set AOS_SERVICE_ID --repo your-org/your-repo --env aos-verification --body '<your service id>'
+   gh secret set AOS_API_URL --repo your-org/your-repo --env aos-verification --body 'https://api.aoscloud.io:10000/api/v11'
+   ```
+
+   Creating the environment needs admin rights on the repository.
+
+3. **Commit to the default branch.** Done. The watch finds each new version by itself, and
+   [`verify-release`](.github/workflows/verify-release.yml) checks it and decides. Add your own tests in
+   [`tests/your_tests.sh`](docs/tests.md).
 
 ## How to use this repository
 
-1. [Prerequisites](#prerequisites): a Service, verification set up in AosCloud, a version uploaded.
-2. [Run it from your terminal](docs/run-locally.md): the whole story by hand, step by step, for a first try.
-3. [Add the job to your pipeline](#the-verification-job-in-3-steps): the GitHub workflow and its [parameters](#parameters).
-4. [Your tests](docs/tests.md): what `tests/run_tests.sh` checks, the report, and how to add your own tests.
-5. [Example checks](docs/checks.md): 12 scenarios we ran on production, step by step, if you have no tests yet.
-6. [API reference with examples](docs/api.md): every call, with `curl`.
-7. [FAQ and tips](docs/faq.md).
+1. [Put it in GitHub](#put-it-in-github): the workflow files and the secrets.
+2. [Try it on a laptop](docs/run-locally.md): `./aos-verify setup`, upload, `./aos-verify run`.
+3. [Prerequisites](#prerequisites): a Service, verification set up in AosCloud, a version uploaded.
+4. [What the job does](#the-verification-job-in-3-steps), and its [parameters](#parameters).
+5. [Your tests](docs/tests.md): what `tests/run_tests.sh` checks, the report, and how to add your own tests.
+6. [Example checks](docs/checks.md): 12 scenarios we ran on production, step by step, if you have no tests yet.
+7. [API reference with examples](docs/api.md): every call, with `curl`.
+8. [FAQ and tips](docs/faq.md).
 
 ## Prerequisites
 
@@ -195,9 +226,11 @@ fleet through your normal rollout. Rejected: **Invalid**, and it stops here.
 Copy this file to `.github/workflows/watch-verification.yml` on the default branch: GitHub runs a schedule only from
 there. It needs three settings, from [Parameters](#parameters):
 
-1. The variable `AOS_API_URL`.
+1. `AOS_API_URL`, a secret or a variable.
 2. The secret `AOS_SERVICE_ID`: a secret, so that GitHub masks it in the log.
 3. The secrets `AOS_USER_PEM` and `AOS_ROOT_CA_PEM`, in the environment `aos-verification`.
+
+`./aos-verify secrets` prints the commands for all of them: [Put it in GitHub](#put-it-in-github).
 
 `AOS_TEST_UNITS` is no longer required: the job takes the Units from AosCloud.
 
@@ -242,7 +275,7 @@ jobs:
       - name: 0. Ask AosCloud for a waiting batch
         id: discover
         env:
-          AOS_API_URL: ${{ vars.AOS_API_URL }}
+          AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
           SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
           TEST_UNITS: ${{ vars.AOS_TEST_UNITS }}
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
@@ -290,12 +323,13 @@ To start the verification right after an upload in the same workflow, call `veri
 
 ## Parameters
 
-Create the environment `aos-verification`, put the secrets there, and add required reviewers if you want a person to
+`./aos-verify secrets` prints the commands for the four required values: [Put it in GitHub](#put-it-in-github). By hand:
+create the environment `aos-verification`, put the secrets there, and add required reviewers if you want a person to
 confirm (repository Settings → Environments). The variables go in Settings → Secrets and variables → Actions.
 
 | Name | Kind | Value |
 |---|---|---|
-| `AOS_API_URL` | variable | `https://api.aoscloud.io:10000/api/v11`, or your API host |
+| `AOS_API_URL` | secret or variable | `https://api.aoscloud.io:10000/api/v11`, or your API host. A secret wins over a variable of the same name |
 | `AOS_USER_PEM` | secret | one PEM file with the SP user certificate, the intermediate certificates and the key (see below) |
 | `AOS_ROOT_CA_PEM` | secret | the AosEdge root CA file `aos-root-ca.crt` (from `aos-keys`, see below; it is not secret) |
 | `AOS_SERVICE_ID` | secret | your Service id; it is not secret, but GitHub masks a secret in the log |
@@ -305,9 +339,9 @@ confirm (repository Settings → Environments). The variables go in Settings →
 | `version` | workflow input | the version to verify; to start the job by hand, this is the only input you need |
 | `service_id`, `batch_id`, `units` | workflow inputs | optional: the Service (default `AOS_SERVICE_ID`), the batch (default found by the version), the test Units, separated by spaces |
 
-Your SP user certificate is a `.p12` that `aos-keys` saved under `~/.aos/security/` (one per AosCloud and role;
+What `./aos-verify secrets` does for the certificate, by hand: your SP user certificate is a `.p12` that `aos-keys` saved under `~/.aos/security/` (one per AosCloud and role;
 `find ~/.aos/security -name "*.p12"` lists them). Put the path of the SP one of your AosCloud into `AOS_P12`, as in
-[Run it from your terminal, step 3](docs/run-locally.md#3-your-certificate). `.p12` is a password-protected bundle;
+[Run it from your terminal, appendix, step 3](docs/run-locally.md#3-your-certificate). `.p12` is a password-protected bundle;
 Python `requests` and `curl` need PEM files. Turn it into one PEM file that holds the certificate, the intermediate
 certificates and the key. Do not add `-clcerts`: without the intermediate certificates AosCloud refuses the
 connection with `unknown ca`. Store the file as the secret, and delete it. Press Enter if you are asked for the

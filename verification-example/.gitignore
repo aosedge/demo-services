@@ -1,0 +1,10 @@
+__pycache__/
+.pytest_cache/
+*.pem
+*.key
+*.p12
+video/
+report/
+.venv/
+.aos-verify/
+.aos-verify.env

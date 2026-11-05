@@ -34,6 +34,8 @@ on:
         required: false
       AOS_SERVICE_ID:
         required: false
+      AOS_API_URL:
+        required: false
   workflow_dispatch:
     inputs:
       version:
@@ -65,7 +67,7 @@ jobs:
     permissions:
       contents: read
     env:
-      AOS_API_URL: ${{ vars.AOS_API_URL }}
+      AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
       VERSION: ${{ inputs.version }}
     steps:
       # First, and from the event file: the header of a step prints its env before any mask can apply.

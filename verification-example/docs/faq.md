@@ -104,13 +104,14 @@ The runner needs outgoing TCP **10000** to the API host, **without TLS inspectio
 that decrypts TLS breaks mutual TLS. Ask your network team for a pass-through rule for `<api host>:10000`.
 
 **My certificate expires.**
-A user certificate has an end date. Renew it before that date, convert the new `.p12` (see the
-[README](../README.md#parameters)), and replace the `AOS_USER_PEM` secret. Check the date with
-`openssl x509 -in user.pem -noout -enddate`.
+A user certificate has an end date. Renew it before that date, run `./aos-verify setup` again (it makes the PEM from the
+new `.p12`), and replace the `AOS_USER_PEM` secret with the line `./aos-verify secrets` prints. Check the date with
+`openssl x509 -in .aos-verify/user.pem -noout -enddate`.
 
 **`unknown ca` when connecting.**
-The error reads `tlsv1 alert unknown ca`: the PEM file has no intermediate certificates. Make it again without
-`-clcerts`: `openssl pkcs12 -in "$AOS_P12" -nodes -out user.pem`. The file then holds the certificate, the
+The error reads `tlsv1 alert unknown ca`: the certificate is from another AosCloud, or the PEM file has no intermediate
+certificates. `./aos-verify setup` makes it right; by hand, without `-clcerts`:
+`openssl pkcs12 -in "$AOS_P12" -nodes -out user.pem`. The file then holds the certificate, the
 intermediate certificates and the key. Replace the `AOS_USER_PEM` secret.
 
 **`Can't open aos-user-sp.p12`.**
@@ -147,6 +148,6 @@ environment `aos-verification`: add required reviewers and protected branches th
 its Enterprise plan; the call ends in HTTP 422 otherwise). The job writes the PEM to a
 folder of the runner that only it can read, only in the steps that call AosCloud (the discover step of the watch, wait,
 the built-in checks, the decision), and deletes it at the end of each. Your tests run in a step of their own, with no
-secret and no key file. Delete local copies of `user.pem` after you store the secret.
+secret and no key file. Delete local copies of the PEM (`.aos-verify/user.pem`) after you store the secret.
 
 **Next →** back to the start: [How to use this repository](../README.md#how-to-use-this-repository)
