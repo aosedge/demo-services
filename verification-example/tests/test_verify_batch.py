@@ -1003,7 +1003,7 @@ def test_the_watch_asks_every_5_minutes_and_can_write_actions():
 def test_the_readme_shows_the_watch_as_it_is():
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
     assert '[`.github/workflows/watch-batches.yml`](.github/workflows/watch-batches.yml)' in readme
-    assert '```yaml\n# Ask AosCloud on a schedule' not in readme and readme.count('<summary>Why every 5 minutes?</summary>') == 1
+    assert '```yaml\n# Ask AosCloud on a schedule' not in readme and '<details>' not in readme
 
 
 @needs_bash
@@ -1464,7 +1464,7 @@ def test_the_60_second_look_is_called_observing_everywhere(tmp_path):
 BOX = ('Defaults: the job decides by itself (AOS_DECISION=auto). For a decision by a person, set '
        'AOS_DECISION=report-only: the job only checks and writes the report, and a person approves or '
        'rejects in the SP UI. Or ask (laptop only).',
-       'Built-in checks run on every Service version (A1, B1, C2; C3/C4 unless AOS_WATCH_SECONDS=0). Add your '
+       'Built-in checks run on every Service version (what they check). Add your '
        'own tests in tests/your_tests.sh (start from tests/your_tests.sh.example): they run after the '
        'built-in checks. If any check or test fails, the verdict is reject; in auto mode the job sends it, '
        'in report-only a person decides.')
@@ -1489,20 +1489,21 @@ def start_here_overview() -> str:
 
 def test_the_box_is_right_below_the_tables_in_the_readme_and_start_here():
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    box = readme[readme.index('> [!IMPORTANT]'):readme.index('<details>')]
+    box = readme[readme.index('> [!IMPORTANT]'):readme.index('## How to use this repository')]
+    box = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', box)  # a link reads as its words
     for line in BOX:
         assert line in plain(box), line
         assert line in plain(start_here_overview()), line
-    assert readme.index('AosCloud API call.') < readme.index('](docs/img/flow.svg)') < readme.index('## Step by step') < readme.index('> [!IMPORTANT]')
+    order = ['Nothing reaches the fleet before the decision.', '## How the job knows it is time', '](docs/img/flow.svg)',
+             '## It ran on production', '## Limits', '## Step by step', '> [!IMPORTANT]', '## How to use this repository']
+    assert [readme.index(part) for part in order] == sorted(readme.index(part) for part in order)
     assert '<blockquote class="alert">' in start_here_overview() and '[!IMPORTANT]' not in start_here_overview()
 
 
 def test_why_every_5_minutes_says_the_same_everywhere():
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    assert WHY in plain(readme[readme.index('<details>'):readme.index('</details>')])
+    assert 'Why every 5 minutes' not in readme and 'docs/faq.md#the-watch-timing-and-old-verification-batches' in readme
     assert WHY in plain((ROOT / 'docs/faq.md').read_text(encoding='utf-8'))
-    assert WHY in plain(start_here_overview())
-    assert '<details><summary>Why every 5 minutes?</summary>' in start_here_overview()
     text = WATCH.read_text(encoding='utf-8')
     above = text[text.index('schedule:'):text.index('- cron:')]
     assert WHY in ' '.join(line.strip().lstrip('# ') for line in above.splitlines()[1:])
@@ -1814,3 +1815,45 @@ def test_a_4xx_or_tls_error_in_the_observation_is_no_fail_and_no_reject(says, re
     if code == 3:
         assert 'reject' not in run.stdout.lower().split('verdict')[-1] and 'FAIL → reject' not in report
         assert 'FAIL C3/C4' not in run.stdout
+
+
+# The README for a first reader: the proof and the limits first, one place for each, and a short page.
+def test_the_proof_and_the_limits_come_right_after_the_first_diagram():
+    readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+    proof = readme[readme.index('## It ran on production'):readme.index('## Limits')]
+    assert proof.count('| 05.11.2026 | GitHub |') == 2 and '| 30.10.2026 | Terminal |' in proof
+    assert 'pressed once' in proof and 'Production AosCloud 6.1.97.' in proof
+    limits = readme[readme.index('## Limits'):readme.index('## Step by step')]
+    for part in ('no webhook', 'best-effort', 'second decision', 'offline means no decision', 'Not yet run on GitHub', '6.2.31'):
+        assert part in limits, part
+    rest = readme.replace(limits, '')
+    for caveat in ('Scheduled starts are being confirmed', 'Not yet run on GitHub', '0 scheduled runs', 'Status 05.11.2026'):
+        assert caveat not in rest, caveat
+
+
+def test_the_readme_is_short_and_who_tells_whom_has_its_own_page():
+    readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+    assert len(readme.splitlines()) <= 330 and 'sequence.svg' not in readme and '(docs/who-tells-whom.md)' in readme
+    page = (ROOT / 'docs' / 'who-tells-whom.md').read_text(encoding='utf-8')
+    assert '](img/sequence.svg)' in page and '| Who | Tells whom |' in page
+    assert 'runs in any CI with Python 3.10 that reaches AosCloud' in readme and '## Who maintains this' in readme
+    for letter in 'ABC':
+        assert f'\n### {letter}. ' in readme
+    assert not re.search(r'^### [123]\. ', readme, re.M)
+
+
+def test_start_a_is_the_main_start_and_the_watch_the_fallback():
+    flow = (ROOT / 'docs/img/flow.svg').read_text(encoding='utf-8')
+    sequence = (ROOT / 'docs/img/sequence.svg').read_text(encoding='utf-8')
+    assert '>Start A: chain (main)<' in flow and '>Start B: watch (fallback)<' in flow
+    assert 'Start A (main)' in sequence and '>Start B: watch (fallback)<' in sequence
+    for picture in (flow, sequence):
+        assert 'Why polling' not in picture and "5 min is GitHub's minimum, best effort" in picture
+    readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+    assert 'Start it from your upload workflow (Start A)' in readme and 'The watch finds each new Service version by itself' not in readme
+
+
+def test_no_internal_words_reach_a_partner():
+    for name in ('README.md', 'TRY_IT.md', 'docs/faq.md', 'docs/api.md', 'docs/who-tells-whom.md'):
+        text = (ROOT / name).read_text(encoding='utf-8')
+        assert not re.search(r'[Tt]ell us|rehearsal|showcase', text), name

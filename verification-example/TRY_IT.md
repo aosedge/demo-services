@@ -44,7 +44,7 @@ In a fork the scheduled `watch-batches` stops at once ("scheduled watch is off i
 
 **Actions → demo-release (demo only) → Run workflow → Run workflow**. Leave the branch as `main`.
 
-In about 30 seconds the run is green (rehearsal: 29 s). Its summary shows:
+In about 30 seconds the run is green (measured: 29 s). Its summary shows:
 
 - the Service version it uploaded: the highest in AosCloud, plus 1 in the last number;
 - the link to the `verify-batch` run;
@@ -54,7 +54,7 @@ In about 30 seconds the run is green (rehearsal: 29 s). Its summary shows:
 
 ## 5. Open the verify-batch run
 
-Follow the link, or open **Actions → verify-batch**. The title is `verify-batch manual <version>`. About 1.5 minutes (rehearsal: 1 min 22 s):
+Follow the link, or open **Actions → verify-batch**. The title is `verify-batch manual <version>`. About 1.5 minutes (measured: 1 min 22 s):
 
 | Step | What you see |
 |---|---|
@@ -75,10 +75,10 @@ If you also have a login: **SP UI → Verification batches** shows the new Servi
 | No workflows in the Actions tab, or no **Run workflow** button | Actions are not enabled yet: step 3. |
 | Actions enabled, no banner, but "No workflows found" | GitHub has not registered the files yet. Make the one-space edit of step 3 and wait a minute. |
 | `Missing secrets: ...` | Add the secrets it names: step 2. Check the spelling, and add them as secrets, not variables. |
-| `The user of AOS_USER_PEM needs the permission deployment_bundles_create` | This certificate may not upload. Tell us. |
+| `The user of AOS_USER_PEM needs the permission deployment_bundles_create` | This certificate may not upload: tell the person who sent you the secrets. |
 | demo-release is green, but verify-batch is red with `no longer Waiting_validation` | Someone pressed the button in another fork at the same moment and got the same Service version; AosCloud keeps the first upload. Run demo-release again. |
-| `TLS error` or `HTTP 401` or `HTTP 403` | A secret has a wrong value, or the demo user was removed. Paste it again, or tell us. |
-| `Unit ... is offline`: the run keeps waiting, up to 30 minutes, then ends red with no decision | The demo Unit is off, so the job rightly decides nothing. Tell us. |
+| `TLS error` or `HTTP 401` or `HTTP 403` | A secret has a wrong value, or the demo user was removed. Paste it again, or tell the person who sent you the secrets. |
+| `Unit ... is offline`: the run keeps waiting, up to 30 minutes, then ends red with no decision | The demo Unit is off, so the job rightly decides nothing. Tell the person who sent you the secrets. |
 | `no longer Waiting_validation`, red | Another pipeline decided first, or someone decided in the UI. No harm is done. |
 
 ## When you are done
