@@ -1446,7 +1446,7 @@ def test_an_observation_skipped_for_a_failed_version_says_that_not_off(tmp_path)
 
 
 @needs_bash
-def test_the_watch_is_only_the_github_job_never_the_observation(tmp_path):
+def test_the_60_second_look_is_called_observing_everywhere(tmp_path):
     run, _, report = run_tests_sh(tmp_path)
     assert 'observing for 60 s' in run.stdout and 'watch' not in run.stdout.lower()
     # Started with the version here, so the job that finds a batch had no part in it. Only the name of the setting stays.
