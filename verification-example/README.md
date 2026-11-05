@@ -2,18 +2,19 @@
 
 A GitHub Actions job finds a new Service version waiting in AosCloud, checks it on the Verification Set Units, and approves or rejects it with one AosCloud API call.
 
-![Automatic verification of a new Service version. The upload job, an existing step, uploads the Service version. AosCloud creates a Verification batch, state Waiting verification, and installs the new Service version only on the Units of the Verification Set. Step 0: watch-batches.yml polls AosCloud every 5 minutes: is a new Service version waiting for verification? AosCloud sends no notification to a pipeline, so the job asks. 5 minutes is the shortest GitHub schedule; GitHub may start runs late or skip them; for a guaranteed start use Start A. Two starts: Start A, chain: the upload job starts verify-batch right after the upload. Start B, watch: watch-batches starts verify-batch when it finds a waiting batch. verify-batch.yml: 1 Wait until the Service version is active on every Verification Set Unit; a timeout or an offline Unit means no decision. 2 Test: built-in checks and partner tests, report.html and junit.xml. 3 Decide: auto, the default, the job approves or rejects; report-only, a person decides in the SP UI. Verified goes on to the normal rollout; Invalid: the rollout stops.](docs/img/flow.svg)
+![Automatic verification of a new Service version. Step 1: the upload job, an existing step, uploads the Service version. Step 2: AosCloud creates a Verification batch, state Waiting verification, and installs the new Service version only on the Units of the Verification Set. Step 0: watch-batches.yml polls AosCloud every 5 minutes: is a new Service version waiting for verification? AosCloud sends no notification to a pipeline, so the job asks. 5 minutes is the shortest GitHub schedule; GitHub may start runs late or skip them; for a guaranteed start use Start A. Two starts: Start A, chain: the upload job starts verify-batch right after the upload. Start B, watch: watch-batches starts verify-batch when it finds a waiting batch. verify-batch.yml: 5 Wait until the Service version is active on every Verification Set Unit; a timeout or an offline Unit means no decision. 6 Test: built-in checks and partner tests, report.html and junit.xml. 7 Decide: auto, the default, the job approves or rejects; report-only, a person decides in the SP UI. Verified goes on to the normal rollout; Invalid: the rollout stops.](docs/img/flow.svg)
 
 ## Step by step
 
 | # | Step | Runs where | What is checked / decided | Where you see it |
 |---|---|---|---|---|
-| – | Upload (existing step) | CI pipeline | New Service version sent | SP UI: Deployment bundles |
-| – | Verification batch created | AosCloud | State: Waiting verification | SP UI: Verification batches |
+| ① | Upload (existing step) | CI pipeline | New Service version sent | SP UI: Deployment bundles |
+| ② | Verification batch created | AosCloud | State: Waiting verification | SP UI: Verification batches |
+| ③④ | Service version installed, then reported | Verification Set Units | Installed, active or failed | SP UI: Unit → Subjects & Services |
 | ⓪ | Watch asks every 5 min (or Start A) | `watch-batches.yml` | New Service version waiting? | Job log |
-| 1 | Wait | `verify-batch.yml` | Verification Set Units active | Job log |
-| 2 | Test | `verify-batch.yml` | Built-in checks + partner tests | `report.html` |
-| 3 | Decide | `verify-batch.yml` | `auto`: the job. `report-only`: a person | Job log; report |
+| ⑤ | Wait | `verify-batch.yml` | Test Units active | Job log |
+| ⑥ | Test | `verify-batch.yml` | Built-in checks + partner tests | `report.html` |
+| ⑦ | Decide | `verify-batch.yml` | `auto`: the job. `report-only`: a person | Job log; report |
 | – | Result | AosCloud | Verified / Invalid | SP UI: Verification batches |
 
 ## How the job knows it is time
@@ -28,7 +29,7 @@ A GitHub Actions job finds a new Service version waiting in AosCloud, checks it 
 > [!IMPORTANT]
 > **Defaults:** the job decides by itself (`AOS_DECISION=auto`). For a decision by a person, set `AOS_DECISION=report-only`: the job only checks and writes the report, and a person approves or rejects in the SP UI. Or `ask` (laptop only).
 >
-> Built-in checks run on every Service version (A1, B1, C2; C3/C4 unless `AOS_WATCH_SECONDS=0`). Partner tests go in `tests/your_tests.sh` (start from `tests/your_tests.sh.example`): they run after the built-in checks. If any check or test fails, the verdict is reject; in `auto` mode the job sends it, in `report-only` a person decides.
+> Built-in checks run on every Service version (A1, B1, C2; C3/C4 unless `AOS_WATCH_SECONDS=0`). Add your own tests in `tests/your_tests.sh` (start from `tests/your_tests.sh.example`): they run after the built-in checks. If any check or test fails, the verdict is reject; in `auto` mode the job sends it, in `report-only` a person decides.
 
 <details>
 <summary>Why every 5 minutes?</summary>
@@ -46,7 +47,7 @@ AosCloud does not notify a pipeline when a new Service version waits (no webhook
 2. [Try it on a laptop](docs/run-locally.md): `./aos-verify setup`, upload, `./aos-verify run`.
 3. [Prerequisites](#prerequisites): a Service, verification set up in AosCloud, a Service version uploaded.
 4. [What the job does](#the-verification-job-in-3-steps), and its [parameters](#parameters).
-5. [Partner tests](docs/tests.md): what `tests/run_tests.sh` checks, the report, and how to add partner tests.
+5. [Partner tests](docs/tests.md): what `tests/run_tests.sh` checks, the report, and how to add your own tests.
 6. [Example checks](docs/checks.md): 12 scenarios we ran on production, step by step, if you have no tests yet.
 7. [API reference with examples](docs/api.md): every call, with `curl`.
 8. [FAQ and tips](docs/faq.md).
@@ -78,7 +79,7 @@ AosCloud does not notify a pipeline when a new Service version waits (no webhook
 
 3. **Commit to the default branch.** Done. The watch finds each new Service version by itself, and
    [`verify-batch`](.github/workflows/verify-batch.yml) checks it and decides, by itself
-   ([Automatic decision](#automatic-decision) says how to change that). Add partner tests in
+   ([Automatic decision](#automatic-decision) says how to change that). Add your own tests in
    [`tests/your_tests.sh`](docs/tests.md).
 
 ## Who tells whom
@@ -91,7 +92,7 @@ schedule, with the SP certificate alone. Nobody presses anything.
 | Who | Tells whom | What | Where you see it |
 |---|---|---|---|
 | Your upload job | AosCloud | a new Service version | the job log; SP UI → Deployment bundles |
-| AosCloud | the test Units of the Verification Set | install this Service version | SP UI → Verification batches: Waiting verification |
+| AosCloud | the Verification Set Units | install this Service version | SP UI → Verification batches: Waiting verification |
 | A test Unit | AosCloud | installed, and active or failed | SP UI → Unit → Subjects & Services → Service Instances |
 | AosCloud, when the watch asks | the watch | the batch id, the Service version, the Unit ids of the Set | the log of `watch-batches`; the title of the `verify-batch` run |
 | The verification job | AosCloud | one decision: approve or reject | the report; SP UI: Verified or Invalid |
@@ -137,13 +138,13 @@ GitHub Actions must be enabled for the repository. Organisation owners can switc
 
 The OEM account does these steps once. The new Service version then goes to these Units first, and to no other Unit.
 
-1. **Create the Verification Set**: a Unit Set with **Verification set = YES**, in the fleet of the test Units.
+1. **Create the Verification Set**: a Unit Set with **Verification set = YES**, in the fleet of its Units.
    OEM UI → Unit-sets → +, or `POST unit-sets/ {title, is_validation_set: true, fleet, description}`
    ([unit_sets_create](https://api.aoscloud.io/api/v11/docs#/unit-sets/unit_sets_create)).
 
    ![The Unit Sets list: the Verification Set has Verification set = YES](docs/img/01-oem-unit-sets.png)
 
-2. **Add the test Units** to it: Add unit, or `POST unit-sets/{id}/units/ {system_uids}`
+2. **Add the Verification Set Units** to it: Add unit, or `POST unit-sets/{id}/units/ {system_uids}`
    ([unit_sets_units_create](https://api.aoscloud.io/api/v11/docs#/unit-sets/unit_sets_units_create)).
    The Units must be provisioned and online.
 
@@ -196,9 +197,9 @@ You do not need to give the job the ids of the test Units: with the SP certifica
 All calls use mutual TLS with the SP certificate on `https://<api host>:10000/api/v11/`. Each call links to its
 description, with a `curl` example and a sample response, in the [API reference](docs/api.md).
 
-### 1. Wait: `verify_batch.py wait`
+### 5. Wait: `verify_batch.py wait`
 
-It finds the Verification batch of this Service and Service version, takes the test Units from AosCloud (or from the `units` input or
+It finds the Verification batch of this Service and Service version, takes the Verification Set Units from AosCloud (or from the `units` input or
 `AOS_TEST_UNITS`, if you set them), then waits until the Service version runs on every test Unit.
 
 - `GET verification-batch/?ordering=-created_at&limit=50&offset=<n>`, page by page: [find the batch](docs/api.md#find-the-verification-batch)
@@ -215,7 +216,7 @@ reached or a test Unit was offline; the job decides nothing. Only a lost connect
 
 ![The test Unit runs the new Service version (Unit → Subjects & Services → Service Instances)](docs/img/09-sp-unit-service-instances.png)
 
-### 2. Test: `tests/run_tests.sh`
+### 6. Test: `tests/run_tests.sh`
 
 The built-in checks run first: they read the Verification batch and the Units again (exactly this Service version, on every Unit, no crash) and
 observe the Service version for 60 s (late failure, restarts). Then partner tests, from `tests/your_tests.sh` when you add it
@@ -224,7 +225,7 @@ failed, 3 when AosCloud could not be read or a test Unit is offline: neither dec
 `report/junit.xml`; the job keeps them, with the decision written into the report: open the run page → **Artifacts** →
 **verification-report**.
 
-### 3. Decide: `verify_batch.py decide --approve` or `--reject`
+### 7. Decide: `verify_batch.py decide --approve` or `--reject`
 
 It reads the Verification batch once more, refuses unless the state is `Waiting_validation` (UI: Waiting verification), prints
 the architectures it decides (all of the batch), and sends one call, with no retry:
@@ -267,7 +268,7 @@ With `report-only` the job is still green or red: green when all checks pass, re
 The mode in use is on the first line of `./aos-verify run`, on the first line of the GitHub job summary, and in the header of the report.
 
 > **Next**
-> - [Partner tests](docs/tests.md): what `tests/run_tests.sh` checks, the report, and how to add partner tests
+> - [Partner tests](docs/tests.md): what `tests/run_tests.sh` checks, the report, and how to add your own tests
 > - [Example checks](docs/checks.md): 12 scenarios we ran on production, with the code
 > - [API reference with examples](docs/api.md): every call, with `curl`, sample responses and errors
 > - [FAQ and tips](docs/faq.md): decisions, running it, connection, security
@@ -398,7 +399,7 @@ reviewers (repository Settings → Environments) or set `AOS_DECISION` to `repor
 | `AOS_SERVICE_ID` | secret | your Service id; it is not secret, but GitHub masks a secret in the log |
 | `AOS_TEST_UNITS` | variable | optional: test only these Units of the Verification Set; ids separated by spaces. A Unit you leave out is not checked. The job stops if one is outside the Set, or if an architecture of the Verification batch has none |
 | `AOS_DECISION` | variable | `auto` (default), `ask` or `report-only`: [Automatic decision](#automatic-decision) |
-| `AOS_WATCH_SECONDS` | variable (on a laptop: environment) | how long the built-in checks observe the Service version on the test Units; default `60`, `0` turns it off. See [Example checks](docs/checks.md#c3-late-failure) |
+| `AOS_WATCH_SECONDS` | variable (on a laptop: environment) | how long the built-in checks observe the Service version on the Verification Set Units; default `60`, `0` turns it off. See [Example checks](docs/checks.md#c3-late-failure) |
 | `AOS_WAIT_TIMEOUT` | variable (on a laptop: environment) | seconds to wait for the Service version on the Units; default `1800`. The job stops after 60 minutes |
 | `version` | workflow input | the Service version to verify; to start the job by hand, this is the only input you need |
 | `service_id`, `batch_id`, `units` | workflow inputs | optional: the Service (default `AOS_SERVICE_ID`), the batch (default found by the Service version), the test Units, separated by spaces |

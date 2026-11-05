@@ -86,7 +86,7 @@ curl -sS --cert "$AOS_CERT" --cacert "$AOS_CA" "$AOS_API_URL/verification-batch/
 
 ### The Units of the Verification Set
 
-The job takes the test Units from these two calls, with the SP certificate alone. A test Unit has to be in both.
+The job takes the Verification Set Units from these two calls, with the SP certificate alone. A test Unit has to be in both.
 
 **GET `verification-batch/{batch_id}/statistics/`** · SP · read ·
 Swagger: [verification_batch_statistics](https://api.aoscloud.io/api/v11/docs#/verification-batch/verification_batch_statistics)
@@ -263,7 +263,7 @@ The body takes the **System UIDs** of the Units, not their ids.
 
 ### Find a Unit id
 
-The job needs the `id` of each test Unit, not its System UID.
+The job needs the `id` of each Verification Set Unit, not its System UID.
 **GET `units/?system_uid=<system uid>`** · OEM · read ·
 Swagger: [units_list](https://api.aoscloud.io/api/v11/docs#/units/units_list)
 

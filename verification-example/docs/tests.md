@@ -1,6 +1,6 @@
 # Partner tests
 
-This page says what `tests/run_tests.sh` checks, what its report shows, how to add partner tests, and how to check
+This page says what `tests/run_tests.sh` checks, what its report shows, how to add your own tests, and how to check
 the example itself.
 
 ## What `tests/run_tests.sh` does
@@ -13,7 +13,7 @@ It runs after `wait`, and takes no arguments. `./aos-verify run` and `./aos-veri
    | Check | What it checks |
    |---|---|
    | A1 | the Verification batch holds exactly this Service and Service version, and still waits |
-   | B1 | the Service version is installed and active on every test Unit |
+   | B1 | the Service version is installed and active on every Verification Set Unit |
    | C2 | no instance of the Service version failed |
    | C3/C4 | the observation: every 60 s for `WATCH_SECONDS` (default 60, `0` = off), the Service version still runs on every Unit. It reads once every 60 s, and it does not measure memory |
 
@@ -27,7 +27,7 @@ AosCloud could not be read or a test Unit is offline: nothing is decided, becaus
 
 ![The test Unit runs the new Service version (Unit → Subjects & Services → Service Instances)](img/09-sp-unit-service-instances.png)
 
-## Add partner tests
+## Add your own tests
 
 Start from the example. It has three tests that need your values, so they fail until you change them:
 
@@ -48,7 +48,7 @@ The rule: print one line per test, `PASS <name>` or `FAIL <name>: <why>`, and ex
 `tests/run_tests.sh` puts these lines into the report, in their own section; until you add the file, an amber line there says so. Partner tests get `SERVICE_ID`, `VERSION`,
 `BATCH_ID` and `UNIT_ID` (or `AOS_TEST_UNITS`) in their environment, but not `AOS_CERT`; in the job they run in a step
 with no secret. An HTTP check needs a
-network path from the runner to the test Unit.
+network path from the runner to the Verification Set Unit.
 
 Examples of checks for the 12 scenarios we ran on production: [Example checks](checks.md).
 
@@ -56,7 +56,7 @@ Examples of checks for the 12 scenarios we ran on production: [Example checks](c
 
 `tests/test_verify_batch.py` runs `verify_batch.py` against a small in-memory AosCloud, with no network: `discover`
 (the highest Service version, stale Verification batches, the Units in both lists, `--dry-run`), `check`, `status`, wait, a Service version that failed or is still starting, a timeout, paging through the batches, errors that stop at
-once (HTTP 4xx, TLS, a missing setting, no test Units, any unexpected error) and outages that are retried, approve,
+once (HTTP 4xx, TLS, a missing setting, no Verification Set Units, any unexpected error) and outages that are retried, approve,
 reject, `--arch`, a decided batch, a batch with no architectures, HTTP 5xx after the decision, an empty answer, and a
 lost answer. With `bash`, it also runs `tests/run_tests.sh` (the built-in checks, the observation, partner tests, the report, the exit
 codes) and steps of the workflows: the job never ends green without a decision, stops on an empty secret, and deletes

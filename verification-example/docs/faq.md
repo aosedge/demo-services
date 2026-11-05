@@ -16,7 +16,7 @@ the schedule.
 **Who may approve or reject?**
 The Service Provider, with the SP certificate.
 
-**What if a test Unit never gets the Service version?**
+**What if a Verification Set Unit never gets the Service version?**
 `wait` times out with exit 2, or exit 3 if the Unit is offline, and the job decides nothing. An offline Unit does not
 count, even if AosCloud still shows the new Service version active: that state is old. The Verification batch keeps waiting, with no time
 limit. Check that the
@@ -87,7 +87,7 @@ environment of its own, with the same secrets and no reviewers: change the `envi
 `watch-batches.yml`.
 
 **`no Verification Set Unit for arm64`.**
-The batch needs a decision for an architecture that has no test Unit. The job will not approve what it did not test,
+The batch needs a decision for an architecture that has no Verification Set Unit. The job will not approve what it did not test,
 so the watch run stays red and nothing starts until you add a Unit of that architecture to the Verification Set, or
 decide in the UI.
 

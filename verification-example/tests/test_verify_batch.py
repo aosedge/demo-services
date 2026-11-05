@@ -765,7 +765,7 @@ exit {code}
     env = {'PATH': f"{fake}:{os.environ['PATH']}", 'RUNNER_TEMP': str(tmp_path), 'GITHUB_OUTPUT': str(output),
            'USER_PEM': user_pem, 'INPUT_UNITS': units, 'OVERRIDE_UNITS': override, 'WAIT_TIMEOUT': '1',
            'SERVICE_ID': service, 'VERSION': NEW, 'BATCH_INPUT': batch_input, 'ACTOR': actor}
-    run = subprocess.run(['bash', '-e', '-c', step('1. Wait')], env=env, capture_output=True, text=True, timeout=60,
+    run = subprocess.run(['bash', '-e', '-c', step('5. Wait')], env=env, capture_output=True, text=True, timeout=60,
                          check=False)
     return run, output.read_text(), (tmp_path / 'aos' / 'user.pem').exists()
 
@@ -936,12 +936,12 @@ def test_the_first_step_masks_the_inputs_without_an_env(tmp_path):
 
 
 def test_your_tests_step_has_no_secret_and_only_the_verdict_decides():
-    yours = workflow_step('2b.', WORKFLOW)
+    yours = workflow_step('6b.', WORKFLOW)
     assert 'secrets.' not in yours and 'USER_PEM' not in yours and 'RUN_PART: yours' in yours
     assert 'SERVICE_ID: ${{ steps.wait.outputs.service_id }}' in yours
-    assert 'secrets.AOS_USER_PEM' in workflow_step('2a.', WORKFLOW)
+    assert 'secrets.AOS_USER_PEM' in workflow_step('6a.', WORKFLOW)
     text = WORKFLOW.read_text(encoding='utf-8')
-    assert "steps.tests.outputs.code == '0'" in workflow_step('3a.', WORKFLOW)
+    assert "steps.tests.outputs.code == '0'" in workflow_step('7a.', WORKFLOW)
     assert "steps.tests.outputs.code == '1'" in text and 'persist-credentials: false' in text
 
 
@@ -1389,12 +1389,12 @@ def test_what_wait_saw_fail_stays_a_fail_even_if_aoscloud_reads_well_later(tmp_p
 def test_the_job_decides_by_itself_unless_told_otherwise():
     text = (ROOT / '.github/workflows/verify-batch.yml').read_text(encoding='utf-8')
     assert "AOS_DECISION: ${{ vars.AOS_DECISION || 'auto' }}" in text
-    approve, reject = text.split('- name: 3a. Approve')[1], text.split('- name: 3b. Reject')[1]
+    approve, reject = text.split('- name: 7a. Approve')[1], text.split('- name: 7b. Reject')[1]
     assert "env.AOS_DECISION == 'auto'" in approve.split('run: |')[0]
     assert "env.AOS_DECISION == 'auto'" in reject.split('run: |')[0]
     assert text.count('verify_batch.py decide') == 2 and text.count('--report-dir report') == 2
-    assert "env.AOS_DECISION != 'auto'" in text.split('- name: 3. No decision')[1].split('run: |')[0]
-    assert text.index('- name: Keep the report') > text.index('- name: 3. No decision')
+    assert "env.AOS_DECISION != 'auto'" in text.split('- name: 7. No decision')[1].split('run: |')[0]
+    assert text.index('- name: Keep the report') > text.index('- name: 7. No decision')
 
 
 def scenario_row(page, code):
@@ -1459,8 +1459,8 @@ def test_the_60_second_look_is_called_observing_everywhere(tmp_path):
 BOX = ('Defaults: the job decides by itself (AOS_DECISION=auto). For a decision by a person, set '
        'AOS_DECISION=report-only: the job only checks and writes the report, and a person approves or '
        'rejects in the SP UI. Or ask (laptop only).',
-       'Built-in checks run on every Service version (A1, B1, C2; C3/C4 unless AOS_WATCH_SECONDS=0). Partner'
-       ' tests go in tests/your_tests.sh (start from tests/your_tests.sh.example): they run after the '
+       'Built-in checks run on every Service version (A1, B1, C2; C3/C4 unless AOS_WATCH_SECONDS=0). Add your '
+       'own tests in tests/your_tests.sh (start from tests/your_tests.sh.example): they run after the '
        'built-in checks. If any check or test fails, the verdict is reject; in auto mode the job sends it, '
        'in report-only a person decides.')
 WHY = ('AosCloud does not notify a pipeline when a new Service version waits (no webhook), so the watch asks'
@@ -1525,7 +1525,7 @@ def summary_of(workflow: Path, step: str, tmp_path, **env) -> list[str]:
 def test_the_job_summary_starts_with_the_decision_mode(tmp_path, mode):
     lines = summary_of(ROOT / '.github/workflows/verify-batch.yml', 'Say the decision mode', tmp_path, AOS_DECISION=mode)
     assert lines[0] == f'Decision mode: {mode} (change with the AOS_DECISION variable)'
-    assert lines[2].startswith('Why every 5 minutes? AosCloud does not notify a pipeline')
+    assert plain(lines[2]) == f'Why every 5 minutes? {WHY}'
 
 
 def test_the_decision_mode_is_said_before_anything_can_fail_and_the_values_are_next_to_it():

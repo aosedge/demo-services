@@ -63,7 +63,7 @@ Note: `aos-signer` prints your e-mail on upload (`Upload info: user=…`). Mask 
 ./aos-verify run
 ```
 
-This is what the GitHub job does: it finds the Verification batch, waits for the Service version on the test Units, runs the built-in checks
+This is what the GitHub job does: it finds the Verification batch, waits for the Service version on the Verification Set Units, runs the built-in checks
 and partner tests, writes the report and opens it, then asks before it sends the decision, and writes the decision into the
 report. A batch appears some seconds after the upload, so it asks AosCloud for up to 2 minutes, and says how long is left:
 `asking again in 10 s (1:40 left, Ctrl-C to stop)`. `AOS_DISCOVER_TIMEOUT` changes that limit, in seconds; `0` asks only once.
@@ -118,7 +118,7 @@ Every failure prints one line and the command that fixes it. The usual ones:
 | `unknown ca` | the certificate of another AosCloud, or a PEM with no intermediate certificates | `./aos-verify setup`, and pick the SP certificate of this AosCloud |
 | `not the SP certificate of this AosCloud (403)` | an OEM certificate, or another AosCloud | `./aos-verify setup` |
 | `no waiting Verification batch`, `Nothing to verify after 2 min` | nothing new was uploaded, or the Verification batch is already decided | upload a new Service version, then `./aos-verify run` |
-| `is offline`, `decide nothing` | a test Unit is not connected, so what AosCloud shows for it is old | `./aos-verify check`; when it says `online`, `./aos-verify run` |
+| `is offline`, `decide nothing` | a Verification Set Unit is not connected, so what AosCloud shows for it is old | `./aos-verify check`; when it says `online`, `./aos-verify run` |
 
 ## Commands for debugging
 
@@ -128,7 +128,7 @@ One step at a time. All except `decide` only read AosCloud. `discover` remembers
 |---|---|
 | `./aos-verify check` | the connection, the latest batch, what the Units run |
 | `./aos-verify discover` | is a new Service version waiting, and on which Units? |
-| `./aos-verify wait` | waits until the Service version runs on the test Units |
+| `./aos-verify wait` | waits until the Service version runs on the Verification Set Units |
 | `./aos-verify test` | the built-in checks and partner tests, then the report |
 | `./aos-verify report` | opens the report |
 | `./aos-verify decide approve` or `reject` | sends the decision for that batch, once |
@@ -148,7 +148,7 @@ source .venv/bin/activate && source .aos-verify.env
 | 0 | the verdict is approve (sent, a dry run, your no, or `report-only`), or nothing waits |
 | 1 | the verdict is reject (sent, a dry run, your no, or `report-only`) |
 | 2 | decide nothing: a setting, an HTTP 4xx answer, a timeout; or the decision was refused |
-| 3 | decide nothing: AosCloud could not be reached or a test Unit is offline; after the question: the decision may have been applied, so look at the Verification batch in the UI |
+| 3 | decide nothing: AosCloud could not be reached or a Verification Set Unit is offline; after the question: the decision may have been applied, so look at the Verification batch in the UI |
 
 ## Appendix: what setup does, by hand
 
@@ -287,7 +287,7 @@ $env:AOS_API_URL = "https://api.aoscloud.io:10000/api/v11"; $env:AOS_CERT = "$PW
 Three values, in one line. This is the only line you edit; everything after it copies as it is.
 
 - **Service id**: SP UI → Services → your Service → ID.
-- **Unit id**: OEM UI → Units → your test Unit → ID. Not the System UID. Or look both up with the API:
+- **Unit id**: OEM UI → Units → your Verification Set Unit → ID. Not the System UID. Or look both up with the API:
   [find a Service id](api.md#find-the-service-id), [find a Unit id](api.md#find-a-unit-id).
 - **Service version**: the Service version you upload in step 6, `items[].version` in its `config.yaml`. It must be new.
 

@@ -23,7 +23,7 @@ source .venv/bin/activate && source .aos-verify.env && source .aos-verify/state
 | A2 | Upload processed | the bundle is refused, and nobody notices | `aos-signer upload` output; SP UI Deployment bundles; `wait` says `no Verification batch yet` | Scenarios covered: Checked now | Done: seen on production, 30.10; Error with the reason: seen on production, 28.10 |
 | A3 | Same Service version uploaded again | a decision on an old Service version | `wait`: no batch, exit 2, nothing decided | Scenarios covered: Covered by the waiting logic | seen on production, 28.10 |
 | A4 | Evidence for every release | nobody can say later why a Service version was approved | the report, `junit.xml`, the job log, the batch in the UI | the report itself | seen on production, 30.10: batch Verified in the UI |
-| B1 | On every test Unit | approved before the Service version runs everywhere | `wait`, then the built-in checks read it again | Built-in checks: B1 | seen on production, 30.10: active on the test Unit about 15 s after the upload |
+| B1 | On every Verification Set Unit | approved before the Service version runs everywhere | `wait`, then the built-in checks read it again | Built-in checks: B1 | seen on production, 30.10: active on the test Unit about 15 s after the upload |
 | B2 | A Unit that never gets it | approved while half of the Units never got it | `wait` times out, exit 2, no decision | Scenarios covered: Covered by the waiting logic | seen on production, 29.10 |
 | C1 | The Service's own tests | the Service version runs but does not work | `tests/your_tests.sh` | Partner tests | seen on production, 30.10: the sample checks passed |
 | C2 | Crash on start | a Service version that does not start is approved | `wait` exit 1 → reject; the built-in checks read it again | Built-in checks: C2 | seen on production, 29.10 |
@@ -47,7 +47,7 @@ python verify_batch.py discover --dry-run
 **What you see.** One JSON line, or `no waiting Verification batch`. In the report, Scenarios covered: "found by the watch in GitHub: batch
 …, Service version …, Units from the Verification Set", or "found by ./aos-verify on this computer: …".
 
-**The decision.** None here. With no test Unit: exit 2, and nothing starts.
+**The decision.** None here. With no Verification Set Unit: exit 2, and nothing starts.
 
 ## A1. Exactly this Service and Service version
 
@@ -106,7 +106,7 @@ Invalid.
 
 ## B1. On every listed Unit
 
-**What it checks.** The Service version runs on every test Unit before the checks go on.
+**What it checks.** The Service version runs on every Verification Set Unit before the checks go on.
 
 **How.** In the job, the Units come from AosCloud. In the terminal, or to override them: one `--unit` per test Unit
 (in the job: `AOS_TEST_UNITS`, separated by spaces; in the terminal: `AOS_TEST_UNITS` instead of `UNIT_ID`). `wait`
@@ -116,8 +116,7 @@ waits for each; the built-in checks read each again.
 python verify_batch.py check --service-id "$SERVICE_ID" --unit "$UNIT_ID"
 ```
 
-**What you see.** `wait` prints `Verification batch …: Unit … installed`; the report: `B1 … is installed and running on every test
-Unit PASS`, "Service version … active on 1 of 1 Units".
+**What you see.** `wait` prints `Verification batch …: Unit … installed`; the report: `B1 … is installed and running on every Verification Set Unit PASS`, "Service version … active on 1 of 1 Units".
 
 **The decision.** Exit 0 only when the Service version is active on every Unit; then the checks run.
 
