@@ -1,4 +1,4 @@
-# Partner tests
+# Checks and the report
 
 This page says what `tests/run_tests.sh` checks, what its report shows, how to add your own tests, and how to check
 the example itself.
@@ -23,7 +23,7 @@ It runs after `wait`, and takes no arguments. `./aos-verify run` and `./aos-veri
    **verification-report** at the bottom of that page.
 
 **Exit 0 approves the Service version. Exit 1 (a check failed) rejects it**, unless you changed that with
-[`AOS_DECISION`](../README.md#automatic-decision). After the decision the report says what was done. Exit 2 means a value is missing. Exit 3 means
+[`AOS_DECISION`](how-it-works.md#decision-modes). After the decision the report says what was done. Exit 2 means a value is missing. Exit 3 means
 AosCloud could not be read or a test Unit is offline: nothing is decided, because neither says anything about the Service version.
 
 ![The test Unit runs the new Service version (Unit → Subjects & Services → Service Instances)](img/09-sp-unit-service-instances.png)
@@ -71,6 +71,6 @@ pip install pytest requests
 python -m pytest -q
 ```
 
-You should see `164 passed`. Without `bash` (plain Windows), the 48 tests that use `bash` are skipped.
+From the zip you should see `355 passed, 9 skipped` (the 9 need the demo files, which are not in the zip). Without `bash` (plain Windows), the 42 tests that use `bash` are skipped too.
 
 **Next →** [Example checks](checks.md): 12 scenarios we ran on production, with the code

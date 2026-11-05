@@ -1,12 +1,12 @@
 # AosCloud API reference, with examples
 
 This page lists every AosCloud API call that the job and the prerequisites use, each with a `curl` example and a
-short sample response. Start with the [README](../README.md#how-to-use-this-repository) if you have not set up the job yet.
+short sample response. Start with the [README](../README.md#add-it-to-your-pipeline) if you have not set up the job yet.
 
 > **What the job needs from AosCloud.** Calls: `GET verification-batch/`, `GET verification-batch/{id}/`,
 > `GET verification-batch/{id}/statistics/`, `GET services/{id}/units/`, `GET units/{id}/`,
 > `GET units/{id}/subjects-services/{service id}/`, one `PATCH verification-batch/{id}/`. Permissions:
-> [README, prerequisite A](../README.md#a-a-service-that-your-pipeline-already-deploys-sp). Two gaps: no notification
+> [Setup, prerequisite A](setup.md#a-a-service-that-your-pipeline-already-deploys-sp). Two gaps: no notification
 > when a batch waits, so the job polls; PATCH is accepted on a decided batch, so the last decision wins.
 
 > **Before you call the API**
@@ -322,4 +322,4 @@ deployment-bundles/upload/, permission deployment_bundles_create). The job itsel
 
 Every call above is part of the public AosCloud API v11. The Swagger reference lists all the other calls.
 
-**Next →** [FAQ and tips](faq.md) · back to the [README](../README.md)
+**Next →** [FAQ](faq.md) · back to the [README](../README.md#read-more)

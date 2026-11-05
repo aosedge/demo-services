@@ -1,6 +1,6 @@
 # Run it from your terminal
 
-To try it, or to find out why the job failed. In GitHub you need none of this: [Set it up in GitHub](../README.md#set-it-up-in-github).
+To try it, or to find out why the job failed. In GitHub you need none of this: [Add it to your pipeline](../README.md#add-it-to-your-pipeline).
 Three blocks, in this order: setup, upload, run. If you start `run` first, it waits up to 2 min for your upload. It needs bash: Terminal on macOS and Linux, Git Bash on Windows (not tested on Windows yet).
 
 ## 1. Clone and set up
@@ -11,7 +11,7 @@ git clone -b verification-example https://github.com/aosedge/demo-services && cd
 
 It checks the tools, creates `.venv`, finds your SP certificate under `~/.aos/security` and makes the PEM file from it,
 copies the root CA from `aos-keys`, and asks three things: the API URL (Enter takes production), which Service, if your
-SP has several, and who decides after the checks ([Automatic decision](../README.md#automatic-decision); Enter takes `ask`).
+SP has several, and who decides after the checks ([Decision modes](how-it-works.md#decision-modes); Enter takes `ask`).
 With several SP certificates it shows a numbered list, with the SP company next to each; pick the one of the AosCloud you
 call. If it asks for a password, that is the password of the `.p12` file, not of your computer.
 
@@ -104,7 +104,7 @@ Reload the report too: it now says `Decision: approved, <time>, Verification bat
 | Option | What it does |
 |---|---|
 | `--dry-run` | everything up to the decision; sends nothing |
-| `--yes` | the short form of `AOS_DECISION=auto`: approves or rejects without asking, as the job does ([Automatic decision](../README.md#automatic-decision)) |
+| `--yes` | the short form of `AOS_DECISION=auto`: approves or rejects without asking, as the job does ([Decision modes](how-it-works.md#decision-modes)) |
 | `--no-open` | does not open the report |
 | `--poll SECONDS`, `--timeout SECONDS` | how long to ask for a batch (default 120, or `AOS_DISCOVER_TIMEOUT`), how long to wait for the Service version (default 1800, or `AOS_WAIT_TIMEOUT`) |
 
@@ -381,7 +381,7 @@ command that reads this line, like `$(…)`, gets them whole:
 ```
 
 If it says `no Verification Set Unit`, a Unit is missing from the Verification Set, or the Service is not linked to it
-([prerequisite B](../README.md#b-verification-configured-oem)).
+([prerequisite B](setup.md#b-verification-configured-oem)).
 
 ### 7. Wait
 
@@ -519,4 +519,4 @@ If your test Units do not cover every architecture of the batch, add `--arch` fo
 
 Delete `user.pem` when you are done: it holds your private key.
 
-**Next →** [Set it up in GitHub](../README.md#set-it-up-in-github), then [Partner tests](tests.md)
+**Next →** [Setup](setup.md), then [Checks and the report](tests.md)

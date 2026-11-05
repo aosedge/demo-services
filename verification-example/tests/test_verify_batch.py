@@ -495,7 +495,7 @@ def test_a_success_without_a_json_body_still_exits_0(cloud, capsys, body):
     assert decide() == 0 and capsys.readouterr().out.strip() == f'Verification batch {verify_batch.short(BATCH)} (amd64): approved, sent'
 
 
-# discover: step 0, reads only
+# discover: step 4 (Start B), reads only
 
 def waiting(version, batch_id=None, state='Waiting_validation', service=SERVICE):
     return {'id': batch_id or 'batch-' + version.replace('.', '_'), 'state': state, 'architectures': ['amd64'],
@@ -944,10 +944,10 @@ def test_your_tests_step_has_no_secret_and_only_the_verdict_decides():
 
 def test_only_the_discover_step_of_the_watch_has_the_key():
     text = WATCH.read_text(encoding='utf-8')
-    # twice: the trim step only checks that it is there, step 0 writes it
-    assert text.count('secrets.AOS_USER_PEM') == 2 and 'secrets.AOS_USER_PEM' in workflow_step('0. Ask', WATCH)
+    # twice: the trim step only checks that it is there, step 4 writes it
+    assert text.count('secrets.AOS_USER_PEM') == 2 and 'secrets.AOS_USER_PEM' in workflow_step('4. Ask', WATCH)
     assert '$USER_PEM' not in workflow_step('Check and trim', WATCH).split('if [ -z "$USER_PEM" ]', 1)[1]
-    assert 'GH_TOKEN' not in workflow_step('0. Ask', WATCH) and 'persist-credentials: false' in text
+    assert 'GH_TOKEN' not in workflow_step('4. Ask', WATCH) and 'persist-credentials: false' in text
     assert 'secrets.' not in workflow_step('Start one', WATCH)
 
 
@@ -972,14 +972,14 @@ def test_the_discover_step_deletes_the_key_and_calls_discover(tmp_path):
     env = {'PATH': f"{fake}:{os.environ['PATH']}", 'RUNNER_TEMP': str(tmp_path), 'USER_PEM': 'PEM',
            'AOS_CA': str(tmp_path / 'aos' / 'aos-root-ca.crt'), 'TEST_UNITS': 'unit-chosen', 'CALLED': str(tmp_path / 'called'),
            'SERVICE_ID': 'service-chosen'}
-    run = subprocess.run(['bash', '-e', '-c', step('0. Ask', WATCH)], env=env, capture_output=True, text=True,
+    run = subprocess.run(['bash', '-e', '-c', step('4. Ask', WATCH)], env=env, capture_output=True, text=True,
                          timeout=60, check=False)
     assert run.returncode == 0, run.stderr
     assert (tmp_path / 'called').read_text().strip() == 'verify_batch.py discover --unit unit-chosen'
     assert not (tmp_path / 'aos').exists()
     (tmp_path / 'aos').mkdir()
     (tmp_path / 'aos' / 'aos-root-ca.crt').write_text('CA')
-    run = subprocess.run(['bash', '-e', '-c', step('0. Ask', WATCH)], env={**env, 'FAKE_CODE': '2'}, capture_output=True,
+    run = subprocess.run(['bash', '-e', '-c', step('4. Ask', WATCH)], env={**env, 'FAKE_CODE': '2'}, capture_output=True,
                          text=True, timeout=60, check=False)
     assert run.returncode == 2 and not (tmp_path / 'aos').exists()
 
@@ -1000,10 +1000,12 @@ def test_the_watch_asks_every_5_minutes_and_can_write_actions():
     assert 'actions: write' in text and 'contents: read' in text
 
 
-def test_the_readme_shows_the_watch_as_it_is():
-    readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    assert '[`.github/workflows/watch-batches.yml`](.github/workflows/watch-batches.yml)' in readme
-    assert '```yaml\n# Ask AosCloud on a schedule' not in readme and '<details>' not in readme
+def test_the_docs_show_the_watch_as_it_is():
+    setup = (ROOT / 'docs' / 'setup.md').read_text(encoding='utf-8')
+    assert '[`.github/workflows/watch-batches.yml`](../.github/workflows/watch-batches.yml)' in setup
+    for name in ('README.md', 'docs/setup.md', 'docs/how-it-works.md'):
+        text = (ROOT / name).read_text(encoding='utf-8')
+        assert '```yaml\n# Ask AosCloud on a schedule' not in text and '<details>' not in text
 
 
 # check and status: read only
@@ -1398,7 +1400,7 @@ def test_a2_is_checked_and_e2_waits_for_the_next_version(tmp_path):
 
 
 @pytest.mark.parametrize('code, change', [
-    ('⓪', '—'), ('A1', '—'), ('A2', '—'), ('A3', '—'), ('A4', '—'), ('B1', 'AOS_WAIT_TIMEOUT'), ('B2', 'AOS_WAIT_TIMEOUT'),
+    ('4', '—'), ('A1', '—'), ('A2', '—'), ('A3', '—'), ('A4', '—'), ('B1', 'AOS_WAIT_TIMEOUT'), ('B2', 'AOS_WAIT_TIMEOUT'),
     ('C1', 'your_tests.sh'), ('C2', '—'), ('C3', 'AOS_WATCH_SECONDS'), ('C4', 'AOS_WATCH_SECONDS, your_tests.sh'),
     ('D1', '—'), ('D2', '—'), ('E1', 'your_tests.sh'), ('E2', '—')])
 def test_the_report_says_what_you_can_change(tmp_path, code, change):
@@ -1464,34 +1466,36 @@ def plain(text: str) -> str:
     return html.unescape(re.sub(r'<[^>]+>', '', text.replace('`', '').replace('**', '')))
 
 
-def start_here_overview() -> str:
+def start_here_page(page_id: str) -> str:
     page = (ROOT / 'START_HERE.html').read_text(encoding='utf-8')
-    return page[page.index('<section class="page" id="overview">'):page.index('<section class="page" id="prerequisites">')]
+    section = page[page.index(f'<section class="page" id="{page_id}">'):]
+    return section[:section.index('</section>')]
 
 
-def test_the_box_is_right_below_the_tables_in_the_readme_and_start_here():
-    readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    box = readme[readme.index('> [!IMPORTANT]'):readme.index('## How to use this repository')]
+def test_the_defaults_are_in_decision_modes_and_start_here():
+    page = (ROOT / 'docs' / 'how-it-works.md').read_text(encoding='utf-8')
+    box = page[page.index('## Decision modes'):page.index('One setting, `AOS_DECISION`')]
     box = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', box)  # a link reads as its words
     for line in BOX:
         assert line in plain(box), line
-        assert line in plain(start_here_overview()), line
-    order = ['Nothing reaches the fleet before the decision.', '## How the job knows it is time', '](docs/img/flow.svg)',
-             '## It ran on production', '## Limits', '## Step by step', '> [!IMPORTANT]', '## How to use this repository']
-    assert [readme.index(part) for part in order] == sorted(readme.index(part) for part in order)
-    assert '<blockquote class="alert">' in start_here_overview() and '[!IMPORTANT]' not in start_here_overview()
+        assert line in plain(start_here_page('how-it-works')), line
+    readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+    assert 'Defaults:' not in readme and '[!IMPORTANT]' not in readme
+    assert '](docs/how-it-works.md#decision-modes)' in readme
 
 
 def test_why_every_5_minutes_says_the_same_everywhere():
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    assert 'Why every 5 minutes' not in readme and 'docs/faq.md#the-watch-timing-and-old-verification-batches' in readme
+    assert 'Why every 5 minutes' not in readme
     assert WHY in plain((ROOT / 'docs/faq.md').read_text(encoding='utf-8'))
+    assert WHY in plain((ROOT / 'docs/how-it-works.md').read_text(encoding='utf-8'))
     text = WATCH.read_text(encoding='utf-8')
     above = text[text.index('schedule:'):text.index('- cron:')]
     assert WHY in ' '.join(line.strip().lstrip('# ') for line in above.splitlines()[1:])
 
 
-@pytest.mark.parametrize('name', ['README.md', 'START_HERE.html', 'docs/faq.md', 'docs/run-locally.md', 'docs/img/sequence.svg'])
+@pytest.mark.parametrize('name', ['README.md', 'START_HERE.html', 'docs/faq.md', 'docs/run-locally.md', 'docs/setup.md',
+                                  'docs/how-it-works.md', 'docs/img/sequence.svg'])
 def test_every_5_minutes_is_the_default_in_the_docs(name):
     text = re.sub(r'\s*\n\s*#?\s*', ' ', plain((ROOT / name).read_text(encoding='utf-8')))
     # the only 10 left is the example of how to change it
@@ -1931,8 +1935,9 @@ def test_try_it_has_the_five_steps_and_the_readme_links_it():
         assert name in page
     assert verify_batch.AN_UUID.search(page) is None and '@' not in page
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    assert readme.index('TRY_IT.md') > readme.index('| – | Result |') and readme.index('TRY_IT.md') < readme.index('> [!IMPORTANT]')
-    assert readme.index('## How the job knows') < readme.index('![Automatic verification')
+    assert readme.index('## Add it to your pipeline') < readme.index('## Try it in your browser') < readme.index('TRY_IT.md')
+    assert readme.index('TRY_IT.md') < readme.index('## Read more')
+    assert readme.index('![Automatic verification') < readme.index('## How the job knows')
     assert '**Two pipelines on one Service: pause one.**' in (ROOT / 'docs' / 'faq.md').read_text(encoding='utf-8')
 
 
@@ -1951,29 +1956,111 @@ def test_a_4xx_or_tls_error_in_the_observation_is_no_fail_and_no_reject(says, re
         assert 'FAIL C3/C4' not in run.stdout
 
 
-# The README for a first reader: the proof and the limits first, one place for each, and a short page.
-def test_the_proof_and_the_limits_come_right_after_the_first_diagram():
+# The README is one screen in: title, intro, diagram; then the 3 steps and links. Everything else is in docs/.
+README_ORDER = ['# Automatic verification of a new Service version', 'Nothing reaches the fleet before the decision.',
+                'runs in any CI with Python 3.10 that reaches AosCloud', '![Automatic verification', '](docs/img/flow.svg)',
+                '[Open the diagram at full size](https://raw.githubusercontent.com/aosedge/demo-services/main/'
+                'verification-example/docs/img/flow.svg)',
+                'Tested on AosCloud 6.1.97, 05–06.11.2026: a Service version uploaded from GitHub was Verified about '
+                '1.5 min later, with no step in between.',
+                '## How the job knows it is time', 'The calls: six GETs and one PATCH', '## Add it to your pipeline',
+                '## Try it in your browser', '## Read more', 'Maintained by the AosEdge team']
+
+
+def test_the_readme_is_one_screen_in_and_short():
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    proof = readme[readme.index('## It ran on production'):readme.index('## Limits')]
+    assert len(readme.splitlines()) < 80
+    assert [readme.index(part) for part in README_ORDER] == sorted(readme.index(part) for part in README_ORDER)
+    assert [line for line in readme.splitlines() if line.startswith('## ')] == [
+        '## How the job knows it is time', '## Add it to your pipeline', '## Try it in your browser', '## Read more']
+    assert readme.splitlines()[-1].startswith('Maintained by the AosEdge team')
+    for gone in ('Defaults', '## Limits', 'It ran on production', '## Step by step', '## Prerequisites', '## Parameters',
+                 '## Security', 'sequence.svg', 'Not yet run on GitHub'):
+        assert gone not in readme, gone
+    for target in ('docs/setup.md', 'docs/how-it-works.md', 'docs/tests.md', 'docs/checks.md', 'docs/api.md', 'docs/faq.md',
+                   'docs/run-locally.md'):
+        assert f']({target})' in readme.split('## Read more')[1], target
+
+
+def test_the_readme_snippet_is_the_verify_job_of_the_example():
+    readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+    snippet = readme.split('```yaml\n')[1].split('```')[0]
+    snippet = textwrap.dedent('\n'.join(line[3:] for line in snippet.splitlines()))
+    example = (ROOT / 'examples' / 'release-caller.yml').read_text(encoding='utf-8')
+    assert snippet.strip() and textwrap.indent(snippet.strip(), '  ') in example
+
+
+def test_the_proof_and_the_limits_moved_to_one_place_each():
+    page = (ROOT / 'docs' / 'how-it-works.md').read_text(encoding='utf-8')
+    proof = page[page.index('## Tested on AosCloud'):]
     assert proof.count('| 05.11.2026 | GitHub |') == 2 and '| 30.10.2026 | Terminal |' in proof
-    assert 'pressed once' in proof and 'Production AosCloud 6.1.97.' in proof
-    limits = readme[readme.index('## Limits'):readme.index('## Step by step')]
-    for part in ('no webhook', 'best-effort', 'second decision', 'offline means no decision', 'Not yet run on GitHub', '6.2.31'):
+    assert '| 06.11.2026 | GitHub | A fresh fork' in proof and 'Production AosCloud 6.1.97.' in proof
+    faq = (ROOT / 'docs' / 'faq.md').read_text(encoding='utf-8')
+    assert faq.index('## Limits') < faq.index('## Before you start')
+    limits = faq[faq.index('## Limits'):faq.index('## Before you start')]
+    for part in ('no webhook', 'best-effort', 'second decision', 'offline means no decision', 'Not yet run on GitHub', '6.2.31',
+                 'one Service per repository'):
         assert part in limits, part
-    rest = readme.replace(limits, '')
-    for caveat in ('Scheduled starts are being confirmed', 'Not yet run on GitHub', '0 scheduled runs', 'Status 05.11.2026'):
-        assert caveat not in rest, caveat
+    for name in ('README.md', 'docs/setup.md', 'docs/how-it-works.md'):
+        rest = (ROOT / name).read_text(encoding='utf-8')
+        for caveat in ('Scheduled starts are being confirmed', 'Not yet run on GitHub', '0 scheduled runs', 'Status 05.11.2026'):
+            assert caveat not in rest, (name, caveat)
 
 
-def test_the_readme_is_short_and_who_tells_whom_has_its_own_page():
-    readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    assert len(readme.splitlines()) <= 330 and 'sequence.svg' not in readme and '(docs/who-tells-whom.md)' in readme
-    page = (ROOT / 'docs' / 'who-tells-whom.md').read_text(encoding='utf-8')
-    assert '](img/sequence.svg)' in page and '| Who | Tells whom |' in page
-    assert 'runs in any CI with Python 3.10 that reaches AosCloud' in readme and '## Who maintains this' in readme
+def test_setup_and_how_it_works_hold_what_left_the_readme():
+    setup = (ROOT / 'docs' / 'setup.md').read_text(encoding='utf-8')
     for letter in 'ABC':
-        assert f'\n### {letter}. ' in readme
-    assert not re.search(r'^### [123]\. ', readme, re.M)
+        assert f'\n### {letter}. ' in setup
+    for heading in ('## Before you start', '## Who has to act', '## Secrets', '## Start A: after your upload',
+                    '## Start B: the watch', '## Parameters', '## Security', '## Who maintains this'):
+        assert f'\n{heading}\n' in setup, heading
+    assert '| `AOS_WATCH` |' in setup and '| `AOS_DECISION` |' in setup and 'SP, once (a user who may create users)' in setup
+    page = (ROOT / 'docs' / 'how-it-works.md').read_text(encoding='utf-8')
+    for heading in ('## Step by step', '### 5. Wait', '### 6. Test', '### 7. Decide', '## Decision modes',
+                    '## The watch (Start B)', '## Who tells whom', '## Tested on AosCloud'):
+        assert f'\n{heading}' in page, heading
+    assert '](img/sequence.svg)' in page and '| Who | Tells whom |' in page
+    assert not (ROOT / 'docs' / 'who-tells-whom.md').exists()
+
+
+def test_one_numbering_1_to_7_everywhere():
+    for name in ('README.md', 'TRY_IT.md', 'docs/setup.md', 'docs/how-it-works.md', 'docs/checks.md', 'docs/faq.md',
+                 'docs/img/flow.svg', 'docs/img/sequence.svg', 'tests/report.py', WATCH.relative_to(ROOT).as_posix()):
+        if not (ROOT / name).exists():  # TRY_IT.md is not in the partner zip
+            continue
+        text = (ROOT / name).read_text(encoding='utf-8')
+        assert not re.search('[⓪③④]|step 0|0 is the', text), name
+    page = (ROOT / 'docs' / 'how-it-works.md').read_text(encoding='utf-8')
+    steps = re.findall(r'^\| (\d) \| ', page[page.index('## Step by step'):page.index('## The verification job')], re.M)
+    assert steps == list('1234567')
+    assert '- name: 4. Ask AosCloud' in WATCH.read_text(encoding='utf-8')
+    for name in ('flow.svg', 'sequence.svg'):
+        svg = (ROOT / 'docs' / 'img' / name).read_text(encoding='utf-8')
+        digits = re.findall(r'<circle cx="[\d.]+" cy="[\d.]+" r="(\d+)"[^>]*/>\n<text [^>]*>(\d)</text>', svg)
+        assert sorted({d for _, d in digits}) == list('1234567'), name
+        assert {r for r, _ in digits} == {'14'}, name
+        alt = re.search(r'aria-label="([^"]*)"', svg)[1]
+        assert alt == re.search(r'<title>([^<]*)</title>', svg)[1] and ' 0,' not in alt and 'Step 0' not in alt
+
+
+def github_anchor(heading: str) -> str:
+    heading = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', heading).replace('`', '')
+    return re.sub(r'[^\w\- ]', '', heading.strip().lower()).replace(' ', '-')
+
+
+def test_every_link_between_the_pages_resolves():
+    pages = [ROOT / 'README.md', ROOT / 'TRY_IT.md', *sorted((ROOT / 'docs').glob('*.md'))]
+    for page in (p for p in pages if p.exists()):
+        text = re.sub(r'```.*?```', '', page.read_text(encoding='utf-8'), flags=re.S)
+        for target in re.findall(r'\]\(([^)\s]+)\)', text):
+            if target.startswith(('http://', 'https://')):
+                continue
+            path, _, anchor = target.partition('#')
+            file = (page.parent / path).resolve() if path else page
+            assert file.exists(), (page.name, target)
+            if anchor and file.suffix == '.md':
+                headings = re.findall(r'^#{1,6} (.*)$', file.read_text(encoding='utf-8'), re.M)
+                assert anchor in {github_anchor(h) for h in headings}, (page.name, target)
 
 
 def test_start_a_is_the_main_start_and_the_watch_the_fallback():
@@ -1984,11 +2071,11 @@ def test_start_a_is_the_main_start_and_the_watch_the_fallback():
     for picture in (flow, sequence):
         assert 'Why polling' not in picture and "5 min is GitHub's minimum, best effort" in picture
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    assert 'Start it from your upload workflow (Start A)' in readme and 'The watch finds each new Service version by itself' not in readme
+    assert 'Start it after your upload (Start A)' in readme and 'The watch finds each new Service version by itself' not in readme
 
 
 def test_no_internal_words_reach_a_partner():
-    for name in ('README.md', 'TRY_IT.md', 'docs/faq.md', 'docs/api.md', 'docs/who-tells-whom.md'):
+    for name in ('README.md', 'TRY_IT.md', 'docs/faq.md', 'docs/api.md', 'docs/setup.md', 'docs/how-it-works.md'):
         if not (ROOT / name).exists():  # TRY_IT.md is not in the partner zip
             continue
         text = (ROOT / name).read_text(encoding='utf-8')

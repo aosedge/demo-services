@@ -25,7 +25,7 @@ from xml.sax.saxutils import quoteattr
 GROUPS = [('A', 'upload and Verification batch'), ('B', 'delivery to the Verification Set Units'), ('C', 'the Service runs'),
           ('D', 'next to other Services'), ('E', 'configuration and recovery')]
 SCENARIOS = [
-    ('⓪', 'Found automatically (discover)'),
+    ('4', 'Found automatically (discover)'),
     ('A1', 'Exactly this Service and Service version'), ('A2', 'Upload processed'), ('A3', 'Same Service version uploaded again'),
     ('A4', 'Evidence for every release'), ('B1', 'On every Verification Set Unit'), ('B2', 'A Unit that never gets it'),
     ('C1', "The Service's own tests"), ('C2', 'Crash on start'), ('C3', 'Late failure'), ('C4', 'Restarts'),
@@ -88,7 +88,7 @@ def coverage(rows: list[dict], observe: int, found: tuple[str, str]) -> dict[str
                          OBSERVATION_OFF))
     no_tests = (NOT_RUN, 'none added: add them to tests/your_tests.sh')
     return {
-        '⓪': found,
+        '4': found,
         'A1': (CHECKED, builtin.get('A1', 'FAIL')),
         'A2': (CHECKED, 'The Verification batch exists, so AosCloud processed the upload.'),
         'A3': (WAITING_LOGIC, 'Did not happen in this run. If it does: a Service version that already exists gets no '

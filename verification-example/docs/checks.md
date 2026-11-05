@@ -1,6 +1,6 @@
 # Example checks
 
-12 scenarios we ran on production AosCloud 6.1 (28–30.10.2026), and step ⓪, finding the Verification batch. Use them as a starting point if you have no tests
+12 scenarios we ran on production AosCloud 6.1 (28–30.10.2026), and step 4, finding the Verification batch. Use them as a starting point if you have no tests
 yet. Most are already built into `verify_batch.py` and `tests/run_tests.sh`; the rest are a few lines in
 `tests/your_tests.sh`.
 
@@ -18,7 +18,7 @@ source .venv/bin/activate && source .aos-verify.env && source .aos-verify/state
 
 | # | Scenario | What can go wrong | Covered by | Row in the report | Result on production |
 |---|---|---|---|---|---|
-| ⓪ | Found automatically (discover) | nobody starts the job, or it starts on an old Verification batch | `discover`: the highest Service version, Units from the Verification Set | Scenarios covered: batch …, Service version …, Units from the Verification Set | read-only on production and on staging, 04.11: right batch, stale ones left alone. On GitHub, 05.11: the watch, started by hand, found 4.11.0 and started verify-batch; demo-upload started verify-batch on 05.11 (4.11.1) and 06.11 (4.11.2). GitHub has not yet run the watch on its schedule in this repository |
+| 4 | Found automatically (discover) | nobody starts the job, or it starts on an old Verification batch | `discover`: the highest Service version, Units from the Verification Set | Scenarios covered: batch …, Service version …, Units from the Verification Set | read-only on production and on staging, 04.11: right batch, stale ones left alone. On GitHub, 05.11: the watch, started by hand, found 4.11.0 and started verify-batch; demo-upload started verify-batch on 05.11 (4.11.1) and 06.11 (4.11.2). GitHub has not yet run the watch on its schedule in this repository |
 | A1 | Exactly this Service and Service version | a decision on the wrong batch | `wait`, then the built-in checks read it again | Built-in checks: A1 | seen on production, 30.10: the batch of the uploaded Service version found |
 | A2 | Upload processed | the bundle is refused, and nobody notices | `aos-signer upload` output; SP UI Deployment bundles; `wait` says `no Verification batch yet` | Scenarios covered: Checked now | Done: seen on production, 30.10; Error with the reason: seen on production, 28.10 |
 | A3 | Same Service version uploaded again | a decision on an old Service version | `wait`: no batch, exit 2, nothing decided | Scenarios covered: Covered by the waiting logic | seen on production, 28.10 |
@@ -32,7 +32,7 @@ source .venv/bin/activate && source .aos-verify.env && source .aos-verify/state
 | E1 | Bad configuration | a wrong setting ships with good code | a config test in `tests/your_tests.sh` | Partner tests | seen on production, 29.10 |
 | E2 | Recovery: the fixed Service version | the fix skips the gate | upload the fix as a new Service version; the same steps approve it | the report of the fixed Service version | seen on production, 29.10 |
 
-## ⓪. Found automatically (discover)
+## 4. Found automatically (discover)
 
 **What it checks.** The right Verification batch and the right Units are found with nobody naming them: by the watch in GitHub, by
 `./aos-verify run` on a laptop.
