@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 346" width="1000" height="346" font-family="Roboto, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" role="img" aria-label="Your upload job uploads a new version; AosCloud holds it in a Verification batch and sends it only to the Verification Set; the verification job waits, runs your tests and decides once: approve gives Verified and the version goes on to the fleet, reject gives Invalid and it stops"><title>Your upload job uploads a new version; AosCloud holds it in a Verification batch and sends it only to the Verification Set; the verification job waits, runs your tests and decides once: approve gives Verified and the version goes on to the fleet, reject gives Invalid and it stops</title><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5793CE"/></marker>
+<filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#173D7A" flood-opacity="0.12"/></filter></defs>
+<rect x="0.5" y="0.5" width="999" height="345" rx="14" fill="#ffffff" stroke="#C9DDF0"/><clipPath id="top"><rect x="0.5" y="0.5" width="999" height="200" rx="14"/></clipPath><rect x="0" y="0" width="1000" height="46" fill="#173D7A" clip-path="url(#top)"/>
+<text x="24" y="29" font-size="16" font-weight="600" fill="#fff" text-anchor="start"><tspan fill="#4AA8FF">Aos</tspan><tspan fill="#ffffff">Edge</tspan><tspan fill="#B3E0FF" font-weight="400">  |  </tspan><tspan fill="#ffffff">Verify a new Service version in your pipeline</tspan></text>
+<text x="976" y="29" font-size="12" font-weight="400" fill="#B3E0FF" text-anchor="end">one job · three steps · one decision</text>
+<g filter="url(#sh)"><rect x="24" y="70" width="190" height="200" rx="12" fill="#fff" stroke="#C9DDF0"/></g>
+<clipPath id="c1"><rect x="24" y="70" width="190" height="200" rx="12"/></clipPath>
+<rect x="24" y="70" width="190" height="38" fill="#173D7A" clip-path="url(#c1)"/>
+<text x="40" y="86" font-size="10" font-weight="700" fill="#B3E0FF" text-anchor="start">YOUR CI PIPELINE</text>
+<text x="40" y="101" font-size="14" font-weight="700" fill="#fff" text-anchor="start">Upload job</text>
+<text x="40" y="136" font-size="13" font-weight="400" fill="#4F5F75" text-anchor="start">Build and sign</text>
+<rect x="40" y="146" width="124" height="22" rx="11" fill="#EEF7FF"/>
+<text x="101.75" y="161" font-size="11" font-weight="600" fill="#14243F" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">aos-signer sign</text>
+<text x="40" y="194" font-size="13" font-weight="400" fill="#4F5F75" text-anchor="start">Upload</text>
+<rect x="40" y="204" width="137" height="22" rx="11" fill="#EEF7FF"/>
+<text x="108.65" y="219" font-size="11" font-weight="600" fill="#14243F" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">aos-signer upload</text>
+<text x="40" y="254" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">as you do today</text>
+<g filter="url(#sh)"><rect x="254" y="70" width="230" height="200" rx="12" fill="#fff" stroke="#C9DDF0"/></g>
+<clipPath id="c2"><rect x="254" y="70" width="230" height="200" rx="12"/></clipPath>
+<rect x="254" y="70" width="230" height="38" fill="#4AA8FF" clip-path="url(#c2)"/>
+<text x="270" y="86" font-size="10" font-weight="700" fill="#ffffff" text-anchor="start">AOSCLOUD</text>
+<text x="270" y="101" font-size="14" font-weight="700" fill="#fff" text-anchor="start">Verification batch</text>
+<rect x="270" y="122" width="148" height="22" rx="11" fill="#D2EDFF"/>
+<text x="344.0" y="137" font-size="11" font-weight="600" fill="#173D7A" text-anchor="middle">Waiting verification</text>
+<text x="270" y="166" font-size="12" font-weight="400" fill="#4F5F75" text-anchor="start">The version goes only to</text>
+<text x="270" y="182" font-size="12" font-weight="400" fill="#4F5F75" text-anchor="start">the Verification Set:</text>
+<rect x="270" y="194" width="58" height="40" rx="8" fill="#EEF7FF" stroke="#C9DDF0"/>
+<text x="299" y="211" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">test</text>
+<text x="299" y="225" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">Unit</text>
+<rect x="336" y="194" width="58" height="40" rx="8" fill="#EEF7FF" stroke="#C9DDF0"/>
+<text x="365" y="211" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">test</text>
+<text x="365" y="225" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">Unit</text>
+<rect x="402" y="194" width="58" height="40" rx="8" fill="#EEF7FF" stroke="#C9DDF0"/>
+<text x="431" y="211" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">test</text>
+<text x="431" y="225" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">Unit</text>
+<text x="270" y="256" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">no other Unit gets it yet</text>
+<g filter="url(#sh)"><rect x="524" y="70" width="260" height="200" rx="12" fill="#fff" stroke="#C9DDF0"/></g>
+<clipPath id="c3"><rect x="524" y="70" width="260" height="200" rx="12"/></clipPath>
+<rect x="524" y="70" width="260" height="38" fill="#173D7A" clip-path="url(#c3)"/>
+<text x="540" y="86" font-size="10" font-weight="700" fill="#B3E0FF" text-anchor="start">THIS EXAMPLE</text>
+<text x="540" y="101" font-size="14" font-weight="700" fill="#fff" text-anchor="start">Verification job</text>
+<circle cx="552" cy="136" r="12" fill="#173D7A"/><text x="552" y="141" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+<text x="572" y="134" font-size="13" font-weight="700" fill="#14243F" text-anchor="start">Wait</text>
+<text x="622" y="134" font-size="11" font-weight="500" fill="#173D7A" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify_batch.py wait</text>
+<text x="572" y="151" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">version active on the test Units</text>
+<circle cx="552" cy="184" r="12" fill="#173D7A"/><text x="552" y="189" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+<text x="572" y="182" font-size="13" font-weight="700" fill="#14243F" text-anchor="start">Test</text>
+<text x="622" y="182" font-size="11" font-weight="500" fill="#173D7A" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">tests/run_tests.sh</text>
+<text x="572" y="199" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">your checks: exit 0 or 1</text>
+<circle cx="552" cy="232" r="12" fill="#173D7A"/><text x="552" y="237" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+<text x="572" y="230" font-size="13" font-weight="700" fill="#14243F" text-anchor="start">Decide</text>
+<text x="622" y="230" font-size="11" font-weight="500" fill="#173D7A" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify_batch.py decide</text>
+<text x="572" y="247" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">one API call, sent once</text>
+<rect x="824" y="88" width="152" height="74" rx="10" fill="#E6F5EC" stroke="#1E7A46"/>
+<text x="838" y="112" font-size="14" font-weight="700" fill="#1E7A46" text-anchor="start">✓ Approve</text>
+<text x="838" y="132" font-size="12" font-weight="500" fill="#14243F" text-anchor="start">Verified (API: Valid)</text>
+<text x="838" y="150" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">on to your normal rollout</text>
+<rect x="824" y="180" width="152" height="74" rx="10" fill="#FDEDEC" stroke="#B42318"/>
+<text x="838" y="204" font-size="14" font-weight="700" fill="#B42318" text-anchor="start">✕ Reject</text>
+<text x="838" y="224" font-size="12" font-weight="500" fill="#14243F" text-anchor="start">Invalid</text>
+<text x="838" y="242" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">stops here</text>
+<line x1="217" y1="170.0" x2="250" y2="170.0" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<text x="234.0" y="162.0" font-size="10" font-weight="500" fill="#4F5F75" text-anchor="middle">upload</text>
+<line x1="487" y1="170.0" x2="520" y2="170.0" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<text x="504.0" y="162.0" font-size="10" font-weight="500" fill="#4F5F75" text-anchor="middle">API</text>
+<path d="M786,234 C806,234 802,125 821,125" fill="none" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M786,234 C806,234 802,217 821,217" fill="none" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="24" y="292" width="952" height="34" rx="8" fill="#D2EDFF"/>
+<text x="500" y="314" font-size="12" font-weight="500" fill="#173D7A" text-anchor="middle">Public AosCloud API v11 over mutual TLS with your SP certificate · the job decides once and never changes a decided batch</text></svg>

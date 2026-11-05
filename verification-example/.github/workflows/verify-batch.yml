@@ -1,0 +1,252 @@
+# Verify a new Service version on the Verification Set, then approve or reject it in AosCloud.
+# Three ways in, one job: watch-batches.yml starts it for a batch it found (workflow_dispatch), your upload job
+# calls it right after the upload (workflow_call), or you start it by hand with the version alone (workflow_dispatch).
+name: verify-batch
+# watch-batches.yml looks for the batch id in this title, to start one run per batch
+run-name: verify-batch ${{ inputs.batch_id || 'manual' }} ${{ inputs.version }}
+
+on:
+  workflow_call:
+    inputs:
+      service_id:
+        description: AosCloud id of the Service; default the secret AOS_SERVICE_ID
+        type: string
+        required: false
+      version:
+        description: the version that was just uploaded
+        type: string
+        required: true
+      batch_id:
+        description: the batch of this version; default found by the version
+        type: string
+        required: false
+      units:
+        description: the test Units, separated by spaces; default the Units of the Verification Set that have the Service
+        type: string
+        required: false
+    secrets:
+      # not required here: they come from the environment aos-verification (see the README, Parameters)
+      # AOS_USER_PEM: one PEM file with the SP user certificate, the intermediate certificates and the key
+      # (openssl pkcs12 -in aos-user-sp.p12 -nodes -out user.pem; without -clcerts, see the README)
+      AOS_USER_PEM:
+        required: false
+      AOS_ROOT_CA_PEM:
+        required: false
+      AOS_SERVICE_ID:
+        required: false
+      AOS_API_URL:
+        required: false
+  workflow_dispatch:
+    inputs:
+      version:
+        description: the version that was uploaded
+        required: true
+      service_id:
+        description: AosCloud id of the Service; default the secret AOS_SERVICE_ID
+        required: false
+      batch_id:
+        description: the batch of this version; default found by the version
+        required: false
+      units:
+        description: the test Units, separated by spaces; default the Units of the Verification Set that have the Service
+        required: false
+
+# By version, not by batch id: an upload job does not know the batch id, and its run must queue with a run that the
+# watch started for the same batch. AosCloud has one batch per version. A secret cannot be used in this line, and the
+# group name is public: a run with the input service_id queues on its own.
+concurrency:
+  group: verify-batch-${{ inputs.service_id || 'service' }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # the secrets live in this environment; add required reviewers there if a person must confirm
+    environment: aos-verification
+    permissions:
+      contents: read
+    env:
+      AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
+      VERSION: ${{ inputs.version }}
+      # Decision mode. Change it with the variable AOS_DECISION in the environment aos-verification:
+      #   auto         all checks pass, approve; a check fails, reject. The default
+      #   report-only  the report only, no decision sent: a person decides in the AosCloud UI
+      #   ask          for a laptop: there is no terminal here to ask in, so the job sends nothing
+      AOS_DECISION: ${{ vars.AOS_DECISION || 'auto' }}
+    steps:
+      # First, and from the event file: the header of a step prints its env before any mask can apply.
+      - name: Hide the ids in this log
+        run: |
+          for id in $(jq -r '.inputs // {} | [.service_id, .batch_id, .units] | map(select(.)) | join(" ")' "$GITHUB_EVENT_PATH"); do
+            echo "::add-mask::$id"
+          done
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # The first line of the job summary.
+      - name: Say the decision mode
+        run: |
+          {
+            echo "Decision mode: $AOS_DECISION (change with the AOS_DECISION variable)"
+            echo
+            echo "Why every 5 minutes? AosCloud does not notify a pipeline, so the watch asks; 5 minutes is the shortest interval GitHub allows. To change it, edit the cron line in watch-batches.yml."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install requests
+        run: python -m pip install requests==2.32.3
+
+      - name: Write the root CA to a temporary folder
+        env:
+          ROOT_CA: ${{ secrets.AOS_ROOT_CA_PEM }}
+        run: |
+          if [ -z "$ROOT_CA" ]; then
+            echo "::error::AOS_ROOT_CA_PEM is empty: put it in the environment aos-verification (see the README, Parameters)"
+            exit 1
+          fi
+          dir="$RUNNER_TEMP/aos" && mkdir -p "$dir" && chmod 700 "$dir"
+          printf '%s\n' "$ROOT_CA" > "$dir/aos-root-ca.crt"
+          echo "AOS_CA=$dir/aos-root-ca.crt" >> "$GITHUB_ENV"
+
+      # The private key exists only while steps 1, 2a and 3 run: each writes it and deletes it when it ends.
+      # Step 2b, your tests, has no secret at all.
+      - name: 1. Wait for the batch and the version on the test Units
+        id: wait
+        env:
+          USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          SERVICE_ID: ${{ inputs.service_id || secrets.AOS_SERVICE_ID }}
+          INPUT_UNITS: ${{ inputs.units }}
+          OVERRIDE_UNITS: ${{ vars.AOS_TEST_UNITS }}
+          BATCH_INPUT: ${{ inputs.batch_id }}
+          ACTOR: ${{ github.actor }}
+          WAIT_TIMEOUT: ${{ vars.AOS_WAIT_TIMEOUT || '1800' }}
+        run: |
+          # the input first, then the optional override; both empty: wait takes the Units from AosCloud
+          units=()
+          set -f
+          for unit in ${INPUT_UNITS:-$OVERRIDE_UNITS}; do units+=(--unit "$unit"); done
+          set +f
+          # for the report: who found the batch, and where the test Units came from
+          found_by=version
+          if [ -n "$BATCH_INPUT" ] && [ "$ACTOR" = 'github-actions[bot]' ]; then found_by=watch; fi
+          units_from='the Verification Set'
+          if [ -n "$INPUT_UNITS" ] && [ "$found_by" != watch ]; then units_from='the run input'
+          elif [ -n "$OVERRIDE_UNITS" ]; then units_from=AOS_TEST_UNITS; fi
+          batch_arg=()
+          if [ -n "$BATCH_INPUT" ]; then batch_arg=(--batch-id "$BATCH_INPUT"); fi
+          if [ -z "$SERVICE_ID" ]; then echo "::error::AOS_SERVICE_ID is empty: put the secret in the environment aos-verification, or pass service_id"; exit 1; fi
+          if [ -z "$USER_PEM" ]; then
+            echo "::error::AOS_USER_PEM is empty: put it in the environment aos-verification (see the README, Parameters)"
+            exit 1
+          fi
+          export AOS_CERT="$RUNNER_TEMP/aos/user.pem"
+          trap 'rm -f "$AOS_CERT"' EXIT
+          (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
+          set +e
+          found="$RUNNER_TEMP/aos/units"
+          batch=$(python verify_batch.py wait --service-id "$SERVICE_ID" --version "$VERSION" "${units[@]}" \
+                  "${batch_arg[@]}" --units-file "$found" --timeout "$WAIT_TIMEOUT")
+          code=$?
+          set -e
+          {
+            echo "service_id=$SERVICE_ID"
+            echo "batch_id=$batch"
+            echo "units=$(cat "$found" 2>/dev/null)"
+            echo "found_by=$found_by"
+            echo "units_from=$units_from"
+            echo "code=$code"
+          } >> "$GITHUB_OUTPUT"
+          # 0 ready; 1 failed on a Unit, rejected below; anything else (timed out, decided, an error): decide nothing
+          case "$code" in 0) ;; 1) [ -n "$batch" ] || exit 1 ;; *) exit 1 ;; esac
+
+      # The built-in checks read AosCloud (the batch, the Units, the observation), so this step has the certificate.
+      # It only collects results: step 2b gives the verdict.
+      - name: 2a. Run the built-in checks
+        id: builtin
+        if: steps.wait.outputs.code == '0' || steps.wait.outputs.code == '1'
+        env:
+          SERVICE_ID: ${{ inputs.service_id || secrets.AOS_SERVICE_ID }}
+          BATCH_ID: ${{ steps.wait.outputs.batch_id }}
+          AOS_TEST_UNITS: ${{ steps.wait.outputs.units }}
+          USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          WATCH_SECONDS: ${{ vars.AOS_WATCH_SECONDS || '60' }}
+          VERSION_FAILED: ${{ steps.wait.outputs.code == '1' && 'yes' || '' }}
+          RUN_PART: builtin
+        run: |
+          export AOS_CERT="$RUNNER_TEMP/aos/user.pem"
+          trap 'rm -f "$AOS_CERT"' EXIT
+          (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
+          tests/run_tests.sh
+
+      # No secret in this step: your tests cannot read the key. Code 0 approves, 1 rejects, 3 decides nothing.
+      - name: 2b. Run your tests and write the report
+        id: tests
+        if: "!cancelled() && (steps.wait.outputs.code == '0' || steps.wait.outputs.code == '1')"
+        env:
+          SERVICE_ID: ${{ steps.wait.outputs.service_id }}
+          BATCH_ID: ${{ steps.wait.outputs.batch_id }}
+          AOS_TEST_UNITS: ${{ steps.wait.outputs.units }}
+          WATCH_SECONDS: ${{ vars.AOS_WATCH_SECONDS || '60' }}
+          FOUND_BY: ${{ steps.wait.outputs.found_by }}
+          UNITS_FROM: ${{ steps.wait.outputs.units_from }}
+          VERSION_FAILED: ${{ steps.wait.outputs.code == '1' && 'yes' || '' }}
+          RUN_PART: yours
+        run: |
+          set +e
+          tests/run_tests.sh
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: 3a. Approve
+        if: env.AOS_DECISION == 'auto' && steps.wait.outputs.code == '0' && steps.tests.outputs.code == '0'
+        env:
+          USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          BATCH_ID: ${{ steps.wait.outputs.batch_id }}
+        run: |
+          export AOS_CERT="$RUNNER_TEMP/aos/user.pem"
+          trap 'rm -f "$AOS_CERT"' EXIT
+          (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
+          python verify_batch.py decide --batch-id "$BATCH_ID" --approve --report-dir report
+
+      - name: 3b. Reject
+        if: >-
+          always() && env.AOS_DECISION == 'auto' && steps.wait.outputs.batch_id != '' &&
+          (steps.wait.outputs.code == '1' || steps.tests.outputs.code == '1')
+        env:
+          USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          BATCH_ID: ${{ steps.wait.outputs.batch_id }}
+        run: |
+          export AOS_CERT="$RUNNER_TEMP/aos/user.pem"
+          trap 'rm -f "$AOS_CERT"' EXIT
+          (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
+          python verify_batch.py decide --batch-id "$BATCH_ID" --reject --report-dir report
+          echo "Rejected: the new version failed on a test Unit or in the tests." && exit 1
+
+      - name: 3. No decision (AOS_DECISION is not auto)
+        if: always() && env.AOS_DECISION != 'auto' && steps.tests.outcome != 'skipped'
+        env:
+          BATCH_ID: ${{ steps.wait.outputs.batch_id }}
+        run: |
+          echo "AOS_DECISION=$AOS_DECISION: nothing sent. A person decides in the SP UI, Verification batches."
+          python tests/report.py --out report --batch-id "$BATCH_ID" --decision report-only
+
+      # After the decision, so that the report says what was decided.
+      - name: Keep the report
+        if: always() && steps.tests.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-report
+          path: report/
+          if-no-files-found: ignore
+
+      - name: Remove the certificates
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/aos"

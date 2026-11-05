@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Your tests of the new version. Copy this file to tests/your_tests.sh and put your own tests in it:
+#     cp tests/your_tests.sh.example tests/your_tests.sh
+# tests/run_tests.sh runs it after the built-in checks, with SERVICE_ID, VERSION, BATCH_ID and UNIT_ID (or AOS_TEST_UNITS) in
+# its environment, and puts its PASS and FAIL lines into the report. Print one line per test:
+#     PASS <name>          or          FAIL <name>: <why>
+# Exit 0 when every test passed. The three examples below need your values, so they fail until you change them.
+set -u
+failed=0
+
+check() {  # check <name> <command...>
+  local name=$1; shift
+  if "$@" > /dev/null 2>&1; then echo "PASS $name"; else echo "FAIL $name: $* failed"; failed=1; fi
+}
+
+UNIT_HOST=${UNIT_HOST:-unit.example}
+
+# 1. The health endpoint of your Service on a test Unit (needs a network path from here to the Unit).
+check health_endpoint curl -fsS --max-time 10 "http://$UNIT_HOST:8080/health"
+
+# 2. Your test suite, for example pytest.
+check acceptance_suite python -m pytest -q acceptance/
+
+# 3. A request to the main feature, compared with the expected answer.
+# shellcheck disable=SC2317  # called through check
+main_feature() { curl -fsS --max-time 10 "http://$UNIT_HOST:8080/api/status" | grep -q '"status": *"ok"'; }
+check main_feature main_feature
+
+exit $failed

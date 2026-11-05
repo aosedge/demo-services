@@ -1,0 +1,788 @@
+#!/usr/bin/env bash
+# Copyright (c) 2018-2026 EPAM Systems Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# One command for the verification flow on a laptop, and the helper that fills the GitHub secrets.
+# Runs on bash 3.2 (macOS), Linux and Git Bash on Windows.
+set -u
+
+HERE=$(cd "$(dirname "$0")" && pwd)
+cd "$HERE" || exit 2
+ENV_FILE=.aos-verify.env
+DIR=.aos-verify
+STATE=$DIR/state
+PROD_URL=https://api.aoscloud.io:10000/api/v11
+REQUESTS_PIN=requests==2.32.3
+ENVIRONMENT=aos-verification
+SETUP=./aos-verify\ setup
+
+usage() {
+  cat <<'E'
+./aos-verify setup [--p12 FILE] [--ca FILE] [--api-url URL] [--service CODENAME|ID] [--decision MODE]
+    checks the tools, creates .venv, finds the certificates, asks for the API URL, the Service and the decision mode,
+    tests the connection
+./aos-verify run [--yes] [--dry-run] [--no-open] [--poll SECONDS] [--timeout SECONDS]
+    the whole flow: discover, wait, built-in checks and your tests, report, decide
+
+AOS_DECISION, from setup or the environment: auto (it decides by itself; --yes is the short form), ask (it asks first; the
+default here), report-only (it sends nothing; you decide in the UI).
+AOS_DISCOVER_TIMEOUT: how long run waits for a batch, in seconds; default 120. --poll says the same for one run.
+AOS_WAIT_TIMEOUT: how long it waits for the version on the Units, in seconds; default 1800. --timeout says the same.
+AOS_WATCH_SECONDS: how long it keeps observing the version after the checks; default 60, 0 = off.
+./aos-verify secrets [--repo ORG/REPO]
+    prints the gh commands that fill the GitHub secrets; it never prints the key
+
+For debugging, one step at a time:
+./aos-verify check                     the connection, the latest batch, what the Units run (reads only)
+./aos-verify discover                  is a new version waiting? (reads only)
+./aos-verify wait [--timeout SECONDS]  wait until the version runs on the test Units (reads only)
+./aos-verify test                      built-in checks and your tests, then the report (reads only)
+./aos-verify report                    open the report
+./aos-verify decide approve|reject     send the decision for the batch found last
+E
+}
+
+say() { printf '%s\n' "$*"; }
+short() { printf '…%s' "${1: -4}"; }
+
+# One clear line, and the one command that fixes it.
+fail() {
+  printf 'STOP: %s\n' "$1" >&2
+  if [ -n "${2:-}" ]; then printf 'Fix:  %s\n' "$2" >&2; fi
+  exit "${3:-2}"
+}
+
+os_kind() {
+  case "$(uname -s)" in
+    Darwin) echo mac ;;
+    MINGW* | MSYS* | CYGWIN*) echo win ;;
+    *) echo linux ;;
+  esac
+}
+
+install_command() {
+  case "$(os_kind)" in
+    mac) echo 'brew install python jq' ;;
+    win) echo 'winget install -e --id Python.Python.3.12; winget install -e --id jqlang.jq (curl and openssl come with Git for Windows; then open a new Git Bash)' ;;
+    *) echo 'sudo apt-get install -y python3 python3-venv curl jq openssl (or the same names with dnf)' ;;
+  esac
+}
+
+# The first Python 3.10 or later on PATH. On macOS, python3 may be the old 3.9 of the Command Line Tools.
+find_python() {
+  local candidate
+  for candidate in python3 python3.14 python3.13 python3.12 python3.11 python3.10 python; do
+    if command -v "$candidate" > /dev/null 2>&1 &&
+      "$candidate" -c 'import sys; sys.exit(sys.version_info < (3, 10))' > /dev/null 2>&1; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+venv_python() {
+  if [ -x .venv/bin/python ]; then
+    echo .venv/bin/python
+  elif [ -x .venv/Scripts/python.exe ]; then
+    echo .venv/Scripts/python.exe
+  fi
+}
+
+check_tools() {
+  local missing='' tool
+  BASE_PYTHON=$(find_python) || missing='python3 (3.10 or later)'
+  for tool in curl jq openssl; do
+    command -v "$tool" > /dev/null 2>&1 || missing="$missing${missing:+, }$tool"
+  done
+  if [ -n "$missing" ]; then fail "missing: $missing" "$(install_command)"; fi
+  say "OK    tools: $("$BASE_PYTHON" -c 'import sys; print("python %d.%d" % sys.version_info[:2])'), curl, jq, openssl"
+}
+
+make_venv() {
+  local python
+  python=$(venv_python)
+  if [ -n "$python" ] && "$python" -c 'import requests' > /dev/null 2>&1; then
+    say 'OK    .venv: already there, with requests'
+    return
+  fi
+  if ! "$BASE_PYTHON" -m venv .venv > /dev/null 2>&1; then
+    fail "$BASE_PYTHON could not create .venv" "$(install_command)"
+  fi
+  python=$(venv_python)
+  if ! "$python" -m pip install --quiet --disable-pip-version-check "$REQUESTS_PIN" > "$DIR/pip.log" 2>&1; then
+    fail "could not install requests, see $DIR/pip.log (network or proxy?)" "$SETUP"
+  fi
+  say "OK    .venv: created, $REQUESTS_PIN installed"
+}
+
+# p12_read FILE PASSWORD ARGS...: the file's content as PEM; -legacy for an older .p12 on OpenSSL 3. The password goes
+# through the environment, so that it never shows in a process list.
+p12_read() {
+  local file=$1 password=$2
+  shift 2
+  AOS_P12_PASS=$password openssl pkcs12 -in "$file" -passin env:AOS_P12_PASS "$@" 2> /dev/null ||
+    AOS_P12_PASS=$password openssl pkcs12 -legacy -in "$file" -passin env:AOS_P12_PASS "$@" 2> /dev/null
+}
+
+# subject_field "OU" <subject line>: both OpenSSL ("O = x, OU = y") and LibreSSL ("/O=x/OU=y") forms.
+subject_field() {
+  printf '%s\n' "$2" | sed -nE "s#.*[,/ =]$1 ?= ?([^,/]+).*#\\1#p" | head -1
+}
+
+# The SP company from the OU of the subject ("SP <name>"). On test tenants the name is the e-mail of a person: only its
+# tag stays, enough to tell two tenants apart, or its domain if it has no tag.
+tenant_name() {
+  local ou=$1 name local_part
+  name=${ou#* }
+  if [ "$name" = "$ou" ]; then return 0; fi
+  case "$name" in
+    *@*)
+      local_part=${name%%@*}
+      case "$local_part" in
+        *+*) name="…+${local_part#*+}" ;;
+        *) name="…@${name#*@}" ;;
+      esac
+      ;;
+  esac
+  printf '%s' "$name"
+}
+
+# "<role>|<domain>|<valid to>|<SP company>" of a .p12 that has no password; empty if it has one.
+p12_facts() {
+  local pem subject end ou
+  pem=$(p12_read "$1" '' -clcerts -nokeys) || return 0
+  [ -n "$pem" ] || return 0
+  subject=$(printf '%s\n' "$pem" | openssl x509 -noout -subject 2> /dev/null)
+  end=$(printf '%s\n' "$pem" | openssl x509 -noout -enddate 2> /dev/null | cut -d= -f2)
+  subject=", ${subject#subject=}"
+  ou=$(subject_field OU "$subject")
+  printf '%s|%s|%s|%s' "${ou%% *}" "$(subject_field O "$subject")" "$end" "$(tenant_name "$ou")"
+}
+
+# The SP certificates under ~/.aos/security, one path per line. An OEM certificate cannot do this job.
+find_sp_p12() {
+  local file facts
+  [ -d "$HOME/.aos/security" ] || return 0
+  find "$HOME/.aos/security" -type f -name '*.p12' 2> /dev/null | LC_ALL=C sort | while IFS= read -r file; do
+    facts=$(p12_facts "$file")
+    if [ -n "$facts" ]; then
+      [ "${facts%%|*}" != OEM ] && printf '%s\n' "$file"
+    else
+      case "$(basename "$file" | tr '[:upper:]' '[:lower:]')" in
+        *oem*) ;;
+        *) printf '%s\n' "$file" ;;
+      esac
+    fi
+  done
+}
+
+# The folder and file name under ~/.aos, the SP company, the domain and the end date. Never the name of the user in the
+# certificate. No company in the subject: the folder name says which one it is.
+describe_p12() {
+  local facts domain end tenant
+  facts=$(p12_facts "$1")
+  domain=$(printf '%s' "$facts" | cut -d'|' -f2)
+  end=$(printf '%s' "$facts" | cut -d'|' -f3)
+  tenant=$(printf '%s' "$facts" | cut -d'|' -f4)
+  printf '%s' "${1#"$HOME"/.aos/}"
+  if [ -n "$facts" ]; then
+    printf '  (%s, %s, valid to %s)' "${tenant:-no SP name in it, see the folder}" "${domain:-domain unknown}" "$end"
+  else
+    printf '  (has a password)'
+  fi
+}
+
+choose_p12() {
+  local list count answer
+  list=$(find_sp_p12)
+  if [ -z "$list" ]; then
+    fail "no SP certificate (.p12) under ~/.aos/security" "$SETUP --p12 /path/to/your-sp.p12"
+  fi
+  count=$(printf '%s\n' "$list" | wc -l | tr -d ' ')
+  if [ "$count" -eq 1 ]; then
+    P12=$list
+    say "OK    certificate: $(describe_p12 "$P12")"
+    return
+  fi
+  say "Found $count SP certificates. Use the one of the AosCloud you call:"
+  local index=0 file
+  while IFS= read -r file; do
+    index=$((index + 1))
+    say "  $index) $(describe_p12 "$file")"
+  done <<< "$list"
+  printf 'Which one? [1-%s] ' "$count"
+  IFS= read -r answer || answer=''
+  case "$answer" in
+    '' | *[!0-9]*) fail "not a number from the list: '$answer'" "$SETUP" ;;
+  esac
+  if [ "$answer" -lt 1 ] || [ "$answer" -gt "$count" ]; then fail "not a number from the list: '$answer'" "$SETUP"; fi
+  P12=$(printf '%s\n' "$list" | sed -n "${answer}p")
+  say "OK    certificate: $(describe_p12 "$P12")"
+}
+
+# One PEM file: the certificate, the intermediate certificates and the key. Without -clcerts: AosCloud needs the chain.
+make_pem() {
+  local password='' pem tries=0
+  pem=$(p12_read "$P12" '' -nodes) || pem=''
+  while ! printf '%s' "$pem" | grep -q 'PRIVATE KEY'; do
+    tries=$((tries + 1))
+    if [ "$tries" -gt 3 ]; then fail 'three wrong passwords for this .p12 file' "$SETUP"; fi
+    printf "Password of this .p12 file (not of your computer; often empty, then press Enter): "
+    IFS= read -rs password || fail 'no password given for the .p12 file' "$SETUP"
+    printf '\n'
+    pem=$(p12_read "$P12" "$password" -nodes) || pem=''
+  done
+  (umask 077 && printf '%s\n' "$pem" > "$DIR/user.pem")
+  chmod 600 "$DIR/user.pem"
+  say "OK    $DIR/user.pem: $(printf '%s\n' "$pem" | grep -c 'BEGIN CERTIFICATE') certificates and the key, readable only by you"
+}
+
+# aos-keys brings the root CA. The file of the same name in aos-signer is another, expired CA.
+copy_ca() {
+  local found=${1:-}
+  if [ -z "$found" ]; then
+    found=$(find "$HOME/.aos" -type f -path '*aos_keys/files/1rootCA.crt' 2> /dev/null | head -1)
+  fi
+  if [ -z "$found" ] || [ ! -f "$found" ]; then
+    fail 'the AosEdge root CA was not found: it comes with aos-keys, in ~/.aos/venv' "$SETUP --ca /path/to/1rootCA.crt"
+  fi
+  cp "$found" "$DIR/aos-root-ca.crt"
+  chmod 600 "$DIR/aos-root-ca.crt"
+  say "OK    $DIR/aos-root-ca.crt: copied from aos-keys"
+}
+
+ask_url() {
+  if [ -z "$API_URL" ]; then
+    printf 'AosCloud API URL [%s]: ' "$PROD_URL"
+    IFS= read -r API_URL || API_URL=''
+    API_URL=${API_URL:-$PROD_URL}
+  fi
+  case "$API_URL" in
+    https://*) ;;
+    *) fail "the API URL must start with https://, not '$API_URL'" "$SETUP --api-url $PROD_URL" ;;
+  esac
+  # Only "is the address there?". TLS and the certificate are the job of the check below, hence -k here.
+  curl -ksS --max-time 15 -o /dev/null "$API_URL/" > /dev/null 2>&1
+  case $? in
+    6 | 7 | 28) fail "cannot reach $API_URL: a wrong address, or the network or VPN" "$SETUP --api-url $PROD_URL" ;;
+  esac
+  say "OK    AosCloud: $API_URL"
+}
+
+# Say what a failed read means, in one line, with the command that fixes it.
+explain_failure() {
+  local said=$1 what=$2
+  case "$said" in
+    *'unknown ca'* | *UNKNOWN_CA*)
+      fail 'AosCloud does not accept this certificate (unknown ca): it is from another AosCloud, or the PEM has no intermediate certificates' "$SETUP" ;;
+    *CERTIFICATE_VERIFY_FAILED* | *'certificate verify failed'*)
+      fail 'the root CA does not match this AosCloud' "$SETUP --ca /path/to/1rootCA.crt" ;;
+    *'TLS error'* | *SSL* | *ssl*)
+      fail 'the TLS connection failed: the certificate is not valid for this AosCloud, or it has expired' "$SETUP" ;;
+    *'HTTP 401'* | *'HTTP 403'*)
+      fail 'this certificate may not read that: it is not the SP certificate of this AosCloud (403)' "$SETUP" ;;
+    *'HTTP 404'*)
+      fail 'not found (404): a wrong Service id or a wrong API URL' "$SETUP" ;;
+    *)
+      fail "$what: $(printf '%s' "$said" | tail -1)" "$SETUP" ;;
+  esac
+}
+
+choose_service() {
+  local rows said code count answer
+  said=$(mktemp)
+  rows=$("$PY" verify_batch.py services 2> "$said")
+  code=$?
+  rows=$(printf '%s' "$rows" | tr -d '\r')
+  if [ "$code" -ne 0 ]; then
+    local text
+    text=$(cat "$said")
+    rm -f "$said"
+    explain_failure "$text" 'cannot list the Services'
+  fi
+  rm -f "$said"
+  if [ -z "$rows" ]; then
+    fail 'this SP has no Service yet: create one in SP UI → Services, or upload a first version' "$SETUP"
+  fi
+  if [ -n "$SERVICE_WANTED" ]; then
+    rows=$(printf '%s\n' "$rows" | awk -F'\t' -v w="$SERVICE_WANTED" '$1 == w || $2 == w')
+    if [ -z "$rows" ]; then fail "this SP has no Service '$SERVICE_WANTED'" "$SETUP"; fi
+  fi
+  count=$(printf '%s\n' "$rows" | wc -l | tr -d ' ')
+  if [ "$count" -gt 1 ]; then
+    say "This SP has $count Services:"
+    printf '%s\n' "$rows" | awk -F'\t' '{ printf "  %d) %s  (%s)\n", NR, $2, $3 }'
+    printf 'Which one? [1-%s] ' "$count"
+    IFS= read -r answer || answer=''
+    case "$answer" in
+      '' | *[!0-9]*) fail "not a number from the list: '$answer'" "$SETUP" ;;
+    esac
+    if [ "$answer" -lt 1 ] || [ "$answer" -gt "$count" ]; then fail "not a number from the list: '$answer'" "$SETUP"; fi
+    rows=$(printf '%s\n' "$rows" | sed -n "${answer}p")
+  fi
+  SERVICE_ID=$(printf '%s' "$rows" | cut -f1)
+  SERVICE_CODENAME=$(printf '%s' "$rows" | cut -f2)
+  say "OK    Service: $SERVICE_CODENAME"
+}
+
+quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+
+check_decision() {
+  case "$1" in
+    auto | ask | report-only) ;;
+    *) fail "AOS_DECISION must be auto, ask or report-only, not '$1'" "$SETUP --decision ask" ;;
+  esac
+}
+
+# Once, in setup. The option or the environment answers it; the default is what you chose last time, or ask.
+ask_decision() {
+  local last='' answer=''
+  if [ -z "$DECISION" ]; then DECISION=${AOS_DECISION:-}; fi
+  if [ -z "$DECISION" ]; then
+    if [ -f "$ENV_FILE" ]; then
+      # shellcheck disable=SC1090
+      last=$(. "./$ENV_FILE" && printf '%s' "${AOS_DECISION:-}")
+    fi
+    say 'After the checks, who decides?'
+    say '  auto         it approves or rejects by itself'
+    say '  ask          it asks you first'
+    say '  report-only  it writes the report and sends nothing; you decide in the UI'
+    printf 'Decision mode [%s]: ' "${last:-ask}"
+    IFS= read -r answer || printf '\n'
+    DECISION=${answer:-${last:-ask}}
+  fi
+  check_decision "$DECISION"
+  say "OK    decision mode: $DECISION"
+}
+
+write_env() {
+  (
+    umask 077
+    {
+      echo '# Written by ./aos-verify setup. It holds no key, but it points to one. Keep it out of the repository.'
+      echo "export AOS_API_URL=$(quote "$API_URL")"
+      echo "export AOS_CERT=$(quote "$HERE/$DIR/user.pem")"
+      echo "export AOS_CA=$(quote "$HERE/$DIR/aos-root-ca.crt")"
+      echo "export SERVICE_ID=$(quote "$SERVICE_ID")"
+      echo "export SERVICE_CODENAME=$(quote "$SERVICE_CODENAME")"
+      echo "export AOS_DECISION=$(quote "$DECISION")"
+    } > "$ENV_FILE"
+  )
+  chmod 600 "$ENV_FILE"
+}
+
+cmd_setup() {
+  P12='' API_URL='' SERVICE_WANTED='' SERVICE_ID='' SERVICE_CODENAME='' DECISION=''
+  local ca=''
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --p12) P12=${2:-}; shift 2 || fail '--p12 needs a file' "$SETUP" ;;
+      --ca) ca=${2:-}; shift 2 || fail '--ca needs a file' "$SETUP" ;;
+      --api-url) API_URL=${2:-}; shift 2 || fail '--api-url needs a URL' "$SETUP" ;;
+      --service) SERVICE_WANTED=${2:-}; shift 2 || fail '--service needs a codename or an id' "$SETUP" ;;
+      --decision) DECISION=${2:-}; shift 2 || fail '--decision needs auto, ask or report-only' "$SETUP" ;;
+      *) fail "unknown option: $1" './aos-verify help' ;;
+    esac
+  done
+  check_tools
+  mkdir -p "$DIR" && chmod 700 "$DIR"
+  make_venv
+  if [ -n "$P12" ]; then
+    if [ ! -f "$P12" ]; then fail "there is no file $P12" "$SETUP --p12 /path/to/your-sp.p12"; fi
+    say "OK    certificate: $(describe_p12 "$P12")"
+  else
+    choose_p12
+  fi
+  make_pem
+  copy_ca "$ca"
+  ask_url
+  PY=$(venv_python)
+  export AOS_API_URL=$API_URL AOS_CERT="$HERE/$DIR/user.pem" AOS_CA="$HERE/$DIR/aos-root-ca.crt"
+  choose_service
+  ask_decision
+  write_env
+  say "OK    $ENV_FILE: your settings, readable only by you, ignored by git"
+  say ''
+  local said code
+  said=$(mktemp)
+  "$PY" verify_batch.py check --service-id "$SERVICE_ID" 2> "$said"
+  code=$?
+  if [ "$code" -ne 0 ]; then
+    local text
+    text=$(cat "$said")
+    rm -f "$said"
+    explain_failure "$text" 'the connection check failed'
+  fi
+  rm -f "$said"
+  say ''
+  say 'Ready. Upload a new version as you do today, then: ./aos-verify run'
+  say 'If you start run first, it waits up to 2 min for your upload.'
+}
+
+load() {
+  if [ ! -f "$ENV_FILE" ]; then fail 'not set up yet' "$SETUP"; fi
+  PY=$(venv_python)
+  if [ -z "$PY" ]; then fail '.venv is missing' "$SETUP"; fi
+  local from_environment=${AOS_DECISION:-}
+  # shellcheck disable=SC1090
+  . "./$ENV_FILE"
+  DECISION=${from_environment:-${AOS_DECISION:-ask}}
+  check_decision "$DECISION"
+  if [ ! -f "$AOS_CERT" ] || [ ! -f "$AOS_CA" ]; then fail 'the certificate files are missing' "$SETUP"; fi
+}
+
+save_state() {
+  (
+    umask 077
+    {
+      echo "export BATCH_ID=$(quote "$BATCH_ID")"
+      echo "export BATCH=$(quote "$BATCH_ID")"
+      echo "export VERSION=$(quote "$VERSION")"
+      echo "export AOS_TEST_UNITS=$(quote "$UNITS")"
+      echo "export UNIT_ID=$(quote "${UNITS%% *}")"
+    } > "$STATE"
+  )
+}
+
+load_state() {
+  if [ ! -f "$STATE" ]; then fail 'no batch found yet' './aos-verify discover'; fi
+  # shellcheck disable=SC1090
+  . "./$STATE"
+  UNITS=$AOS_TEST_UNITS
+}
+
+# Keep what discover printed. Fields come through jq; tr, because jq on Windows ends its lines with CR.
+remember() {
+  BATCH_ID=$(printf '%s' "$1" | jq -r .batch_id | tr -d '\r')
+  VERSION=$(printf '%s' "$1" | jq -r .version | tr -d '\r')
+  UNITS=$(printf '%s' "$1" | jq -r '.units | join(" ")' | tr -d '\r')
+  save_state
+}
+
+# What was found, for a person: ids shortened.
+found_line() {
+  local unit units=''
+  for unit in $UNITS; do units="$units $(short "$unit")"; done
+  say "batch $(short "$BATCH_ID"), version $VERSION, test Units:$units"
+}
+
+# One question to AosCloud. Sets FOUND (the JSON line, or empty) and SAID (the last line of the explanation).
+ask_cloud() {
+  local err code
+  err=$(mktemp)
+  FOUND=$("$PY" verify_batch.py discover --service-id "$SERVICE_ID" "$@" 2> "$err")
+  code=$?
+  FOUND=$(printf '%s' "$FOUND" | tr -d '\r')
+  ALL_SAID=$(cat "$err")
+  SAID=$(tail -1 "$err")
+  rm -f "$err"
+  return "$code"
+}
+
+cmd_discover() {
+  load
+  ask_cloud --dry-run
+  local code=$?
+  [ -z "$ALL_SAID" ] || say "$ALL_SAID"
+  if [ "$code" -ne 0 ]; then explain_failure "$ALL_SAID" 'discover stopped'; fi
+  if [ -n "$FOUND" ]; then
+    remember "$FOUND"
+    found_line
+    say 'Next: ./aos-verify wait'
+  fi
+}
+
+run_wait() {
+  local args=()
+  local unit
+  for unit in $UNITS; do args+=(--unit "$unit"); done
+  "$PY" verify_batch.py wait --service-id "$SERVICE_ID" --version "$VERSION" --batch-id "$BATCH_ID" \
+    ${args[@]+"${args[@]}"} --timeout "$WAIT_TIMEOUT" > /dev/null
+}
+
+cmd_wait() {
+  WAIT_TIMEOUT=${AOS_WAIT_TIMEOUT:-1800}
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --timeout) WAIT_TIMEOUT=${2:-1800}; shift 2 || exit 2 ;;
+      *) fail "unknown option: $1" './aos-verify help' ;;
+    esac
+  done
+  load
+  load_state
+  run_wait
+  local code=$?
+  say "exit code: $code"
+  return "$code"
+}
+
+run_checks() {
+  AOS_TEST_UNITS=$UNITS BATCH_ID=$BATCH_ID VERSION=$VERSION SERVICE_ID=$SERVICE_ID PYTHON="$HERE/$PY" \
+    AOS_DECISION=$DECISION FOUND_BY=run UNITS_FROM='the Verification Set' bash tests/run_tests.sh
+}
+
+# The decision, or that none was sent, into the report of this batch. It never changes the outcome.
+note_decision() {  # note_decision not-sent|report-only [why]
+  "$PY" tests/report.py --out report --batch-id "$BATCH_ID" --decision "$1" ${2:+--why "$2"} > /dev/null 2>&1 || true
+}
+
+cmd_test() {
+  load
+  load_state
+  run_checks
+  local code=$?
+  say "exit code: $code"
+  return "$code"
+}
+
+cmd_report() {
+  if [ ! -f report/report.html ]; then fail 'no report yet' './aos-verify test'; fi
+  case "$(os_kind)" in
+    mac) open report/report.html ;;
+    win) start report/report.html ;;
+    *)
+      if command -v xdg-open > /dev/null 2>&1; then
+        xdg-open report/report.html
+      else
+        say "report: $HERE/report/report.html"
+      fi
+      ;;
+  esac
+}
+
+send_decision() {  # send_decision approve|reject [more arguments for decide]
+  local choice=$1 code
+  shift
+  "$PY" verify_batch.py decide --batch-id "$BATCH_ID" "--$choice" --report-dir report "$@"
+  code=$?
+  case "$code" in
+    0) say "Done: reload SP UI → Verification batches." ;;
+    3) say 'The decision may have been applied. Look at the batch in the UI, and do NOT send it again.' ;;
+    *) say 'Nothing was sent.' ;;
+  esac
+  return "$code"
+}
+
+cmd_decide() {
+  local choice=${1:-}
+  case "$choice" in
+    approve | reject) shift ;;
+    *) fail 'say which: approve or reject' './aos-verify decide approve' ;;
+  esac
+  load
+  load_state
+  say "Version $VERSION, batch $(short "$BATCH_ID"): $choice"
+  send_decision "$choice" "$@"
+}
+
+cmd_check() {
+  load
+  local err code
+  err=$(mktemp)
+  "$PY" verify_batch.py check --service-id "$SERVICE_ID" 2> "$err"
+  code=$?
+  if [ "$code" -ne 0 ]; then
+    local text
+    text=$(cat "$err")
+    rm -f "$err"
+    explain_failure "$text" 'the check failed'
+  fi
+  rm -f "$err"
+}
+
+# The final part of run. ask: a local run says "no" as easily as "yes". auto, or --yes: approve or reject, unasked.
+# report-only: nothing is sent, and a person decides in the UI.
+decide_step() {  # decide_step approve|reject <why>
+  local choice=$1 why=$2 answer=''
+  say ''
+  say "Verdict: $choice ($why). Version $VERSION, batch $(short "$BATCH_ID")."
+  if [ "$DRY_RUN" = yes ]; then
+    note_decision not-sent 'a dry run'
+    if [ "$DECISION" = report-only ]; then
+      say 'Dry run: nothing sent to AosCloud. report-only sends nothing anyway: a person decides in the UI.'
+    else
+      say "Dry run: nothing sent to AosCloud. It would $choice batch $(short "$BATCH_ID") ($DECISION)."
+    fi
+    return 0
+  fi
+  if [ "$DECISION" = report-only ]; then
+    note_decision report-only
+    say "Report only: nothing sent. A person decides in SP UI → Verification batches, or: ./aos-verify decide $choice"
+    return 0
+  fi
+  if [ "$DECISION" = ask ]; then
+    printf '%s version %s in AosCloud? This writes one decision. [y/N] ' "$choice" "$VERSION"
+    IFS= read -r answer || answer=''
+    case "$answer" in
+      y | Y | yes | YES) ;;
+      *)
+        note_decision not-sent 'you answered no'
+        say "Nothing sent. To decide later: ./aos-verify decide $choice"
+        return 0
+        ;;
+    esac
+  fi
+  send_decision "$choice"
+}
+
+# Seconds as people say them: 2 min, 90 s.
+in_words() {
+  if [ "$1" -gt 0 ] && [ $(($1 % 60)) -eq 0 ]; then printf '%s min' $(($1 / 60)); else printf '%s s' "$1"; fi
+}
+
+# Open the report when a person is at the terminal.
+show_report() {
+  say ''
+  say "Report: $HERE/report/report.html"
+  if [ "$OPEN_REPORT" = yes ] && [ -t 0 ] && [ -t 1 ]; then cmd_report; fi
+}
+
+# The checks are done: the report first if a person has to answer, after the decision if not, so that it shows it.
+finish() {  # finish approve|reject <why>
+  local code
+  if [ "$DECISION" = ask ] && [ "$DRY_RUN" != yes ]; then show_report; fi
+  say '4. Decision'
+  decide_step "$1" "$2"
+  code=$?
+  if [ "$DECISION" != ask ] || [ "$DRY_RUN" = yes ]; then show_report; fi
+  if [ "$code" -eq 0 ] && [ "$1" = reject ]; then return 1; fi
+  return "$code"
+}
+
+cmd_run() {
+  DRY_RUN=no WAIT_TIMEOUT=${AOS_WAIT_TIMEOUT:-1800} OPEN_REPORT=yes
+  local poll='' yes=no
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --yes) yes=yes; shift ;;
+      --dry-run) DRY_RUN=yes; shift ;;
+      --no-open) OPEN_REPORT=no; shift ;;
+      --poll) poll=${2:-}; shift 2 || exit 2 ;;
+      --timeout) WAIT_TIMEOUT=${2:-1800}; shift 2 || exit 2 ;;
+      *) fail "unknown option: $1" './aos-verify help' ;;
+    esac
+  done
+  load
+  if [ "$yes" = yes ]; then DECISION=auto; fi
+  say "Decision mode: $DECISION (change in $ENV_FILE, AOS_DECISION)"
+  poll=${poll:-${AOS_DISCOVER_TIMEOUT:-120}}
+  case "$poll" in
+    '' | *[!0-9]*) fail "AOS_DISCOVER_TIMEOUT must be a number of seconds, not '$poll'" './aos-verify run --poll 120' ;;
+  esac
+
+  # A batch appears some seconds after an upload, so ask for a while before saying that nothing waits.
+  say "1. Is a new version of $SERVICE_CODENAME waiting?"
+  local started last='' code left step
+  started=$SECONDS
+  while :; do
+    ask_cloud
+    code=$?
+    if [ "$code" -ne 0 ]; then
+      say "$ALL_SAID"
+      case "$ALL_SAID" in
+        *'no test Unit'*) fail 'decide nothing: the batch has no test Unit' './aos-verify check' ;;
+        *) explain_failure "$ALL_SAID" 'discover stopped' ;;
+      esac
+    fi
+    if [ -n "$FOUND" ]; then break; fi
+    if [ "$SAID" != "$last" ]; then
+      say "      $SAID"
+      last=$SAID
+    fi
+    left=$((poll - (SECONDS - started)))
+    if [ "$left" -le 0 ]; then
+      if [ "$poll" -gt 0 ]; then
+        say "Nothing to verify after $(in_words "$poll"). Upload first, then run."
+      else
+        say 'Nothing to verify. Upload first, then run.'
+      fi
+      return 0
+    fi
+    step=10
+    if [ "$left" -lt "$step" ]; then step=$left; fi
+    say "      asking again in $step s ($((left / 60)):$(printf '%02d' $((left % 60))) left, Ctrl-C to stop)"
+    sleep "$step"
+  done
+  remember "$FOUND"
+  say "      $(found_line)"
+
+  say "2. Waiting for version $VERSION on the test Units"
+  run_wait
+  code=$?
+  case "$code" in
+    0) ;;
+    1)
+      say '3. The report (the version failed: no observation, not your tests)'
+      VERSION_FAILED=yes run_checks
+      finish reject 'the version failed on a test Unit'
+      return $?
+      ;;
+    3) fail 'decide nothing: AosCloud could not be reached, or a test Unit is offline' './aos-verify check' 3 ;;
+    *) fail 'decide nothing: see the line above' './aos-verify check' "$code" ;;
+  esac
+
+  say '3. Built-in checks and your tests'
+  run_checks
+  code=$?
+  case "$code" in
+    0) finish approve 'all checks passed' ;;
+    1) finish reject 'a check failed' ;;
+    3) show_report; fail 'decide nothing: AosCloud could not be read, or a test Unit is offline' './aos-verify test' 3 ;;
+    *) fail 'decide nothing: the checks could not run' './aos-verify test' "$code" ;;
+  esac
+}
+
+cmd_secrets() {
+  local repo=''
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --repo) repo=${2:-}; shift 2 || exit 2 ;;
+      *) fail "unknown option: $1" './aos-verify help' ;;
+    esac
+  done
+  if [ ! -f "$ENV_FILE" ]; then cmd_setup; say ''; fi
+  load
+  if [ -z "$repo" ]; then
+    printf 'Your GitHub repository (org/name): '
+    IFS= read -r repo || repo=''
+  fi
+  case "$repo" in
+    */*/* | *' '* | /* | */ | '') fail "not org/name: '$repo'" './aos-verify secrets --repo your-org/your-repo' ;;
+    */*) ;;
+    *) fail "not org/name: '$repo'" './aos-verify secrets --repo your-org/your-repo' ;;
+  esac
+  (umask 077 && printf '%s' "$SERVICE_ID" > "$DIR/service_id")
+  say "Paste these, with gh logged in. The first line needs admin rights on $repo. The key is read from its file: it is"
+  say 'never printed, and never on a command line.'
+  say ''
+  say "gh api -X PUT repos/$repo/environments/$ENVIRONMENT"
+  say "gh secret set AOS_USER_PEM --repo $repo --env $ENVIRONMENT < $(quote "$AOS_CERT")"
+  say "gh secret set AOS_ROOT_CA_PEM --repo $repo --env $ENVIRONMENT < $(quote "$AOS_CA")"
+  say "gh secret set AOS_SERVICE_ID --repo $repo --env $ENVIRONMENT < $(quote "$HERE/$DIR/service_id")"
+  say "gh secret set AOS_API_URL --repo $repo --env $ENVIRONMENT --body $(quote "$AOS_API_URL")"
+  say ''
+  say 'Check: gh secret list --repo '"$repo"' --env '"$ENVIRONMENT"
+  say ''
+  say 'The job decides by itself: approve when all checks pass, reject when one fails. To have it send nothing:'
+  say "gh variable set AOS_DECISION --repo $repo --env $ENVIRONMENT --body report-only"
+}
+
+command=${1:-help}
+if [ $# -gt 0 ]; then shift; fi
+case "$command" in
+  setup) cmd_setup "$@" ;;
+  run) cmd_run "$@" ;;
+  secrets) cmd_secrets "$@" ;;
+  check) cmd_check "$@" ;;
+  discover) cmd_discover "$@" ;;
+  wait) cmd_wait "$@" ;;
+  test) cmd_test "$@" ;;
+  report) cmd_report "$@" ;;
+  decide) cmd_decide "$@" ;;
+  help | -h | --help) usage ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac
