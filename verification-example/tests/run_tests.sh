@@ -44,13 +44,19 @@ record() {  # record <builtin|yours> <code> <name> <PASS|FAIL|SKIP|ERROR> <detai
 }
 
 if [ "$part" != yours ]; then
-echo "Built-in checks of version $VERSION"
+echo "Built-in checks of Service version $VERSION"
+
+# The name of the Service for the report; this step has the certificate, the next one does not.
+if [ -z "${SERVICE_NAME:-}" ]; then
+  SERVICE_NAME=$("$python" "$here/../verify_batch.py" service-name --service-id "$SERVICE_ID" 2> /dev/null || true)
+fi
+printf '%s' "${SERVICE_NAME:-}" > "$out/service_name"
 
 # A1, B1, C2: what wait proved, read again from AosCloud.
 status=$("$python" "$here/../verify_batch.py" status --service-id "$SERVICE_ID" --version "$VERSION" \
          --batch-id "$batch" "${unit_args[@]}")
 if [ $? -eq 2 ]; then
-  record builtin A1 "read the batch and the Units" ERROR "AosCloud could not be read, or a Unit is offline: see the log"
+  record builtin A1 "read the Verification batch and the Units" ERROR "AosCloud could not be read, or a Unit is offline: see the log"
 else
   while IFS=$'\t' read -r code name result detail; do
     [ -n "$code" ] && record builtin "$code" "$name" "$result" "$detail"
@@ -59,7 +65,7 @@ fi
 
 # wait saw it fail, even if AosCloud reads differently a moment later: the verdict must stay what wait said.
 if [ -n "$version_failed" ] && ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tFAIL' "$results"; then
-  record builtin B1 "$VERSION is installed and running on every test Unit" FAIL "wait saw the version fail on a test Unit"
+  record builtin B1 "Service version $VERSION is installed and running on every Verification Set Unit" FAIL "wait saw the Service version fail on a Verification Set Unit"
 fi
 
 # C3, C4: the observation. Every 60 s, wait checks that the version still runs on every Unit. A restart between two reads
@@ -87,10 +93,10 @@ if [ "$observe" -gt 0 ]; then
   elif [ "$lost" -eq 1 ]; then
     record builtin C3/C4 "$still" ERROR "AosCloud could not be read, or a Unit went offline, in round $stopped of $rounds"
   else
-    record builtin C3/C4 "$still" FAIL "the version stopped running in round $stopped of $rounds"
+    record builtin C3/C4 "$still" FAIL "the Service version stopped running in round $stopped of $rounds"
   fi
 elif [ -n "$version_failed" ]; then
-  record builtin C3/C4 "still running, no restarts" SKIP "not run: the version already failed on a test Unit"
+  record builtin C3/C4 "still running, no restarts" SKIP "not run: the Service version already failed on a Verification Set Unit"
 else
   record builtin C3/C4 "still running, no restarts" SKIP "60-second observation was off, AOS_WATCH_SECONDS=0"
 fi
@@ -101,7 +107,7 @@ if [ "$part" = builtin ]; then exit 0; fi
 # Run by parts, the built-in results are already in the file. No built-in result: nothing to approve on.
 if [ "$part" = yours ]; then
   if ! grep -q '^builtin' "$results" 2>/dev/null; then
-    record builtin A1 "read the batch and the Units" ERROR "the built-in checks did not run"
+    record builtin A1 "read the Verification batch and the Units" ERROR "the built-in checks did not run"
   fi
   if grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tFAIL' "$results"; then failed=1; fi
   if grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tERROR' "$results"; then unread=1; fi
@@ -109,9 +115,9 @@ fi
 
 # Your tests: tests/your_tests.sh prints one PASS or FAIL line per test. They run without AOS_CERT.
 if [ -n "$version_failed" ]; then
-  record yours "" "your tests" SKIP "not run: the version already failed on a test Unit"
+  record yours "" "partner tests" SKIP "not run: the Service version already failed on a Verification Set Unit"
 elif [ -f "$here/your_tests.sh" ]; then
-  echo "Your tests"
+  echo "Partner tests"
   yours=$(BATCH_ID=$batch env -u AOS_CERT -u AOS_KEY bash "$here/your_tests.sh" 2>&1)
   code=$?
   lines=0
@@ -129,12 +135,13 @@ elif [ -f "$here/your_tests.sh" ]; then
     record yours "" your_tests.sh FAIL "printed no PASS or FAIL line"
   fi
 else
-  record yours "" "your tests" SKIP "no tests/your_tests.sh (start from tests/your_tests.sh.example)"
+  record yours "" "partner tests" SKIP "no tests/your_tests.sh (start from tests/your_tests.sh.example)"
 fi
 
 "$python" "$here/report.py" --results "$results" --out "$out" --service-id "$SERVICE_ID" --version "$VERSION" \
   --batch-id "$batch" --units "$units" --observe "$observe" \
-  --found-by "${FOUND_BY:-version}" --units-from "${UNITS_FROM:-the values you gave}" --decision-mode "${AOS_DECISION:-}" || failed=1
+  --found-by "${FOUND_BY:-version}" --units-from "${UNITS_FROM:-the values you gave}" --decision-mode "${AOS_DECISION:-}" \
+  --service-name "${SERVICE_NAME:-$(cat "$out/service_name" 2> /dev/null)}" || failed=1
 if [ $failed -eq 1 ]; then echo "a check failed: reject"; exit 1; fi
 if [ $unread -eq 1 ]; then echo "AosCloud could not be read, or a Unit is offline: decide nothing, and run it again"; exit 3; fi
 echo "all checks passed: approve"

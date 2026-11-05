@@ -92,7 +92,9 @@ jobs:
           {
             echo "Decision mode: $AOS_DECISION (change with the AOS_DECISION variable)"
             echo
-            echo "Why every 5 minutes? AosCloud does not notify a pipeline, so the watch asks; 5 minutes is the shortest interval GitHub allows. To change it, edit the cron line in watch-batches.yml."
+            cat <<'SUMMARY'
+          Why every 5 minutes? AosCloud does not notify a pipeline when a new Service version waits (no webhook), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub may start runs late or skip them; for a guaranteed start use Start A. Each run takes about 20 s and only reads. To change it, edit one line in `watch-batches.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-batch` right after your upload job (Start A, the chain), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
+          SUMMARY
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/setup-python@v5
@@ -114,9 +116,9 @@ jobs:
           printf '%s\n' "$ROOT_CA" > "$dir/aos-root-ca.crt"
           echo "AOS_CA=$dir/aos-root-ca.crt" >> "$GITHUB_ENV"
 
-      # The private key exists only while steps 1, 2a and 3 run: each writes it and deletes it when it ends.
-      # Step 2b, your tests, has no secret at all.
-      - name: 1. Wait for the batch and the version on the test Units
+      # The private key exists only while steps 5, 6a and 7 run: each writes it and deletes it when it ends.
+      # Step 6b, the partner tests, has no secret at all.
+      - name: 5. Wait for the Verification batch and the Service version on the Verification Set Units
         id: wait
         env:
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
@@ -166,8 +168,8 @@ jobs:
           case "$code" in 0) ;; 1) [ -n "$batch" ] || exit 1 ;; *) exit 1 ;; esac
 
       # The built-in checks read AosCloud (the batch, the Units, the observation), so this step has the certificate.
-      # It only collects results: step 2b gives the verdict.
-      - name: 2a. Run the built-in checks
+      # It only collects results: step 6b gives the verdict.
+      - name: 6a. Run the built-in checks
         id: builtin
         if: steps.wait.outputs.code == '0' || steps.wait.outputs.code == '1'
         env:
@@ -185,7 +187,7 @@ jobs:
           tests/run_tests.sh
 
       # No secret in this step: your tests cannot read the key. Code 0 approves, 1 rejects, 3 decides nothing.
-      - name: 2b. Run your tests and write the report
+      - name: 6b. Run the partner tests and write the report
         id: tests
         if: "!cancelled() && (steps.wait.outputs.code == '0' || steps.wait.outputs.code == '1')"
         env:
@@ -205,7 +207,7 @@ jobs:
           echo "code=$code" >> "$GITHUB_OUTPUT"
           exit "$code"
 
-      - name: 3a. Approve
+      - name: 7a. Approve
         if: env.AOS_DECISION == 'auto' && steps.wait.outputs.code == '0' && steps.tests.outputs.code == '0'
         env:
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
@@ -216,7 +218,7 @@ jobs:
           (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
           python verify_batch.py decide --batch-id "$BATCH_ID" --approve --report-dir report
 
-      - name: 3b. Reject
+      - name: 7b. Reject
         if: >-
           always() && env.AOS_DECISION == 'auto' && steps.wait.outputs.batch_id != '' &&
           (steps.wait.outputs.code == '1' || steps.tests.outputs.code == '1')
@@ -228,9 +230,9 @@ jobs:
           trap 'rm -f "$AOS_CERT"' EXIT
           (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
           python verify_batch.py decide --batch-id "$BATCH_ID" --reject --report-dir report
-          echo "Rejected: the new version failed on a test Unit or in the tests." && exit 1
+          echo "Rejected: the new Service version failed on a Verification Set Unit or in the tests." && exit 1
 
-      - name: 3. No decision (AOS_DECISION is not auto)
+      - name: 7. No decision (AOS_DECISION is not auto)
         if: always() && env.AOS_DECISION != 'auto' && steps.tests.outcome != 'skipped'
         env:
           BATCH_ID: ${{ steps.wait.outputs.batch_id }}

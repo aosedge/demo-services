@@ -202,7 +202,7 @@ def test_a_failed_instance_of_another_version_does_not_count(cloud):
 def test_wait_prints_unit_states_only_when_they_change(cloud, capsys):
     cloud.unit = 'pending'
     wait(timeout=0.3)
-    assert len([line for line in capsys.readouterr().err.splitlines() if line.startswith('batch ')]) == 1
+    assert len([line for line in capsys.readouterr().err.splitlines() if line.startswith('Verification batch ')]) == 1
 
 
 def test_the_batch_is_found_on_a_later_page(cloud):
@@ -247,7 +247,7 @@ def test_a_given_unit_cannot_stand_in_for_an_untested_architecture(cloud, capsys
     cloud.verification_set = {'amd64': [UNIT], 'arm64': ['unit-2']}
     assert wait() == 2
     out = capsys.readouterr()
-    assert out.out == '' and 'no test Unit for arm64' in out.err
+    assert out.out == '' and 'no Verification Set Unit for arm64' in out.err
 
 
 def test_an_offline_unit_that_still_shows_active_decides_nothing(cloud, capsys):
@@ -337,7 +337,7 @@ def test_without_units_and_an_empty_set_wait_decides_nothing(cloud, capsys):
     cloud.verification_set = {'amd64': []}
     assert wait(units=()) == 2
     out = capsys.readouterr()
-    assert out.out == '' and cloud.patches == [] and 'no test Unit for amd64' in out.err
+    assert out.out == '' and cloud.patches == [] and 'no Verification Set Unit for amd64' in out.err
 
 
 def test_without_units_a_placeholder_unit_outside_the_set_is_not_waited_for(cloud):
@@ -492,7 +492,7 @@ def test_4xx_after_the_patch_exits_2(cloud):
 @pytest.mark.parametrize('body', [None, 'not json', []])
 def test_a_success_without_a_json_body_still_exits_0(cloud, capsys, body):
     cloud.patch_answer = (204 if body is None else 200, body)
-    assert decide() == 0 and capsys.readouterr().out.strip() == f'batch {verify_batch.short(BATCH)} (amd64): approved, sent'
+    assert decide() == 0 and capsys.readouterr().out.strip() == f'Verification batch {verify_batch.short(BATCH)} (amd64): approved, sent'
 
 
 # discover: step 0, reads only
@@ -537,7 +537,7 @@ def test_discover_takes_no_older_batch_when_the_highest_version_is_decided(cloud
     cloud.others = [waiting('5.0.0', state=state), waiting('4.9.0')]
     assert discover() == 0
     out = capsys.readouterr()
-    assert out.out == '' and 'no waiting batch' in out.err and 'stale' in out.err and github_output.read_text() == ''
+    assert out.out == '' and 'no waiting Verification batch' in out.err and 'stale' in out.err and github_output.read_text() == ''
     assert not [path for path, _ in cloud.gets if 'statistics' in path]
 
 
@@ -545,7 +545,7 @@ def test_discover_with_nothing_waiting_prints_nothing_and_exits_0(cloud, capsys)
     cloud.batch['state'] = 'Valid'
     assert discover() == 0
     out = capsys.readouterr()
-    assert out.out == '' and 'no waiting batch' in out.err
+    assert out.out == '' and 'no waiting Verification batch' in out.err
 
 
 def test_discover_ignores_batches_of_other_services(cloud, capsys):
@@ -553,7 +553,7 @@ def test_discover_ignores_batches_of_other_services(cloud, capsys):
     cloud.others = [waiting('9.0.0', service='another-service')]
     assert discover() == 0
     out = capsys.readouterr()
-    assert out.out == '' and 'no waiting batch' in out.err
+    assert out.out == '' and 'no waiting Verification batch' in out.err
 
 
 def test_discover_finds_a_batch_on_a_later_page(cloud, capsys):
@@ -602,7 +602,7 @@ def test_no_unit_in_both_lists_exits_2_and_starts_nothing(cloud, capsys, github_
     cloud.service_units = with_service
     assert discover() == 2
     out = capsys.readouterr()
-    assert out.out == '' and 'no test Unit' in out.err and github_output.read_text() == ''
+    assert out.out == '' and 'no Verification Set Unit' in out.err and github_output.read_text() == ''
 
 
 def test_units_outside_the_set_are_ignored_like_the_placeholder_rows_of_6_2(cloud, capsys):
@@ -637,7 +637,7 @@ def test_an_architecture_without_a_test_unit_exits_2(cloud, capsys):
     cloud.verification_set = {'amd64': [UNIT], 'arm64': []}
     assert discover() == 2
     out = capsys.readouterr()
-    assert out.out == '' and 'no test Unit for arm64' in out.err
+    assert out.out == '' and 'no Verification Set Unit for arm64' in out.err
 
 
 def test_dry_run_prints_and_writes_nothing_and_never_patches(cloud, capsys, github_output):
@@ -652,7 +652,7 @@ def test_dry_run_with_no_test_unit_says_so_and_exits_0(cloud, capsys, github_out
     cloud.verification_set = {'amd64': []}
     assert discover('--dry-run') == 0
     found, err = json_line(capsys)
-    assert found['units'] == [] and 'no test Unit' in err and github_output.read_text() == ''
+    assert found['units'] == [] and 'no Verification Set Unit' in err and github_output.read_text() == ''
 
 
 def test_discover_takes_the_service_id_from_the_environment(cloud, capsys, monkeypatch):
@@ -683,7 +683,7 @@ def test_an_override_that_misses_an_architecture_starts_nothing(cloud, capsys):
     cloud.verification_set = {'amd64': [UNIT], 'arm64': ['unit-2']}
     assert discover('--unit', UNIT) == 2
     out = capsys.readouterr()
-    assert out.out == '' and 'no test Unit for arm64' in out.err
+    assert out.out == '' and 'no Verification Set Unit for arm64' in out.err
 
 
 def test_a_locked_batch_is_not_chosen(cloud, capsys):
@@ -765,7 +765,7 @@ exit {code}
     env = {'PATH': f"{fake}:{os.environ['PATH']}", 'RUNNER_TEMP': str(tmp_path), 'GITHUB_OUTPUT': str(output),
            'USER_PEM': user_pem, 'INPUT_UNITS': units, 'OVERRIDE_UNITS': override, 'WAIT_TIMEOUT': '1',
            'SERVICE_ID': service, 'VERSION': NEW, 'BATCH_INPUT': batch_input, 'ACTOR': actor}
-    run = subprocess.run(['bash', '-e', '-c', step('1. Wait')], env=env, capture_output=True, text=True, timeout=60,
+    run = subprocess.run(['bash', '-e', '-c', step('5. Wait')], env=env, capture_output=True, text=True, timeout=60,
                          check=False)
     return run, output.read_text(), (tmp_path / 'aos' / 'user.pem').exists()
 
@@ -936,12 +936,12 @@ def test_the_first_step_masks_the_inputs_without_an_env(tmp_path):
 
 
 def test_your_tests_step_has_no_secret_and_only_the_verdict_decides():
-    yours = workflow_step('2b.', WORKFLOW)
+    yours = workflow_step('6b.', WORKFLOW)
     assert 'secrets.' not in yours and 'USER_PEM' not in yours and 'RUN_PART: yours' in yours
     assert 'SERVICE_ID: ${{ steps.wait.outputs.service_id }}' in yours
-    assert 'secrets.AOS_USER_PEM' in workflow_step('2a.', WORKFLOW)
+    assert 'secrets.AOS_USER_PEM' in workflow_step('6a.', WORKFLOW)
     text = WORKFLOW.read_text(encoding='utf-8')
-    assert "steps.tests.outputs.code == '0'" in workflow_step('3a.', WORKFLOW)
+    assert "steps.tests.outputs.code == '0'" in workflow_step('7a.', WORKFLOW)
     assert "steps.tests.outputs.code == '1'" in text and 'persist-credentials: false' in text
 
 
@@ -1069,7 +1069,7 @@ def test_status_reports_a_decided_batch_as_a1_fail(cloud, capsys):
     cloud.batch['state'] = 'Valid'
     assert main('status', '--service-id', SERVICE, '--version', NEW, '--batch-id', BATCH, '--unit', UNIT) == 1
     rows = {code: (result, detail) for code, _, result, detail in status_lines(capsys)}
-    assert rows['A1'] == ('FAIL', 'batch …ch-1 is Valid, not Waiting_validation')
+    assert rows['A1'] == ('FAIL', 'Verification batch …ch-1 is Valid, not Waiting_validation')
 
 
 # tests/run_tests.sh: the built-in checks, the observation, your tests and the report, with a stand-in for verify_batch.py
@@ -1201,7 +1201,7 @@ def test_by_parts_without_built_in_results_nothing_is_approved(tmp_path):
 def test_your_tests_are_run_without_the_certificate_and_reported(tmp_path):
     yours = '#!/usr/bin/env bash\necho "PASS health ${AOS_CERT:-no-cert}"\necho "PASS suite"\n'
     run, _, report = run_tests_sh(tmp_path, yours=yours)
-    assert run.returncode == 0 and 'PASS health: no-cert' in run.stdout and 'your tests: 2 of 2 passed' in report
+    assert run.returncode == 0 and 'PASS health: no-cert' in run.stdout and 'partner tests: 2 of 2 passed' in report
 
 
 @needs_bash
@@ -1235,7 +1235,7 @@ def test_the_report_verdict_is_white_on_its_colour():
     page = report.render(args, [{'part': 'builtin', 'code': 'A1', 'name': 'a', 'result': 'PASS', 'detail': ''}], 'now')
     assert '.r.pass{' in page and '\n.pass{' not in page and '<div class="verdict pass">PASS → approve</div>' in page
     assert 'service-abcdef' not in page and '…cdef' in page
-    assert f'found by the watch in GitHub: batch …cdef, version {NEW}, Units from the Verification Set' in page
+    assert f'found by the watch in GitHub: Verification batch …cdef, Service version {NEW}, Units from the Verification Set' in page
 
 
 # What a person reads: never a whole id.
@@ -1264,10 +1264,10 @@ def test_wait_says_the_state_of_each_unit_in_words(cloud, capsys):
 
 def test_decide_names_the_state_as_the_ui_does(cloud, capsys):
     assert decide(approve=True) == 0
-    assert capsys.readouterr().out.strip() == f'batch {verify_batch.short(BATCH)} (amd64): approved, now Verified (Valid)'
+    assert capsys.readouterr().out.strip() == f'Verification batch {verify_batch.short(BATCH)} (amd64): approved, now Verified (Valid)'
     cloud.batch['state'] = 'Waiting_validation'
     assert decide(approve=False) == 0
-    assert capsys.readouterr().out.strip() == f'batch {verify_batch.short(BATCH)} (amd64): rejected, now Invalid'
+    assert capsys.readouterr().out.strip() == f'Verification batch {verify_batch.short(BATCH)} (amd64): rejected, now Invalid'
 
 
 def report_args(tmp_path, *more):
@@ -1275,7 +1275,7 @@ def report_args(tmp_path, *more):
     if not results.exists():
         results.write_text('builtin\tA1\tthe batch\tPASS\tok\nbuiltin\tB1\ton every\tPASS\tok\n'
                            'builtin\tC2\tno crash\tPASS\tok\nbuiltin\tC3/C4\tstill running\tPASS\tok\n'
-                           'yours\t\tyour tests\tSKIP\tnone\n')
+                           'yours\t\tpartner tests\tSKIP\tnone\n')
     return ['--out', str(tmp_path / 'r'), '--batch-id', 'batch-abcdef', *more]
 
 
@@ -1292,10 +1292,10 @@ def write_report(tmp_path, found_by='run', observe='60'):
 def test_the_report_explains_itself(tmp_path):
     write_report(tmp_path)
     page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
-    for text in ('<b>A</b> = upload and batch', '<b>B</b> = delivery to the Units', '<b>C</b> = the Service runs',
+    for text in ('<b>A</b> = upload and Verification batch', '<b>B</b> = delivery to the Verification Set Units', '<b>C</b> = the Service runs',
                  '<b>D</b> = next to other Services', '<b>E</b> = configuration and recovery',
                  '= checked, good', '= checked, bad, leads to reject', '= not run',
-                 '4 of 4 built-in checks passed; your tests: none added (tests/your_tests.sh)',
+                 '4 passed, 0 skipped, 0 failed; partner tests: none added (tests/your_tests.sh)',
                  'no restarts in 60 s; memory is not measured', 'Found automatically (discover)'):
         assert text in page, text
     assert 'by wait' not in page and 'memory' not in page.split('Scenarios covered')[0]
@@ -1307,13 +1307,13 @@ def test_the_status_column_has_only_the_four_values(tmp_path):
     write_report(tmp_path)
     page = (tmp_path / 'r/report.html').read_text(encoding='utf-8').split('Scenarios covered')[1]
     statuses = set(re.findall(r'<span class="s \w+">([^<]+)</span>', page))
-    assert statuses == {'Checked now', 'Covered by the waiting logic', 'Not run', 'Needs AosCloud 6.2', 'Next version'}
+    assert statuses == {'Checked now', 'Covered by the waiting logic', 'Not run', 'Needs AosCloud 6.2', 'Next Service version'}
 
 
 @pytest.mark.parametrize('found_by, says, status', [
     ('watch', 'found by the watch in GitHub', 'Checked now'),
     ('run', 'found by ./aos-verify on this computer', 'Checked now'),
-    ('version', 'not needed: started with the version', 'Not run')])
+    ('version', 'not needed: started with the Service version', 'Not run')])
 def test_the_report_says_who_found_the_batch(tmp_path, found_by, says, status):
     write_report(tmp_path, found_by=found_by)
     page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
@@ -1354,7 +1354,7 @@ def test_decide_writes_its_outcome_into_the_report(cloud, tmp_path):
     assert verify_batch.decide(args) == 0
     assert 'Decision: approved,' in (tmp_path / 'report.html').read_text(encoding='utf-8')
     assert verify_batch.decide(args) == 2  # already decided: refused, and the report says so
-    assert 'Decision: not sent (the batch is already Valid)' in (tmp_path / 'report.html').read_text(encoding='utf-8')
+    assert 'Decision: not sent (the Verification batch is already Valid)' in (tmp_path / 'report.html').read_text(encoding='utf-8')
 
 
 def test_times_are_in_utc_with_the_local_time_in_brackets(monkeypatch):
@@ -1377,24 +1377,24 @@ def test_times_are_in_utc_with_the_local_time_in_brackets(monkeypatch):
 def test_a_version_that_failed_gets_a_report_and_no_watch_and_not_your_tests(tmp_path):
     run, calls, report = run_tests_sh(tmp_path, status=1, yours='echo "PASS never"\n', extra={'VERSION_FAILED': 'yes'})
     assert run.returncode == 1 and 'never' not in run.stdout and not any(' wait ' in c for c in calls)
-    assert 'FAIL → reject' in report and 'not run: the version already failed' in report
+    assert 'FAIL → reject' in report and 'not run: the Service version already failed' in report
 
 
 @needs_bash
 def test_what_wait_saw_fail_stays_a_fail_even_if_aoscloud_reads_well_later(tmp_path):
     run, _, report = run_tests_sh(tmp_path, status=0, extra={'VERSION_FAILED': 'yes'})
-    assert run.returncode == 1 and 'FAIL → reject' in report and 'wait saw the version fail' in report
+    assert run.returncode == 1 and 'FAIL → reject' in report and 'wait saw the Service version fail' in report
 
 
 def test_the_job_decides_by_itself_unless_told_otherwise():
     text = (ROOT / '.github/workflows/verify-batch.yml').read_text(encoding='utf-8')
     assert "AOS_DECISION: ${{ vars.AOS_DECISION || 'auto' }}" in text
-    approve, reject = text.split('- name: 3a. Approve')[1], text.split('- name: 3b. Reject')[1]
+    approve, reject = text.split('- name: 7a. Approve')[1], text.split('- name: 7b. Reject')[1]
     assert "env.AOS_DECISION == 'auto'" in approve.split('run: |')[0]
     assert "env.AOS_DECISION == 'auto'" in reject.split('run: |')[0]
     assert text.count('verify_batch.py decide') == 2 and text.count('--report-dir report') == 2
-    assert "env.AOS_DECISION != 'auto'" in text.split('- name: 3. No decision')[1].split('run: |')[0]
-    assert text.index('- name: Keep the report') > text.index('- name: 3. No decision')
+    assert "env.AOS_DECISION != 'auto'" in text.split('- name: 7. No decision')[1].split('run: |')[0]
+    assert text.index('- name: Keep the report') > text.index('- name: 7. No decision')
 
 
 def scenario_row(page, code):
@@ -1407,7 +1407,7 @@ def scenario_row(page, code):
 def test_a2_is_checked_and_e2_waits_for_the_next_version(tmp_path):
     write_report(tmp_path)
     page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
-    assert scenario_row(page, 'A2')[2] == 'Checked now' and scenario_row(page, 'E2')[2] == 'Next version'
+    assert scenario_row(page, 'A2')[2] == 'Checked now' and scenario_row(page, 'E2')[2] == 'Next Service version'
 
 
 @pytest.mark.parametrize('code, change', [
@@ -1424,7 +1424,7 @@ def test_each_status_has_its_colour(tmp_path):
     write_report(tmp_path)
     page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
     for name, kind in (('Checked now', 'pass'), ('Covered by the waiting logic', 'skip'), ('Needs AosCloud 6.2', 'skip'),
-                       ('Not run', 'amber'), ('Next version', 'skip')):
+                       ('Not run', 'amber'), ('Next Service version', 'skip')):
         assert f'<span class="s {kind}">{name}</span>' in page
     assert '.s.pass{background:#DDF3E6' in page and '.s.skip{background:#ECEFF3' in page and '.s.amber{background:#FDF0D5' in page
 
@@ -1443,7 +1443,7 @@ def test_an_observation_that_is_off_is_not_called_the_watch(tmp_path):
 @needs_bash
 def test_an_observation_skipped_for_a_failed_version_says_that_not_off(tmp_path):
     _, _, report = run_tests_sh(tmp_path, status=1, extra={'VERSION_FAILED': 'yes'})
-    assert scenario_row(report, 'C3')[3] == 'not run: the version already failed on a test Unit'
+    assert scenario_row(report, 'C3')[3] == 'not run: the Service version already failed on a Verification Set Unit'
     assert 'AOS_WATCH_SECONDS=0' not in report
 
 
@@ -1456,18 +1456,20 @@ def test_the_60_second_look_is_called_observing_everywhere(tmp_path):
 
 
 # Impossible to miss: the decision mode, your tests, and why the watch asks every 5 minutes.
-BOX = ('Defaults: the job decides by itself (AOS_DECISION=auto). Want a person to decide? Set AOS_DECISION=report-only: '
-       'the job only checks and writes the report, you approve in the AosCloud UI. Or ask (laptop only).',
-       'Built-in checks run on every version (A1, B1, C2; C3/C4 unless AOS_WATCH_SECONDS=0). Add your own tests in '
-       'tests/your_tests.sh (start from tests/your_tests.sh.example): they run after the built-in checks. If any check or '
-       'test fails, the verdict is reject; in auto mode the job sends it, in report-only a person decides.')
-WHY = ('AosCloud does not notify a pipeline when a new version waits (no webhook in 6.1/6.2), so the watch asks every 5 '
-       'minutes. 5 minutes is the shortest interval GitHub allows. GitHub runs scheduled jobs on a best-effort basis: they '
-       'can start late or be skipped, sometimes for long periods (in our test repository, delays of over an hour). Each run takes about 20 s and only reads. To change it, edit one '
-       'line in watch-batches.yml: cron: "*/5 * * * *" → "*/10 * * * *" (every 10 min), "*/30 * * * *", "0 * * * *" '
-       '(hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start verify-batch right '
-       'after your upload job (the chain), or use an external scheduler. A webhook from AosCloud would make it instant '
-       '(feature request).')
+BOX = ('Defaults: the job decides by itself (AOS_DECISION=auto). For a decision by a person, set '
+       'AOS_DECISION=report-only: the job only checks and writes the report, and a person approves or '
+       'rejects in the SP UI. Or ask (laptop only).',
+       'Built-in checks run on every Service version (A1, B1, C2; C3/C4 unless AOS_WATCH_SECONDS=0). Add your '
+       'own tests in tests/your_tests.sh (start from tests/your_tests.sh.example): they run after the '
+       'built-in checks. If any check or test fails, the verdict is reject; in auto mode the job sends it, '
+       'in report-only a person decides.')
+WHY = ('AosCloud does not notify a pipeline when a new Service version waits (no webhook), so the watch asks'
+       ' every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub may start runs late or '
+       'skip them; for a guaranteed start use Start A. Each run takes about 20 s and only reads. To change '
+       'it, edit one line in watch-batches.yml: cron: "*/5 * * * *" → "*/10 * * * *" (every 10 min), "*/30 *'
+       ' * * *", "0 * * * *" (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact '
+       'timing: start verify-batch right after your upload job (Start A, the chain), or use an external '
+       'scheduler. A webhook from AosCloud would make it instant (feature request).')
 
 
 def plain(text: str) -> str:
@@ -1480,13 +1482,13 @@ def start_here_overview() -> str:
     return page[page.index('<section class="page" id="overview">'):page.index('<section class="page" id="prerequisites">')]
 
 
-def test_the_box_is_right_under_what_it_does_in_the_readme_and_start_here():
+def test_the_box_is_right_below_the_tables_in_the_readme_and_start_here():
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
     box = readme[readme.index('> [!IMPORTANT]'):readme.index('<details>')]
     for line in BOX:
         assert line in plain(box), line
         assert line in plain(start_here_overview()), line
-    assert readme.index('AosCloud API call.') < readme.index('> [!IMPORTANT]') < readme.index('![Your upload job')
+    assert readme.index('AosCloud API call.') < readme.index('](docs/img/flow.svg)') < readme.index('## Step by step') < readme.index('> [!IMPORTANT]')
     assert '<blockquote class="alert">' in start_here_overview() and '[!IMPORTANT]' not in start_here_overview()
 
 
@@ -1523,7 +1525,7 @@ def summary_of(workflow: Path, step: str, tmp_path, **env) -> list[str]:
 def test_the_job_summary_starts_with_the_decision_mode(tmp_path, mode):
     lines = summary_of(ROOT / '.github/workflows/verify-batch.yml', 'Say the decision mode', tmp_path, AOS_DECISION=mode)
     assert lines[0] == f'Decision mode: {mode} (change with the AOS_DECISION variable)'
-    assert lines[2].startswith('Why every 5 minutes? AosCloud does not notify a pipeline')
+    assert plain(lines[2]) == f'Why every 5 minutes? {WHY}'
 
 
 def test_the_decision_mode_is_said_before_anything_can_fail_and_the_values_are_next_to_it():
@@ -1536,7 +1538,7 @@ def test_the_decision_mode_is_said_before_anything_can_fail_and_the_values_are_n
 
 
 def test_the_watch_says_why_in_its_summary(tmp_path):
-    assert summary_of(WATCH, 'Say why it asks on a schedule', tmp_path)[0].startswith('Why every 5 minutes?')
+    assert plain(summary_of(WATCH, 'Say why it asks on a schedule', tmp_path)[0]) == f'Why every 5 minutes? {WHY}'
     text = WATCH.read_text(encoding='utf-8')
     # after the checkout: the showcase copy of this file runs in a folder that exists only then
     assert text.index('actions/checkout') < text.index('Say why it asks on a schedule')
@@ -1553,7 +1555,7 @@ def test_the_report_header_says_the_decision_mode_and_keeps_it_after_the_decisio
     assert report.main(report_args(tmp_path, '--decision', 'approved', '--state', 'Valid')) == 0
     page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
     assert fact in page and 'Decision: approved' in page
-    assert page.index('<span>Version</span>') < page.index(fact) < page.index('<span>Test Units</span>')
+    assert page.index('<span>Service version</span>') < page.index(fact) < page.index('<span>Verification Set Units</span>')
 
 
 def test_a_report_without_a_mode_does_not_invent_one(tmp_path):
@@ -1561,19 +1563,19 @@ def test_a_report_without_a_mode_does_not_invent_one(tmp_path):
     assert 'Decision mode' not in (tmp_path / 'r/report.html').read_text(encoding='utf-8')
 
 
-AMBER = '<p class="todo"><b>No tests of yours yet: add tests/your_tests.sh</b>'
+AMBER = '<p class="todo"><b>No partner tests yet: add tests/your_tests.sh</b>'
 
 
 @pytest.mark.parametrize('line, amber', [
-    ('yours\t\tyour tests\tSKIP\tno tests/your_tests.sh (start from tests/your_tests.sh.example)\n', True),
-    ('yours\t\tyour tests\tSKIP\tnot run: the version already failed on a test Unit\n', False),
+    ('yours\t\tpartner tests\tSKIP\tno tests/your_tests.sh (start from tests/your_tests.sh.example)\n', True),
+    ('yours\t\tpartner tests\tSKIP\tnot run: the Service version already failed on a Verification Set Unit\n', False),
     ('yours\t\thealth\tPASS\tok\n', False),
     ('yours\t\thealth\tFAIL\tbroken\n', False)])
 def test_your_tests_section_is_amber_only_when_you_have_none(tmp_path, line, amber):
     (tmp_path / 'results.tsv').write_text('builtin\tA1\tthe batch\tPASS\tok\n' + line)
     write_report(tmp_path)
     page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
-    section = page[page.index('<h2>Your tests</h2>'):page.index('<h2>Scenarios covered</h2>')]
+    section = page[page.index('<h2>Partner tests</h2>'):page.index('<h2>Scenarios covered</h2>')]
     assert (AMBER in section) is amber
     assert ('they run after the built-in checks. If any check or test fails, the verdict is reject; in auto mode the job '
             'sends it, in report-only a person decides.' in section) is amber
@@ -1586,3 +1588,73 @@ def test_the_old_workflow_names_are_gone():
     files = [p for p in ROOT.rglob('*') if p.is_file() and '.git' not in p.parts and p.suffix not in ('.png', '.jpg', '.mp4')
              and '__pycache__' not in p.parts and '.pytest_cache' not in p.parts and '.venv' not in p.parts and 'report' not in p.parts]
     assert [str(p) for p in files if old.search(p.name) or old.search(p.read_text(encoding='utf-8', errors='ignore'))] == []
+
+
+# Terms: a reader never has to guess which version or which batch.
+def report_page(tmp_path, *more, results='builtin\tA1\ta\tPASS\tok\nbuiltin\tB1\tb\tPASS\tok\nbuiltin\tC2\tc\tPASS\tok\n'
+                                         'builtin\tC3/C4\td\tSKIP\toff\nyours\t\tpartner tests\tSKIP\tnone\n'):
+    sys.path.insert(0, str(ROOT / 'tests'))
+    import report  # noqa: E402  pylint: disable=import-outside-toplevel
+    (tmp_path / 'results.tsv').write_text(results)
+    assert report.main(report_args(tmp_path, '--results', str(tmp_path / 'results.tsv'), '--service-id', 'service-abcdef',
+                                   '--version', NEW, '--units', 'unit-abcdef', '--observe', '60', *more)) == 0
+    return (tmp_path / 'r/report.html').read_text(encoding='utf-8')
+
+
+def test_the_report_header_labels(tmp_path):
+    page = report_page(tmp_path, '--service-name', 'verification-demo', '--decision-mode', 'auto')
+    labels = re.findall(r'<div><span>([^<]+)</span>', page)
+    assert labels == ['Service', 'Service version', 'Verification batch', 'Decision mode', 'Verification Set Units', 'Report time']
+    assert '<div><span>Service</span>verification-demo (…cdef)</div>' in page
+
+
+def test_the_report_without_a_service_name_shows_the_short_id(tmp_path):
+    assert '<div><span>Service</span>…cdef</div>' in report_page(tmp_path)
+
+
+def test_the_report_has_no_bare_version_or_batch(tmp_path):
+    page = report_page(tmp_path, '--service-name', 'verification-demo', '--decision-mode', 'auto')
+    labels = re.findall(r'<(?:span|th|h1|h2|b)[^>]*>([^<]+)<', page)
+    assert not [text for text in labels if re.fullmatch(r'\s*(version|batch)s?\s*', text, re.I)]
+    words = html.unescape(re.sub(r'<[^>]+>', ' ', page[page.index('<body>'):]))
+    assert not re.findall(r'.{0,30}(?<!Service )\b[Vv]ersions?\b.{0,10}', words)
+    assert not re.findall(r'.{0,30}(?<!Verification )\b[Bb]atch(?:es)?\b.{0,10}', words)
+    assert 'your tests' not in words.lower() and 'test Unit' not in words
+
+
+def test_the_junit_names_have_no_bare_version(tmp_path):
+    report_page(tmp_path)
+    junit = (tmp_path / 'r/junit.xml').read_text(encoding='utf-8')
+    assert f'name="verification of Service version {NEW}"' in junit and 'classname="your tests"' not in junit
+
+
+def test_the_summary_counts_what_was_skipped_and_failed(tmp_path):
+    page = report_page(tmp_path)
+    assert '3 passed, 1 skipped (C3/C4), 0 failed; partner tests: none added (tests/your_tests.sh)' in page
+    page = report_page(tmp_path, results='builtin\tA1\ta\tPASS\tok\nbuiltin\tB1\tb\tFAIL\tno\nyours\t\th\tPASS\tok\n')
+    assert '1 passed, 0 skipped, 1 failed; partner tests: 1 of 1 passed' in page
+
+
+def test_a1_and_b1_are_named_as_agreed(cloud, capsys):
+    verify_batch.main(['status', '--service-id', SERVICE, '--version', NEW, '--batch-id', 'batch-1', '--unit', UNIT])
+    out = capsys.readouterr().out
+    assert 'A1\tthe Verification batch is for this Service and this Service version\t' in out
+    assert f'B1\tService version {NEW} is installed and running on every Verification Set Unit\t' in out
+
+
+def test_service_name_reads_the_codename(monkeypatch, capsys):
+    monkeypatch.setattr(verify_batch, 'pages', lambda path: [{'id': 'other', 'codename': 'no'}, {'id': SERVICE, 'codename': 'demo'}])
+    assert main('service-name', '--service-id', SERVICE) == 0 and capsys.readouterr().out == 'demo\n'
+
+
+@needs_bash
+def test_by_parts_the_service_name_reaches_the_step_without_the_key(tmp_path):
+    run_tests_sh(tmp_path, part='builtin', extra={'SERVICE_NAME': 'demo-x'})
+    run, _, report = run_tests_sh(tmp_path, part='yours')
+    assert run.returncode == 0 and '<div><span>Service</span>demo-x (…3456)</div>' in report
+
+
+def test_aos_verify_recognises_the_message_of_verify_batch():
+    phrase = 'no Verification Set Unit'
+    assert phrase in (ROOT / 'verify_batch.py').read_text(encoding='utf-8')
+    assert f"*'{phrase}'*)" in (ROOT / 'aos-verify').read_text(encoding='utf-8')
