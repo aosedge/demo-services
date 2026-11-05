@@ -5,11 +5,11 @@
 # The built-in checks of the new version, then your tests, then an HTML report. Run it after wait (it reads AosCloud only).
 # Inputs (environment): SERVICE_ID, VERSION, BATCH (or BATCH_ID), UNIT_ID (or AOS_TEST_UNITS: several Unit ids,
 # separated by spaces), and the settings of verify_batch.py (AOS_API_URL, AOS_CERT, AOS_CA).
-# AOS_WATCH_SECONDS (or WATCH_SECONDS, which wins): how long to watch the version after the checks; default 60, 0 = off.
+# AOS_WATCH_SECONDS (or WATCH_SECONDS, which wins): how long to observe the version after the checks; default 60, 0 = off.
 # Your tests: tests/your_tests.sh, when it exists (start from tests/your_tests.sh.example).
 # Writes report/report.html and report/junit.xml (REPORT_DIR changes the folder).
 # RUN_PART: all (default), or builtin and then yours: the job runs them in two steps, so your tests have no key at all.
-# VERSION_FAILED=yes: wait already saw the version fail on a Unit. Only the report: no watch, and not your tests.
+# VERSION_FAILED=yes: wait already saw the version fail on a Unit. Only the report: no observation, and not your tests.
 # Exit 0 = every check passed: approve. 1 = a check failed: reject. 2 = a setting is missing.
 # 3 = AosCloud could not be read, or a test Unit is offline: decide nothing, neither says anything about the version.
 # builtin always exits 0.
@@ -18,11 +18,11 @@ here=$(cd "$(dirname "$0")" && pwd)
 python=${PYTHON:-python}
 batch=${BATCH_ID:-${BATCH:-}}
 units=${AOS_TEST_UNITS:-${UNIT_ID:-}}
-watch=${WATCH_SECONDS:-${AOS_WATCH_SECONDS:-60}}
+observe=${WATCH_SECONDS:-${AOS_WATCH_SECONDS:-60}}
 out=${REPORT_DIR:-report}
 part=${RUN_PART:-all}
 version_failed=${VERSION_FAILED:-}
-if [ -n "$version_failed" ]; then watch=0; fi
+if [ -n "$version_failed" ]; then observe=0; fi
 
 if [ -z "${SERVICE_ID:-}" ] || [ -z "${VERSION:-}" ]; then echo "SERVICE_ID or VERSION is empty: export them first"; exit 2; fi
 if [ -z "$batch" ]; then echo "BATCH is empty: run wait first, it sets BATCH"; exit 2; fi
@@ -62,11 +62,11 @@ if [ -n "$version_failed" ] && ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tFAIL' "$resu
   record builtin B1 "$VERSION is installed and running on every test Unit" FAIL "wait saw the version fail on a test Unit"
 fi
 
-# C3, C4: the watch. Every 60 s, wait checks that the version still runs on every Unit. A restart between two reads
+# C3, C4: the observation. Every 60 s, wait checks that the version still runs on every Unit. A restart between two reads
 # is not seen, and memory is not measured: add a check to tests/your_tests.sh if you need them.
-if [ "$watch" -gt 0 ]; then
-  rounds=$(( (watch + 59) / 60 ))
-  echo "watching for $watch s ($rounds round(s) of 60 s)"
+if [ "$observe" -gt 0 ]; then
+  rounds=$(( (observe + 59) / 60 ))
+  echo "observing for $observe s ($rounds round(s) of 60 s)"
   stopped=0
   lost=0
   for ((round = 1; round <= rounds; round++)); do
@@ -81,7 +81,7 @@ if [ "$watch" -gt 0 ]; then
       break
     fi
   done
-  still="still running after $watch s, no restarts"
+  still="still running after $observe s, no restarts"
   if [ "$stopped" -eq 0 ]; then
     record builtin C3/C4 "$still" PASS "active on every Unit at each read, one read every 60 s; memory is not measured"
   elif [ "$lost" -eq 1 ]; then
@@ -133,7 +133,7 @@ else
 fi
 
 "$python" "$here/report.py" --results "$results" --out "$out" --service-id "$SERVICE_ID" --version "$VERSION" \
-  --batch-id "$batch" --units "$units" --watch "$watch" \
+  --batch-id "$batch" --units "$units" --observe "$observe" \
   --found-by "${FOUND_BY:-version}" --units-from "${UNITS_FROM:-the values you gave}" || failed=1
 if [ $failed -eq 1 ]; then echo "a check failed: reject"; exit 1; fi
 if [ $unread -eq 1 ]; then echo "AosCloud could not be read, or a Unit is offline: decide nothing, and run it again"; exit 3; fi

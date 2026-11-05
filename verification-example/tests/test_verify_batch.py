@@ -1070,7 +1070,7 @@ def test_status_reports_a_decided_batch_as_a1_fail(cloud, capsys):
     assert rows['A1'] == ('FAIL', 'batch …ch-1 is Valid, not Waiting_validation')
 
 
-# tests/run_tests.sh: the built-in checks, the watch, your tests and the report, with a stand-in for verify_batch.py
+# tests/run_tests.sh: the built-in checks, the observation, your tests and the report, with a stand-in for verify_batch.py
 
 FAKE_PYTHON = r"""#!/usr/bin/env bash
 case "$1" in
@@ -1089,7 +1089,7 @@ esac
 """
 
 
-def run_tests_sh(tmp_path, watch='60', status=0, wait_code=0, yours=None, batch='batch-1234567890', part='all',
+def run_tests_sh(tmp_path, observe='60', status=0, wait_code=0, yours=None, batch='batch-1234567890', part='all',
                  extra=None):
     tests = tmp_path / 'repo' / 'tests'
     tests.mkdir(parents=True, exist_ok=True)
@@ -1102,7 +1102,7 @@ def run_tests_sh(tmp_path, watch='60', status=0, wait_code=0, yours=None, batch=
     fake.chmod(0o755)
     calls = tmp_path / 'calls'
     env = {'PATH': os.environ['PATH'], 'PYTHON': str(fake), 'REAL_PYTHON': sys.executable, 'CALLS': str(calls),
-           'FAKE_STATUS': str(status), 'FAKE_WAIT': str(wait_code), 'WATCH_INTERVAL': '0', 'WATCH_SECONDS': watch,
+           'FAKE_STATUS': str(status), 'FAKE_WAIT': str(wait_code), 'WATCH_INTERVAL': '0', 'WATCH_SECONDS': observe,
            'UNIT_ID': 'unit-abcdef123456', 'SERVICE_ID': 'service-abcdef123456', 'VERSION': NEW, 'BATCH': batch,
            'AOS_CERT': '/secret/user.pem', 'REPORT_DIR': str(tmp_path / 'report'), 'RUN_PART': part, **(extra or {})}
     run = subprocess.run(['bash', str(tests / 'run_tests.sh')], env=env, cwd=tmp_path, capture_output=True,
@@ -1127,14 +1127,14 @@ def test_our_checks_and_the_watch_run_by_default_and_write_the_report(tmp_path):
 
 @needs_bash
 def test_the_watch_catches_a_version_that_stops_running(tmp_path):
-    run, calls, report = run_tests_sh(tmp_path, watch='180', wait_code=1)
+    run, calls, report = run_tests_sh(tmp_path, observe='180', wait_code=1)
     assert run.returncode == 1 and 'FAIL C3/C4' in run.stdout and 'round 1 of 3' in run.stdout
     assert sum(' wait ' in c for c in calls) == 1 and 'FAIL → reject' in report
 
 
 @needs_bash
 def test_the_watch_can_be_turned_off(tmp_path):
-    run, calls, _ = run_tests_sh(tmp_path, watch='0')
+    run, calls, _ = run_tests_sh(tmp_path, observe='0')
     assert run.returncode == 0 and 'SKIP C3/C4' in run.stdout and not any(' wait ' in c for c in calls)
 
 
@@ -1229,7 +1229,7 @@ def test_the_report_verdict_is_white_on_its_colour():
     sys.path.insert(0, str(ROOT / 'tests'))
     import report  # noqa: E402  pylint: disable=import-outside-toplevel
     args = SimpleNamespace(service_id='service-abcdef', version=NEW, batch_id='batch-abcdef', units='unit-abcdef',
-                           watch=60, found_by='watch', units_from='the Verification Set')
+                           observe=60, found_by='watch', units_from='the Verification Set')
     page = report.render(args, [{'part': 'builtin', 'code': 'A1', 'name': 'a', 'result': 'PASS', 'detail': ''}], 'now')
     assert '.r.pass{' in page and '\n.pass{' not in page and '<div class="verdict pass">PASS → approve</div>' in page
     assert 'service-abcdef' not in page and '…cdef' in page
@@ -1277,11 +1277,11 @@ def report_args(tmp_path, *more):
     return ['--out', str(tmp_path / 'r'), '--batch-id', 'batch-abcdef', *more]
 
 
-def write_report(tmp_path, found_by='run', watch='60'):
+def write_report(tmp_path, found_by='run', observe='60'):
     sys.path.insert(0, str(ROOT / 'tests'))
     import report  # noqa: E402  pylint: disable=import-outside-toplevel
     args = report_args(tmp_path, '--results', str(tmp_path / 'results.tsv'), '--service-id', 'service-abcdef',
-                       '--version', NEW, '--units', 'unit-abcdef', '--watch', watch, '--found-by', found_by,
+                       '--version', NEW, '--units', 'unit-abcdef', '--observe', observe, '--found-by', found_by,
                        '--units-from', 'the Verification Set')
     assert report.main(args) == 0
     return report
@@ -1443,4 +1443,12 @@ def test_an_observation_skipped_for_a_failed_version_says_that_not_off(tmp_path)
     _, _, report = run_tests_sh(tmp_path, status=1, extra={'VERSION_FAILED': 'yes'})
     assert scenario_row(report, 'C3')[3] == 'not run: the version already failed on a test Unit'
     assert 'AOS_WATCH_SECONDS=0' not in report
+
+
+@needs_bash
+def test_the_watch_is_only_the_github_job_never_the_observation(tmp_path):
+    run, _, report = run_tests_sh(tmp_path)
+    assert 'observing for 60 s' in run.stdout and 'watch' not in run.stdout.lower()
+    # Started with the version here, so the job that finds a batch had no part in it. Only the name of the setting stays.
+    assert 'watch' not in report.replace('AOS_WATCH_SECONDS', '').lower()
 

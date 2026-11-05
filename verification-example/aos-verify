@@ -712,7 +712,7 @@ cmd_run() {
   case "$code" in
     0) ;;
     1)
-      say '3. The report (the version failed: no watch, not your tests)'
+      say '3. The report (the version failed: no observation, not your tests)'
       VERSION_FAILED=yes run_checks
       finish reject 'the version failed on a test Unit'
       return $?

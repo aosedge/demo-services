@@ -81,7 +81,7 @@ Built-in checks of version 4.10.0
 PASS A1 the batch holds exactly this Service and version: batch …a410 holds version 4.10.0 of Service …ec65
 PASS B1 4.10.0 is installed and running on every test Unit: version 4.10.0 active on 1 of 1 Units
 PASS C2 the Service did not crash on start: no failed instance
-watching for 60 s (1 round(s) of 60 s)
+observing for 60 s (1 round(s) of 60 s)
 PASS C3/C4 still running after 60 s, no restarts: active on every Unit at each read, one read every 60 s; memory is not measured
 SKIP your tests: no tests/your_tests.sh (start from tests/your_tests.sh.example)
 report: report/report.html (and junit.xml)
@@ -409,7 +409,7 @@ In a production run the version was active on the test Unit about 15 s after the
 
 ### 8. Run the built-in checks
 
-The built-in checks read the batch and the Unit again (exactly this version, on every Unit, no crash), then watch the version
+The built-in checks read the batch and the Unit again (exactly this version, on every Unit, no crash), then observe the version
 for 60 s (late failure, restarts). Your own tests run after them, if you add them ([Your tests](tests.md)). The
 script reads the values you exported; it takes no arguments.
 
@@ -432,7 +432,7 @@ Built-in checks of version 4.8.0
 PASS A1 the batch holds exactly this Service and version: batch …4b5a holds version 4.8.0 of Service …5c6d
 PASS B1 4.8.0 is installed and running on every test Unit: version 4.8.0 active on 1 of 1 Units
 PASS C2 the Service did not crash on start: no failed instance
-watching for 60 s (1 round(s) of 60 s)
+observing for 60 s (1 round(s) of 60 s)
 PASS C3/C4 still running after 60 s, no restarts: active on every Unit at each read, one read every 60 s; memory is not measured
 SKIP your tests: no tests/your_tests.sh (start from tests/your_tests.sh.example)
 report: report/report.html (and junit.xml)

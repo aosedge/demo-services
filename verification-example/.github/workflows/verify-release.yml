@@ -154,7 +154,7 @@ jobs:
           # 0 ready; 1 failed on a Unit, rejected below; anything else (timed out, decided, an error): decide nothing
           case "$code" in 0) ;; 1) [ -n "$batch" ] || exit 1 ;; *) exit 1 ;; esac
 
-      # The built-in checks read AosCloud (the batch, the Units, the watch), so this step has the certificate.
+      # The built-in checks read AosCloud (the batch, the Units, the observation), so this step has the certificate.
       # It only collects results: step 2b gives the verdict.
       - name: 2a. Run the built-in checks
         id: builtin

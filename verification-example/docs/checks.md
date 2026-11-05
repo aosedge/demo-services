@@ -6,7 +6,7 @@ yet. Most are already built into `verify_batch.py` and `tests/run_tests.sh`; the
 
 ## What runs by default
 
-`./aos-verify test` (`bash tests/run_tests.sh`, after `wait`) runs the built-in checks A1, B1, C2 and the watch (C3/C4, 60 s) with no setup, then
+`./aos-verify test` (`bash tests/run_tests.sh`, after `wait`) runs the built-in checks A1, B1, C2 and the observation (C3/C4, 60 s) with no setup, then
 your tests if `tests/your_tests.sh` exists. Each check is one row in `report/report.html`; the report ends with a
 "Scenarios covered" table with a status for each scenario in that run (Checked now, Covered by the waiting logic, Not run, Next version, or Needs AosCloud 6.2) and what you can change for it. The commands below run as they are in
 the folder of the example, after `./aos-verify setup` and `./aos-verify discover`, once you have loaded the values
@@ -27,8 +27,8 @@ source .venv/bin/activate && source .aos-verify.env && source .aos-verify/state
 | B2 | A Unit that never gets it | approved while half of the Units never got it | `wait` times out, exit 2, no decision | Scenarios covered: Covered by the waiting logic | seen on production, 29.10 |
 | C1 | The Service's own tests | the version runs but does not work | `tests/your_tests.sh` | Your tests | seen on production, 30.10: the sample checks passed |
 | C2 | Crash on start | a version that does not start is approved | `wait` exit 1 → reject; the built-in checks read it again | Built-in checks: C2 | seen on production, 29.10 |
-| C3 | Late failure | the version fails minutes after the tests | the watch, on by default (60 s) | Built-in checks: C3/C4 | seen on production, 29.10 |
-| C4 | Restarts | the version keeps restarting | the watch, at each read; a restart check in `tests/your_tests.sh`. Memory is not measured | Built-in checks: C3/C4; Your tests | seen on production, 29.10 |
+| C3 | Late failure | the version fails minutes after the tests | the observation, on by default (60 s) | Built-in checks: C3/C4 | seen on production, 29.10 |
+| C4 | Restarts | the version keeps restarting | the observation, at each read; a restart check in `tests/your_tests.sh`. Memory is not measured | Built-in checks: C3/C4; Your tests | seen on production, 29.10 |
 | E1 | Bad configuration | a wrong setting ships with good code | a config test in `tests/your_tests.sh` | Your tests | seen on production, 29.10 |
 | E2 | Recovery: the fixed version | the fix skips the gate | upload the fix as a new version; the same steps approve it | the report of the fixed version | seen on production, 29.10 |
 
@@ -183,14 +183,14 @@ python verify_batch.py decide --batch-id "$BATCH" --reject
 
 **What it checks.** The version still runs some time after it started.
 
-**How.** The watch, on by default: every 60 s for `WATCH_SECONDS` (default 60) it runs `verify_batch.py wait` again
-with `--timeout 60` on every Unit. To watch longer:
+**How.** The observation, on by default: every 60 s for `WATCH_SECONDS` (default 60) it runs `verify_batch.py wait` again
+with `--timeout 60` on every Unit. To observe longer:
 
 ```bash
 WATCH_SECONDS=180 bash tests/run_tests.sh
 ```
 
-In the job, set the variable `AOS_WATCH_SECONDS` (`0` turns it off). The watch reads the Units from AosCloud, so the
+In the job, set the variable `AOS_WATCH_SECONDS` (`0` turns it off). The observation reads the Units from AosCloud, so the
 step of the built-in checks has the certificate; your tests run in another step, with no secret.
 
 **What you see.** `PASS C3/C4 still running after 60 s, no restarts`, or `FAIL C3/C4`: "the version stopped running in round … of …".
@@ -202,7 +202,7 @@ nothing is decided.
 
 **What it checks.** The version does not keep crashing. Memory is not measured: the report says so.
 
-**How.** When AosCloud reports the instance as failed, `wait`, the built-in C2 and the watch see it. The watch reads once
+**How.** When AosCloud reports the instance as failed, `wait`, the built-in C2 and the observation see it. The observation reads once
 every 60 s, so a version that is killed and restarted between two reads can look fine: add a test of your own to `tests/your_tests.sh`, for example the
 uptime that your Service reports:
 

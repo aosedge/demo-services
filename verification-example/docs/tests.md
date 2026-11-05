@@ -15,7 +15,7 @@ It runs after `wait`, and takes no arguments. `./aos-verify run` and `./aos-veri
    | A1 | the batch holds exactly this Service and version, and still waits |
    | B1 | the version is installed and active on every test Unit |
    | C2 | no instance of the version failed |
-   | C3/C4 | the watch: every 60 s for `WATCH_SECONDS` (default 60, `0` = off), the version still runs on every Unit. It reads once every 60 s, and it does not measure memory |
+   | C3/C4 | the observation: every 60 s for `WATCH_SECONDS` (default 60, `0` = off), the version still runs on every Unit. It reads once every 60 s, and it does not measure memory |
 
 2. **Your tests**, from `tests/your_tests.sh`, when the file exists.
 3. **The report**: `report/report.html` and `report/junit.xml`. In the job: the run page → **Artifacts** →
@@ -58,7 +58,7 @@ Examples of checks for the 12 scenarios we ran on production: [Example checks](c
 (the highest version, stale batches, the Units in both lists, `--dry-run`), `check`, `status`, wait, a version that failed or is still starting, a timeout, paging through the batches, errors that stop at
 once (HTTP 4xx, TLS, a missing setting, no test Units, any unexpected error) and outages that are retried, approve,
 reject, `--arch`, a decided batch, a batch with no architectures, HTTP 5xx after the decision, an empty answer, and a
-lost answer. With `bash`, it also runs `tests/run_tests.sh` (the built-in checks, the watch, your tests, the report, the exit
+lost answer. With `bash`, it also runs `tests/run_tests.sh` (the built-in checks, the observation, your tests, the report, the exit
 codes) and steps of the workflows: the job never ends green without a decision, stops on an empty secret, and deletes
 the key; the watch, with a stand-in for `gh`, starts one run per batch.
 

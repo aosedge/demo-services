@@ -4,7 +4,7 @@
 """Write report.html and junit.xml from the results that tests/run_tests.sh collected.
 
     python tests/report.py --results report/results.tsv --out report --service-id ID --version X.Y.Z
-                           --batch-id ID --units "UNIT_ID ..." --watch SECONDS
+                           --batch-id ID --units "UNIT_ID ..." --observe SECONDS
                            [--found-by watch|run|version] [--units-from TEXT]
     python tests/report.py --out report --batch-id ID --decision approved|rejected|not-sent|report-only|unknown
                            [--state STATE] [--why TEXT]
@@ -76,12 +76,12 @@ def found_how(found_by: str) -> tuple[str, str]:
     return NOT_RUN, 'not needed: started with the version'
 
 
-def coverage(rows: list[dict], watch: int, found: tuple[str, str]) -> dict[str, tuple[str, str]]:
+def coverage(rows: list[dict], observe: int, found: tuple[str, str]) -> dict[str, tuple[str, str]]:
     """For each scenario: its status, and what that means in this run."""
     builtin = {r['code']: r['result'] for r in rows if r['part'] == 'builtin'}
     yours = [r for r in rows if r['part'] == 'yours' and r['result'] != 'SKIP']
     late = builtin.get('C3/C4', 'FAIL')
-    watched = watch > 0 and late != 'SKIP'
+    observed = observe > 0 and late != 'SKIP'
     # The check says why it did not run: it was switched off, or the version had already failed.
     off = (NOT_RUN, next((r['detail'] for r in rows if r['code'] == 'C3/C4' and r['result'] == 'SKIP' and r['detail']),
                          OBSERVATION_OFF))
@@ -98,8 +98,8 @@ def coverage(rows: list[dict], watch: int, found: tuple[str, str]) -> dict[str, 
                               'timeout, with no decision.'),
         'C1': (CHECKED, f'{len(yours)} of your tests ran') if yours else no_tests,
         'C2': (CHECKED, builtin.get('C2', 'FAIL')),
-        'C3': (CHECKED, f'{late}: still running after {watch} s') if watched else off,
-        'C4': (CHECKED, f'{late}: no restarts in {watch} s; memory is not measured') if watched else off,
+        'C3': (CHECKED, f'{late}: still running after {observe} s') if observed else off,
+        'C4': (CHECKED, f'{late}: no restarts in {observe} s; memory is not measured') if observed else off,
         'D1': (NEEDS_62, 'AosCloud 6.1 cannot show this.'),
         'D2': (NEEDS_62, 'AosCloud 6.1 cannot show this.'),
         'E1': (CHECKED, f'only if your tests hold a config test; {len(yours)} of your tests ran') if yours else no_tests,
@@ -159,7 +159,7 @@ def render(args, rows: list[dict], when: str, decided: dict | None = None) -> st
     yours = [r for r in rows if r['part'] == 'yours']
     status, how = found_how(args.found_by)
     found = (status, f'{how}: batch {short(args.batch_id)}, version {args.version}, Units from {args.units_from}')
-    cover = coverage(rows, args.watch, found)
+    cover = coverage(rows, args.observe, found)
     scenario_rows = ''.join(f'<tr><td>{code}</td><td>{html.escape(name)}</td>'
                             f'<td><span class="s {STATUS_CLASS[cover[code][0]]}">{html.escape(cover[code][0])}</span></td>'
                             f'<td>{html.escape(cover[code][1])}</td><td>{html.escape(CHANGE_IT.get(code, "—"))}</td></tr>'
@@ -262,7 +262,7 @@ def write_decision(args) -> int:
         return 0
     decided = {'decision': args.decision, 'state': args.state, 'why': args.why,
                'when': stamp(datetime.now(timezone.utc))}
-    report = SimpleNamespace(**{k: meta[k] for k in ('service_id', 'version', 'batch_id', 'units', 'watch', 'found_by',
+    report = SimpleNamespace(**{k: meta[k] for k in ('service_id', 'version', 'batch_id', 'units', 'observe', 'found_by',
                                                      'units_from')})
     (args.out / 'report.html').write_text(render(report, meta['rows'], meta['when'], decided), encoding='utf-8')
     print(f'report: {args.out / "report.html"} (with the decision)')
@@ -277,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--version', default='')
     parser.add_argument('--batch-id', default='')
     parser.add_argument('--units', default='')
-    parser.add_argument('--watch', type=int, default=0)
+    parser.add_argument('--observe', type=int, default=0)
     parser.add_argument('--found-by', default='version')
     parser.add_argument('--units-from', default='the values you gave')
     parser.add_argument('--decision', choices=['approved', 'rejected', 'not-sent', 'report-only', 'unknown'])
@@ -296,7 +296,7 @@ def main(argv: list[str] | None = None) -> int:
     (args.out / 'junit.xml').write_text(junit(args, rows, now.strftime('%Y-%m-%d %H:%M')), encoding='utf-8')
     # What the decision needs to render this report again, with the ids shortened: the folder is kept as an artifact.
     meta = {'service_id': short(args.service_id), 'version': args.version, 'batch_id': short(args.batch_id),
-            'units': ' '.join(short(u) for u in args.units.split()), 'watch': args.watch, 'found_by': args.found_by,
+            'units': ' '.join(short(u) for u in args.units.split()), 'observe': args.observe, 'found_by': args.found_by,
             'units_from': args.units_from, 'when': when, 'rows': rows}
     (args.out / META).write_text(json.dumps(meta, ensure_ascii=False), encoding='utf-8')
     print(f'report: {args.out / "report.html"} (and junit.xml)')

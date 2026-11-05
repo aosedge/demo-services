@@ -194,7 +194,7 @@ reached or a test Unit was offline; the job decides nothing. Only a lost connect
 ### 2. Test: `tests/run_tests.sh`
 
 The built-in checks run first: they read the batch and the Units again (exactly this version, on every Unit, no crash) and
-watch the version for 60 s (late failure, restarts). Then your tests, from `tests/your_tests.sh` when you add it
+observe the version for 60 s (late failure, restarts). Then your tests, from `tests/your_tests.sh` when you add it
 ([Your tests](docs/tests.md)), in a step of their own, with no secret. Exit 0 when every check passed, 1 when a check
 failed, 3 when AosCloud could not be read or a test Unit is offline: neither decides anything. It writes `report/report.html` and
 `report/junit.xml`; the job keeps them, with the decision written into the report: open the run page → **Artifacts** →
@@ -360,7 +360,7 @@ reviewers (repository Settings → Environments) or set `AOS_DECISION` to `repor
 | `AOS_SERVICE_ID` | secret | your Service id; it is not secret, but GitHub masks a secret in the log |
 | `AOS_TEST_UNITS` | variable | optional: test only these Units of the Verification Set; ids separated by spaces. A Unit you leave out is not checked. The job stops if one is outside the Set, or if an architecture of the batch has none |
 | `AOS_DECISION` | variable | `auto` (default), `ask` or `report-only`: [Automatic decision](#automatic-decision) |
-| `AOS_WATCH_SECONDS` | variable (on a laptop: environment) | how long the built-in checks watch the version on the test Units; default `60`, `0` turns the watch off. See [Example checks](docs/checks.md#c3-late-failure) |
+| `AOS_WATCH_SECONDS` | variable (on a laptop: environment) | how long the built-in checks observe the version on the test Units; default `60`, `0` turns it off. See [Example checks](docs/checks.md#c3-late-failure) |
 | `AOS_WAIT_TIMEOUT` | variable (on a laptop: environment) | seconds to wait for the version on the Units; default `1800`. The job stops after 60 minutes |
 | `version` | workflow input | the version to verify; to start the job by hand, this is the only input you need |
 | `service_id`, `batch_id`, `units` | workflow inputs | optional: the Service (default `AOS_SERVICE_ID`), the batch (default found by the version), the test Units, separated by spaces |
