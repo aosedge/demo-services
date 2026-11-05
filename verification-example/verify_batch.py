@@ -8,12 +8,14 @@
     python verify_batch.py check  [--service-id ID] [--unit UNIT_ID ...]
     python verify_batch.py wait   --service-id ID --version X.Y.Z [--unit UNIT_ID ...]
     python verify_batch.py status --service-id ID --version X.Y.Z --batch-id ID --unit UNIT_ID [--unit ...]
-    python verify_batch.py decide --batch-id ID (--approve | --reject) [--arch ARCH ...]
+    python verify_batch.py decide --batch-id ID (--approve | --reject) [--arch ARCH ...] [--report-dir DIR]
 
 discover, services, check and status only read. services: the Services this certificate sees, one line each (id, codename,
 title). discover: is there a new version to verify, and on which Units? It prints one
 JSON line {"batch_id", "version", "units"} when there is. check: the connection, the latest batch of the Service and what each Unit runs.
 status: the checks that wait already proved, read again, one tab-separated line each (code, name, PASS/FAIL, detail).
+Logs show ids as ... plus their last 4 characters. Only the lines meant for another command (discover, services, the batch
+id of wait) hold whole ids, and only when they are captured or piped; on a terminal they are shortened too.
 
 Environment: AOS_API_URL (https://<api host>:10000/api/v11), AOS_CERT (one PEM file with your user certificate, the
 intermediate certificates and the key; or set AOS_KEY to a separate key file), AOS_CA (the AosEdge root CA file).
@@ -36,6 +38,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -48,6 +51,8 @@ PAGE = 50
 PREVIEW = 3  # the batch list shows at most this many items of a batch; read the batch itself for the rest
 SEMVER = re.compile(r'(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?')
 AN_ID = re.compile(r'[0-9A-Za-z_-]+')
+AN_UUID = re.compile(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
+STATE_NAMES = {WAITING: 'Waiting verification', 'Valid': 'Verified'}
 
 
 class Stop(Exception):
@@ -109,6 +114,27 @@ def hide(*values) -> None:
 def short(value) -> str:
     """An id shortened for logs and reports: ... plus its last 4 characters."""
     return f'…{str(value)[-4:]}' if value else '-'
+
+
+def scrub(text) -> str:
+    """Whole ids shortened, wherever they come from: a URL in a connection error, an answer of AosCloud."""
+    return AN_UUID.sub(lambda m: short(m[0]), str(text))
+
+
+def tell(text) -> None:
+    """A line for the person who reads the log."""
+    print(scrub(text), file=sys.stderr)
+
+
+def machine(text) -> None:
+    """A line for the command that reads this output, with whole ids. On a terminal a person reads it: shortened."""
+    print(scrub(text) if sys.stdout.isatty() else text)
+
+
+def state_name(state: str) -> str:
+    """The state as the UI shows it, then as the API says it: Verified (Valid)."""
+    name = STATE_NAMES.get(state, state)
+    return f'{name} ({state})' if name != state else str(state)
 
 
 def holds(batch: dict, service_id: str, version: str | None = None) -> bool:
@@ -184,8 +210,7 @@ def units_of_batch(batch_id: str, service_id: str, given: list[str]) -> tuple[li
         mine = [unit for unit in in_set if unit in wanted]
         for unit in in_set:
             if unit not in wanted and not given:
-                print(f'Unit {short(unit)} is in the Verification Set, but the Service is not linked to it: left out',
-                      file=sys.stderr)
+                tell(f'Unit {short(unit)} is in the Verification Set, but the Service is not linked to it: left out')
         if not mine:
             bare.append(sub_batch.get('architecture') or '?')
         units += [unit for unit in mine if unit not in units]
@@ -240,7 +265,7 @@ def on_unit(unit_id: str, service_id: str) -> tuple[str | None, list]:
 
 def services(_args) -> int:
     for service in pages('services/'):
-        print(f"{service.get('id')}\t{service.get('codename')}\t{service.get('title')}")
+        machine(f"{service.get('id')}\t{service.get('codename')}\t{service.get('title')}")
     return 0
 
 
@@ -284,7 +309,7 @@ def status(args) -> int:
         a1 = f'batch {short(args.batch_id)} is {state}, not {WAITING}'
     else:
         a1 = f'batch {short(args.batch_id)} holds version {args.version} of Service {short(args.service_id)}'
-    rows = [('A1', 'exactly this Service and version', exact and state == WAITING, a1)]
+    rows = [('A1', 'the batch holds exactly this Service and version', exact and state == WAITING, a1)]
     running, failed = [], []
     for unit in units:
         if not is_online(unit):  # neither a pass nor a fail: its state in AosCloud says nothing about this version
@@ -296,9 +321,9 @@ def status(args) -> int:
         for i in mine:
             if i.get('run_state') == 'failed':
                 failed.append(f"{short(unit)}: {i.get('error_message') or i.get('error_exit_code') or 'failed'}")
-    rows.append(('B1', 'on every listed Unit', len(running) == len(units),
+    rows.append(('B1', f'{args.version} is installed and running on every test Unit', len(running) == len(units),
                  f'version {args.version} active on {len(running)} of {len(units)} Units'))
-    rows.append(('C2', 'no crash on start', not failed,
+    rows.append(('C2', 'the Service did not crash on start', not failed,
                  'no failed instance' if not failed else 'failed instance on ' + '; '.join(failed)))
     for code, name, passed, detail in rows:
         print(f"{code}\t{name}\t{'PASS' if passed else 'FAIL'}\t{detail}")
@@ -320,22 +345,22 @@ def discover(args) -> int:
                 else:
                     unusable.append(item.get('version'))
     if unusable:
-        print(f'left out, not SemVer versions: {unusable}', file=sys.stderr)
+        tell(f'left out, not SemVer versions: {unusable}')
     if args.dry_run:
         for _, version, batch in rows[:10]:
-            print(f"batch {short(batch.get('id'))}: version {version}, {batch.get('state')}", file=sys.stderr)
+            tell(f"batch {short(batch.get('id'))}: version {version}, {batch.get('state')}")
         if len(rows) > 10:
-            print(f'... and {len(rows) - 10} older batches', file=sys.stderr)
+            tell(f'... and {len(rows) - 10} older batches')
     # Only the highest version of all counts, decided or not. AosCloud moves the Units on to a newer version and never
     # closes the older batch, so an older batch can wait forever while its version will never run again.
     top = max(rows, key=lambda row: row[0], default=None)  # the newest one, if two have the same precedence
     chosen = top if top and still_open(top[2]) else None
     for row in rows:
         if row[2].get('state') == WAITING and row is not chosen:
-            print(f"stale, left alone: batch {short(row[2].get('id'))}, version {row[1]}", file=sys.stderr)
+            tell(f"stale, left alone: batch {short(row[2].get('id'))}, version {row[1]}")
     if not chosen:
         state = top and ('locked' if top[2].get('is_locked') else top[2].get('state'))
-        print('no waiting batch' + (f': the highest version {top[1]} is {state}' if top else ''), file=sys.stderr)
+        tell('no waiting batch' + (f': the highest version {top[1]} is {state}' if top else ''))
         return 0
     _, version, batch = chosen
     if not AN_ID.fullmatch(str(batch.get('id'))):
@@ -343,10 +368,10 @@ def discover(args) -> int:
     hide(batch['id'])
     units, problem = units_of_batch(batch['id'], args.service_id, given)
     if problem:
-        print(problem, file=sys.stderr)
+        tell(problem)
         if not args.dry_run:
             return 2
-    print(json.dumps({'batch_id': batch['id'], 'version': version, 'units': units}))
+    machine(json.dumps({'batch_id': batch['id'], 'version': version, 'units': units}))
     output = os.environ.get('GITHUB_OUTPUT')
     if output and not args.dry_run:
         with open(output, 'a', encoding='utf-8') as file:
@@ -372,94 +397,123 @@ def wait(args) -> int:
             batch = batch or find_batch(args.service_id, args.version)
             hide(batch and batch.get('id'))
             if batch and args.batch_id and batch['id'] != args.batch_id:
-                print(f"version {args.version} is in batch {batch['id']}, not in {args.batch_id}: decide nothing",
-                      file=sys.stderr)
+                tell(f"version {args.version} is in batch {short(batch['id'])}, not in {short(args.batch_id)}: "
+                     f'decide nothing')
                 return 2
             if batch and not still_open(get(f"verification-batch/{batch['id']}/")):
-                print(f"batch {batch['id']} is no longer {WAITING}: nothing to decide", file=sys.stderr)
+                tell(f"batch {short(batch['id'])} is no longer {WAITING}: nothing to decide")
                 return 2
             unreachable = False
             if batch and not covered:  # every test Unit in the Set, every architecture covered, or no decision at all
                 found, problem = units_of_batch(batch['id'], args.service_id, units)
                 if problem:
                     if not told:
-                        print(f'{problem}: waiting', file=sys.stderr)
+                        tell(f'{problem}: waiting')
                         told = True
                     time.sleep(args.interval)
                     continue
                 units, covered = found, True
-                print(f"test Units: {', '.join(short(unit) for unit in units)}", file=sys.stderr)
+                tell(f"test Units: {', '.join(short(unit) for unit in units)}")
             if batch:
                 if args.units_file:
                     Path(args.units_file).write_text(' '.join(units), encoding='utf-8')
                 states = {unit: state_on_unit(unit, args.service_id, args.version) for unit in units}
                 offline = [short(unit) for unit, state in states.items() if state == 'offline']
                 if states != last:  # print only changes, so the log stays short
-                    print(f'batch {batch["id"]}: {states}', file=sys.stderr)
+                    told_units = ', '.join(f'Unit {short(unit)} {state}' for unit, state in states.items())
+                    tell(f"batch {short(batch['id'])}: {told_units}")
                     if offline:
-                        print(f"Unit {', '.join(offline)} is offline: what AosCloud shows for it is old, so it does "
-                              f'not count; waiting until it is online', file=sys.stderr)
+                        tell(f"Unit {', '.join(offline)} is offline: what AosCloud shows for it is old, so it does "
+                             f'not count; waiting until it is online')
                     last = states
                 if 'failed' in states.values():
-                    print(batch['id'])
+                    machine(batch['id'])
                     return 1
                 if all(s == 'installed' for s in states.values()):
-                    print(batch['id'])
+                    machine(batch['id'])
                     return 0
             elif last is None:
-                print(f'no batch yet for {args.version}, waiting', file=sys.stderr)
+                tell(f'no batch yet for {args.version}, waiting')
                 last = {}
         except Unavailable as e:  # a short outage is no reason to stop waiting
-            print(f'AosCloud not reachable, retrying: {e}', file=sys.stderr)
+            tell(f'AosCloud not reachable, retrying: {e}')
             unreachable = True
         time.sleep(args.interval)
-    print(f'timed out after {args.timeout:.0f} s: decide nothing'
-          + (f": Unit {', '.join(offline)} is offline" if offline else ''), file=sys.stderr)
+    tell(f'timed out after {args.timeout:.0f} s: decide nothing'
+         + (f": Unit {', '.join(offline)} is offline" if offline else ''))
     return 3 if unreachable or offline else 2
 
 
+def note_decision(args, decision: str, state: str | None = None, why: str | None = None) -> None:
+    """Write the decision into the report of this batch, if asked to. A report that fails changes nothing about it."""
+    if not getattr(args, 'report_dir', None):
+        return
+    command = [sys.executable, str(Path(__file__).resolve().parent / 'tests' / 'report.py'), '--out', args.report_dir,
+               '--batch-id', args.batch_id, '--decision', decision]
+    command += ['--state', state] if state else []
+    command += ['--why', why] if why else []
+    subprocess.run(command, check=False, capture_output=True)
+
+
 def decide(args) -> int:
+    outcome = {'decision': 'not-sent'}
+    try:
+        return send_decision(args, outcome)
+    finally:
+        note_decision(args, **outcome)
+
+
+def send_decision(args, outcome: dict) -> int:
     # AosCloud accepts a PATCH on a batch that is already decided, and the last one wins: an approve can become a reject.
     # This check, right before the one PATCH, and the concurrency of the job are the only guard against that.
+    name = short(args.batch_id)
     try:
         batch = get(f'verification-batch/{args.batch_id}/')
     except Unavailable as e:
-        print(f'cannot read batch {args.batch_id}, nothing sent: {e}', file=sys.stderr)
+        tell(f'cannot read batch {name}, nothing sent: {e}')
+        outcome['why'] = 'AosCloud could not be read'
         return 2
     if batch.get('state') != WAITING:
-        print(f"refused: batch {args.batch_id} is {batch.get('state')}, not {WAITING}", file=sys.stderr)
+        tell(f"refused: batch {name} is {batch.get('state')}, not {WAITING}")
+        outcome['why'] = f"the batch is already {batch.get('state')}"
         return 2
     architectures = batch.get('architectures') or []
     if not architectures:
-        print(f'refused: batch {args.batch_id} lists no architectures, nothing sent', file=sys.stderr)
+        tell(f'refused: batch {name} lists no architectures, nothing sent')
+        outcome['why'] = 'the batch lists no architectures'
         return 2
     chosen = args.arch or architectures
     unknown = [arch for arch in chosen if arch not in architectures]
     if unknown:
-        print(f'refused: batch {args.batch_id} has no architecture {", ".join(unknown)} '
-              f'(it has {", ".join(architectures)}), nothing sent', file=sys.stderr)
+        tell(f'refused: batch {name} has no architecture {", ".join(unknown)} '
+             f'(it has {", ".join(architectures)}), nothing sent')
+        outcome['why'] = f'the batch has no architecture {", ".join(unknown)}'
         return 2
-    print(f"batch {args.batch_id}: {'approve' if args.approve else 'reject'} {', '.join(chosen)}", file=sys.stderr)
+    arches = ', '.join(chosen)
+    tell(f"batch {name} ({arches}): {'approve' if args.approve else 'reject'}")
     body = [{'architecture': arch, 'is_approved': args.approve} for arch in chosen]
     base, session = api()
+    outcome.update(decision='unknown')  # from here on, it may have been applied
     try:  # sent exactly once: a retry could apply a second decision
         answer = session.patch(f'{base}/verification-batch/{args.batch_id}/', json=body, timeout=60)
     except requests.RequestException as e:
-        print(f'no answer, the decision may have been applied; check the batch in the UI: {e}', file=sys.stderr)
+        tell(f'no answer, the decision may have been applied; check the batch in the UI: {e}')
         return 3
     if answer.status_code >= 500:
-        print(f'HTTP {answer.status_code}: the decision may have been applied; check the batch in the UI',
-              file=sys.stderr)
+        tell(f'HTTP {answer.status_code}: the decision may have been applied; check the batch in the UI')
         return 3
     if answer.status_code >= 400:
-        print(f'refused by AosCloud: HTTP {answer.status_code} {answer.text[:200]}', file=sys.stderr)
+        tell(f'refused by AosCloud: HTTP {answer.status_code} {answer.text[:200]}')
+        outcome.update(decision='not-sent', why=f'AosCloud refused it, HTTP {answer.status_code}')
         return 2
     try:
         result = answer.json()
     except ValueError:  # a success with an empty or non-JSON body is still a success
         result = None
     state = result.get('state') if isinstance(result, dict) else None
-    print(f"batch {args.batch_id}: {'approved' if args.approve else 'rejected'}, {f'now {state}' if state else 'sent'}")
+    done = 'approved' if args.approve else 'rejected'
+    outcome.update(decision=done, state=state)
+    print(f'batch {name} ({arches}): {done}, {f"now {state_name(state)}" if state else "sent"}')
     return 0
 
 
@@ -494,6 +548,7 @@ def main(argv: list[str] | None = None) -> int:
     choice.add_argument('--approve', action='store_true')
     choice.add_argument('--reject', action='store_true')
     d.add_argument('--arch', action='append', help='an architecture you tested (repeat it); default: all of the batch')
+    d.add_argument('--report-dir', help='write the decision into the report in this folder')
     args = parser.parse_args(argv)
     hide(getattr(args, 'service_id', None), getattr(args, 'batch_id', None), *getattr(args, 'unit', []))
     outcome = {'discover': 'start nothing', 'wait': 'decide nothing',
@@ -502,9 +557,9 @@ def main(argv: list[str] | None = None) -> int:
         return {'discover': discover, 'services': services, 'check': check, 'status': status, 'wait': wait,
                 'decide': decide}[args.command](args)
     except (Stop, Unavailable) as e:
-        print(f'stopped, {outcome}: {e}', file=sys.stderr)
+        tell(f'stopped, {outcome}: {e}')
     except Exception as e:  # pylint: disable=broad-except  # never end with a code the job does not expect
-        print(f'unexpected error, {outcome}: {type(e).__name__}: {e}', file=sys.stderr)
+        tell(f'unexpected error, {outcome}: {type(e).__name__}: {e}')
     return 2
 
 

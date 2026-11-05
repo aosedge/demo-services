@@ -5,26 +5,37 @@
 
     python tests/report.py --results report/results.tsv --out report --service-id ID --version X.Y.Z
                            --batch-id ID --units "UNIT_ID ..." --watch SECONDS
-                           [--found-by watch|version] [--units-from TEXT]
+                           [--found-by watch|run|version] [--units-from TEXT]
+    python tests/report.py --out report --batch-id ID --decision approved|rejected|not-sent|report-only|unknown
+                           [--state STATE] [--why TEXT]
 
 results.tsv: one line per check: builtin|yours, scenario code, name, PASS|FAIL|SKIP|ERROR, detail. Standard library only.
-Ids are shortened to ... plus their last 4 characters. Exit 0 when written.
+Ids are shortened to ... plus their last 4 characters. The second form writes the decision into report.html; it leaves a
+report of another batch alone. Exit 0 when written, or when there is nothing to update.
 """
 import argparse
 import html
+import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from xml.sax.saxutils import quoteattr
 
+GROUPS = [('A', 'upload and batch'), ('B', 'delivery to the Units'), ('C', 'the Service runs'),
+          ('D', 'next to other Services'), ('E', 'configuration and recovery')]
 SCENARIOS = [
-    ('⓪', 'Found by the watch'),
+    ('⓪', 'Found automatically (discover)'),
     ('A1', 'Exactly this Service and version'), ('A2', 'Upload processed'), ('A3', 'Same version uploaded again'),
-    ('A4', 'Evidence for every release'), ('B1', 'On every listed Unit'), ('B2', 'A Unit that never gets it'),
-    ('C1', "The Service's own tests"), ('C2', 'Crash on start'), ('C3', 'Late failure'),
-    ('C4', 'Restarts and memory'), ('E1', 'Bad configuration'), ('E2', 'Recovery: the fixed version'),
+    ('A4', 'Evidence for every release'), ('B1', 'On every test Unit'), ('B2', 'A Unit that never gets it'),
+    ('C1', "The Service's own tests"), ('C2', 'Crash on start'), ('C3', 'Late failure'), ('C4', 'Restarts'),
     ('D1', 'Resource conflict'), ('D2', 'Other Services on the same Unit'),
+    ('E1', 'Bad configuration'), ('E2', 'Recovery: the fixed version'),
 ]
+CHECKED, WAITING_LOGIC, NOT_RUN, NEEDS_62 = 'Checked now', 'Covered by the waiting logic', 'Not run', 'Needs AosCloud 6.2'
+BY_HAND = 'To decide by hand: ./aos-verify decide approve|reject, or SP UI → Verification batches.'
+STATE_NAMES = {'Valid': 'Verified', 'Waiting_validation': 'Waiting verification'}
+META = 'report.json'
 
 
 def short(value: str) -> str:
@@ -40,29 +51,79 @@ def read_results(path: Path) -> list[dict]:
     return rows
 
 
-def coverage(rows: list[dict], watch: int, found: str) -> dict[str, str]:
-    """How each scenario was covered by this run."""
+def stamp(now: datetime) -> str:
+    """UTC, and the local time in brackets when it is another time. The date only if it differs."""
+    utc, local = now.astimezone(timezone.utc), now.astimezone()
+    text = utc.strftime('%Y-%m-%d %H:%M UTC')
+    if local.utcoffset() == utc.utcoffset():
+        return text
+    shown = '%H:%M' if local.date() == utc.date() else '%Y-%m-%d %H:%M'
+    return f'{text} ({local.strftime(shown)} local)'
+
+
+def found_how(found_by: str) -> tuple[str, str]:
+    """Who found the batch, from where this ran: on a laptop it was ./aos-verify, in GitHub the watch."""
+    if found_by == 'watch':
+        return CHECKED, 'found by the watch in GitHub'
+    if found_by == 'run':
+        return CHECKED, 'found by ./aos-verify on this computer'
+    return NOT_RUN, 'not needed: started with the version'
+
+
+def coverage(rows: list[dict], watch: int, found: tuple[str, str]) -> dict[str, tuple[str, str]]:
+    """For each scenario: its status, and what that means in this run."""
     builtin = {r['code']: r['result'] for r in rows if r['part'] == 'builtin'}
     yours = [r for r in rows if r['part'] == 'yours' and r['result'] != 'SKIP']
-    your_tests = f'your tests: {len(yours)} ran' if yours else 'not run: add tests/your_tests.sh'
-    watched = f"checked now: {builtin.get('C3/C4', 'FAIL')}, watched {watch} s" if watch > 0 else 'off (WATCH_SECONDS=0)'
+    late = builtin.get('C3/C4', 'FAIL')
+    watched = watch > 0 and late != 'SKIP'
+    off = (NOT_RUN, 'the watch did not run in this run')
+    no_tests = (NOT_RUN, 'none added: add them to tests/your_tests.sh')
     return {
         '⓪': found,
-        'A1': f"checked now: {builtin.get('A1', 'FAIL')}",
-        'A2': 'by wait: the batch exists, so AosCloud processed the upload',
-        'A3': 'by wait: a version that already exists gets no new batch, and nothing is decided',
-        'A4': 'this report, junit.xml and the job log; the batch keeps its state in AosCloud',
-        'B1': f"checked now: {builtin.get('B1', 'FAIL')}",
-        'B2': 'by wait: a Unit that never gets the version ends in a timeout, with no decision',
-        'C1': your_tests,
-        'C2': f"checked now: {builtin.get('C2', 'FAIL')}",
-        'C3': watched,
-        'C4': watched,
-        'E1': your_tests + ' (a config test)' if yours else your_tests,
-        'E2': 'the next version goes through the same steps',
-        'D1': 'needs AosCloud 6.2',
-        'D2': 'needs AosCloud 6.2',
+        'A1': (CHECKED, builtin.get('A1', 'FAIL')),
+        'A2': (WAITING_LOGIC, 'The batch exists, so AosCloud processed the upload.'),
+        'A3': (WAITING_LOGIC, 'Did not happen in this run. If it does: a version that already exists gets no new '
+                              'batch, and nothing is decided.'),
+        'A4': (CHECKED, 'This report, junit.xml and the job log; the batch keeps its state in AosCloud.'),
+        'B1': (CHECKED, builtin.get('B1', 'FAIL')),
+        'B2': (WAITING_LOGIC, 'Did not happen in this run. If it does: a Unit that never gets the version ends in a '
+                              'timeout, with no decision.'),
+        'C1': (CHECKED, f'{len(yours)} of your tests ran') if yours else no_tests,
+        'C2': (CHECKED, builtin.get('C2', 'FAIL')),
+        'C3': (CHECKED, f'{late}: still running after {watch} s') if watched else off,
+        'C4': (CHECKED, f'{late}: no restarts in {watch} s; memory is not measured') if watched else off,
+        'D1': (NEEDS_62, 'AosCloud 6.1 cannot show this.'),
+        'D2': (NEEDS_62, 'AosCloud 6.1 cannot show this.'),
+        'E1': (CHECKED, f'only if your tests hold a config test; {len(yours)} of your tests ran') if yours else no_tests,
+        'E2': (NOT_RUN, 'Did not happen in this run. The next version goes through the same steps.'),
     }
+
+
+def summary(rows: list[dict]) -> str:
+    """4 of 4 built-in checks passed; your tests: none added (tests/your_tests.sh)."""
+    builtin = [r for r in rows if r['part'] == 'builtin']
+    yours = [r for r in rows if r['part'] == 'yours' and r['result'] != 'SKIP']
+    passed = sum(r['result'] == 'PASS' for r in builtin)
+    text = f'{passed} of {len(builtin)} built-in checks passed; your tests: '
+    if not yours:
+        return text + 'none added (tests/your_tests.sh)'
+    return text + f"{sum(r['result'] == 'PASS' for r in yours)} of {len(yours)} passed"
+
+
+def decision_line(decided: dict | None) -> str:
+    """What was done with the verdict."""
+    if not decided:
+        return f'Decision: not sent yet. {BY_HAND}'
+    kind, when, why = decided['decision'], decided['when'], decided.get('why')
+    if kind in ('approved', 'rejected'):
+        state = decided.get('state')
+        return f"Decision: {kind}, {when}, " + (f'batch now {STATE_NAMES.get(state, state)}' if state else 'sent')
+    if kind == 'report-only':
+        return 'Decision: report-only, nothing sent. A person decides in SP UI → Verification batches.'
+    if kind == 'unknown':
+        return (f'Decision: unknown, {when}: it was sent and the answer was lost. Look at the batch in SP UI → '
+                f'Verification batches, and do not send it again.')
+    return f"Decision: not sent{f' ({why})' if why else ''}. {BY_HAND}"
 
 
 def badge(result: str) -> str:
@@ -77,7 +138,7 @@ def table(rows: list[dict], with_code: bool) -> str:
     return f'<div class="t"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
-def render(args, rows: list[dict], when: str) -> str:
+def render(args, rows: list[dict], when: str, decided: dict | None = None) -> str:
     failed = any(r['result'] == 'FAIL' for r in rows)
     unread = any(r['result'] == 'ERROR' for r in rows)
     if failed or (not unread and not any(r['result'] == 'PASS' for r in rows)):
@@ -88,11 +149,16 @@ def render(args, rows: list[dict], when: str) -> str:
         verdict, tone = 'PASS → approve', 'pass'
     builtin = [r for r in rows if r['part'] == 'builtin']
     yours = [r for r in rows if r['part'] == 'yours']
-    how = 'found by the watch' if args.found_by == 'watch' else 'started with the version: not by the watch'
-    found = f'{how}: batch {short(args.batch_id)}, version {args.version}, Units from {args.units_from}'
+    status, how = found_how(args.found_by)
+    found = (status, f'{how}: batch {short(args.batch_id)}, version {args.version}, Units from {args.units_from}')
     cover = coverage(rows, args.watch, found)
-    scenario_rows = ''.join(f'<tr><td>{code}</td><td>{html.escape(name)}</td><td>{html.escape(cover[code])}</td></tr>'
-                            for code, name in SCENARIOS)
+    scenario_rows = ''.join(f'<tr><td>{code}</td><td>{html.escape(name)}</td><td>{html.escape(cover[code][0])}</td>'
+                            f'<td>{html.escape(cover[code][1])}</td></tr>' for code, name in SCENARIOS)
+    groups = ' · '.join(f'<b>{letter}</b> = {html.escape(name)}' for letter, name in GROUPS)
+    badges = [('PASS', 'checked, good'), ('FAIL', 'checked, bad, leads to reject'), ('SKIP', 'not run')]
+    if unread:
+        badges.append(('ERROR', 'AosCloud could not be read: no decision'))
+    legend = ' · '.join(f'{badge(name)} = {html.escape(text)}' for name, text in badges)
     units = ', '.join(short(u) for u in args.units.split()) or '-'
     facts = [('Service', short(args.service_id)), ('Version', args.version), ('Batch', short(args.batch_id)),
              ('Test Units', units), ('Time', when)]
@@ -122,7 +188,9 @@ th,td{{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-al
 th{{background:var(--pale);color:var(--navy)}}
 .r{{display:inline-block;min-width:48px;text-align:center;border-radius:5px;padding:1px 6px;font-weight:700;font-size:13px}}
 .r.pass{{background:#DDF3E6;color:#14603A}}.r.fail{{background:#FBE1DE;color:#8F1D13}}.r.skip{{background:#ECEFF3;color:var(--muted)}}.r.error{{background:#ECEFF3;color:var(--ink)}}
-footer{{color:var(--muted);font-size:12px;padding:12px 0 24px}}
+.summary{{margin:10px 0 2px;font-weight:700}}
+.decision{{margin:2px 0 12px}}
+.legend{{color:var(--muted);font-size:13px;margin:6px 0}}
 </style>
 </head>
 <body>
@@ -130,15 +198,18 @@ footer{{color:var(--muted);font-size:12px;padding:12px 0 24px}}
 <main>
 <h1>Verification report</h1>
 <div class="verdict {tone}">{verdict}</div>
+<p class="summary">{html.escape(summary(rows))}</p>
+<p class="decision">{html.escape(decision_line(decided))}</p>
 <div class="facts">{''.join(f'<div><span>{k}</span>{html.escape(v)}</div>' for k, v in facts)}</div>
 <h2>Built-in checks</h2>
+<p class="legend">{groups}</p>
 {table(builtin, True)}
+<p class="legend">{legend}</p>
 <h2>Your tests</h2>
 {table(yours, False)}
 <h2>Scenarios covered</h2>
-<div class="t"><table><thead><tr><th>#</th><th>Scenario</th><th>How, in this run</th></tr></thead>
+<div class="t"><table><thead><tr><th>#</th><th>Scenario</th><th>Status</th><th>In this run</th></tr></thead>
 <tbody>{scenario_rows}</tbody></table></div>
-<footer>The decision itself is the next step: verify_batch.py decide.</footer>
 </main>
 </body>
 </html>
@@ -166,23 +237,56 @@ def junit(args, rows: list[dict], when: str) -> str:
             f'failures="{failures}" errors="{errors}" skipped="{skipped}" timestamp="{when}">\n' + '\n'.join(cases) + '\n</testsuite>\n')
 
 
+def write_decision(args) -> int:
+    """Render the report again with the decision in it. The checks and their time stay as they were."""
+    meta_file = args.out / META
+    try:
+        meta = json.loads(meta_file.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        print('no report to update', file=sys.stderr)
+        return 0
+    if meta['batch_id'] != short(args.batch_id or ''):
+        print(f"the report is of batch {meta['batch_id']}, not {short(args.batch_id or '')}: left alone", file=sys.stderr)
+        return 0
+    decided = {'decision': args.decision, 'state': args.state, 'why': args.why,
+               'when': stamp(datetime.now(timezone.utc))}
+    report = SimpleNamespace(**{k: meta[k] for k in ('service_id', 'version', 'batch_id', 'units', 'watch', 'found_by',
+                                                     'units_from')})
+    (args.out / 'report.html').write_text(render(report, meta['rows'], meta['when'], decided), encoding='utf-8')
+    print(f'report: {args.out / "report.html"} (with the decision)')
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n', 1)[0])
-    parser.add_argument('--results', type=Path, required=True)
+    parser.add_argument('--results', type=Path)
     parser.add_argument('--out', type=Path, required=True)
-    parser.add_argument('--service-id', required=True)
-    parser.add_argument('--version', required=True)
-    parser.add_argument('--batch-id', required=True)
+    parser.add_argument('--service-id', default='')
+    parser.add_argument('--version', default='')
+    parser.add_argument('--batch-id', default='')
     parser.add_argument('--units', default='')
     parser.add_argument('--watch', type=int, default=0)
     parser.add_argument('--found-by', default='version')
     parser.add_argument('--units-from', default='the values you gave')
+    parser.add_argument('--decision', choices=['approved', 'rejected', 'not-sent', 'report-only', 'unknown'])
+    parser.add_argument('--state')
+    parser.add_argument('--why')
     args = parser.parse_args(argv)
+    if args.decision:
+        return write_decision(args)
+    if not args.results or not args.version or not args.batch_id or not args.service_id:
+        parser.error('--results, --service-id, --version and --batch-id are needed to write a report')
     rows = read_results(args.results)
-    when = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+    now = datetime.now(timezone.utc)
+    when = stamp(now)
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / 'report.html').write_text(render(args, rows, when), encoding='utf-8')
-    (args.out / 'junit.xml').write_text(junit(args, rows, when.replace(' UTC', '')), encoding='utf-8')
+    (args.out / 'junit.xml').write_text(junit(args, rows, now.strftime('%Y-%m-%d %H:%M')), encoding='utf-8')
+    # What the decision needs to render this report again, with the ids shortened: the folder is kept as an artifact.
+    meta = {'service_id': short(args.service_id), 'version': args.version, 'batch_id': short(args.batch_id),
+            'units': ' '.join(short(u) for u in args.units.split()), 'watch': args.watch, 'found_by': args.found_by,
+            'units_from': args.units_from, 'when': when, 'rows': rows}
+    (args.out / META).write_text(json.dumps(meta, ensure_ascii=False), encoding='utf-8')
     print(f'report: {args.out / "report.html"} (and junit.xml)')
     return 0
 

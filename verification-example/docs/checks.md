@@ -1,6 +1,6 @@
 # Example checks
 
-12 scenarios we ran on production AosCloud 6.1 (28–30.10.2026), and step ⓪, the watch. Use them as a starting point if you have no tests
+12 scenarios we ran on production AosCloud 6.1 (28–30.10.2026), and step ⓪, finding the batch. Use them as a starting point if you have no tests
 yet. Most are already built into `verify_batch.py` and `tests/run_tests.sh`; the rest are a few lines in
 `tests/your_tests.sh`.
 
@@ -8,7 +8,7 @@ yet. Most are already built into `verify_batch.py` and `tests/run_tests.sh`; the
 
 `./aos-verify test` (`bash tests/run_tests.sh`, after `wait`) runs the built-in checks A1, B1, C2 and the watch (C3/C4, 60 s) with no setup, then
 your tests if `tests/your_tests.sh` exists. Each check is one row in `report/report.html`; the report ends with a
-"Scenarios covered" table that says how each scenario was covered in that run. The commands below run as they are in
+"Scenarios covered" table with a status for each scenario in that run: Checked now, Covered by the waiting logic, Not run, or Needs AosCloud 6.2. The commands below run as they are in
 the folder of the example, after `./aos-verify setup` and `./aos-verify discover`, once you have loaded the values
 (`SERVICE_ID`, `UNIT_ID`, `VERSION`, `BATCH`) into your terminal:
 
@@ -18,23 +18,24 @@ source .venv/bin/activate && source .aos-verify.env && source .aos-verify/state
 
 | # | Scenario | What can go wrong | Covered by | Row in the report | Result on production |
 |---|---|---|---|---|---|
-| ⓪ | Found by the watch | nobody starts the job, or it starts on an old batch | `discover`: the highest version, Units from the Verification Set | Scenarios covered: batch …, version …, Units from the Verification Set | read-only on production and on staging, 04.11: right batch, stale ones left alone. The scheduled watch ran only against a mock so far |
+| ⓪ | Found automatically (discover) | nobody starts the job, or it starts on an old batch | `discover`: the highest version, Units from the Verification Set | Scenarios covered: batch …, version …, Units from the Verification Set | read-only on production and on staging, 04.11: right batch, stale ones left alone. The scheduled watch ran only against a mock so far |
 | A1 | Exactly this Service and version | a decision on the wrong batch | `wait`, then the built-in checks read it again | Built-in checks: A1 | seen on production, 30.10: the batch of the uploaded version found |
-| A2 | Upload processed | the bundle is refused, and nobody notices | `aos-signer upload` output; SP UI Deployment bundles; `wait` says `no batch yet` | Scenarios covered: by wait | Done: seen on production, 30.10; Error with the reason: seen on production, 28.10 |
-| A3 | Same version uploaded again | a decision on an old version | `wait`: no batch, exit 2, nothing decided | Scenarios covered: by wait | seen on production, 28.10 |
+| A2 | Upload processed | the bundle is refused, and nobody notices | `aos-signer upload` output; SP UI Deployment bundles; `wait` says `no batch yet` | Scenarios covered: Covered by the waiting logic | Done: seen on production, 30.10; Error with the reason: seen on production, 28.10 |
+| A3 | Same version uploaded again | a decision on an old version | `wait`: no batch, exit 2, nothing decided | Scenarios covered: Covered by the waiting logic | seen on production, 28.10 |
 | A4 | Evidence for every release | nobody can say later why a version was approved | the report, `junit.xml`, the job log, the batch in the UI | the report itself | seen on production, 30.10: batch Verified in the UI |
-| B1 | On every listed Unit | approved before the version runs everywhere | `wait`, then the built-in checks read it again | Built-in checks: B1 | seen on production, 30.10: active on the test Unit about 15 s after the upload |
-| B2 | A Unit that never gets it | approved while half of the Units never got it | `wait` times out, exit 2, no decision | Scenarios covered: by wait | seen on production, 29.10 |
+| B1 | On every test Unit | approved before the version runs everywhere | `wait`, then the built-in checks read it again | Built-in checks: B1 | seen on production, 30.10: active on the test Unit about 15 s after the upload |
+| B2 | A Unit that never gets it | approved while half of the Units never got it | `wait` times out, exit 2, no decision | Scenarios covered: Covered by the waiting logic | seen on production, 29.10 |
 | C1 | The Service's own tests | the version runs but does not work | `tests/your_tests.sh` | Your tests | seen on production, 30.10: the sample checks passed |
 | C2 | Crash on start | a version that does not start is approved | `wait` exit 1 → reject; the built-in checks read it again | Built-in checks: C2 | seen on production, 29.10 |
 | C3 | Late failure | the version fails minutes after the tests | the watch, on by default (60 s) | Built-in checks: C3/C4 | seen on production, 29.10 |
-| C4 | Restarts and memory | the version keeps restarting | the watch; a restart check in `tests/your_tests.sh` | Built-in checks: C3/C4; Your tests | seen on production, 29.10 |
+| C4 | Restarts | the version keeps restarting | the watch, at each read; a restart check in `tests/your_tests.sh`. Memory is not measured | Built-in checks: C3/C4; Your tests | seen on production, 29.10 |
 | E1 | Bad configuration | a wrong setting ships with good code | a config test in `tests/your_tests.sh` | Your tests | seen on production, 29.10 |
 | E2 | Recovery: the fixed version | the fix skips the gate | upload the fix as a new version; the same steps approve it | the report of the fixed version | seen on production, 29.10 |
 
-## ⓪. Found by the watch
+## ⓪. Found automatically (discover)
 
-**What it checks.** The job starts by itself, for the right batch, on the right Units.
+**What it checks.** The right batch and the right Units are found with nobody naming them: by the watch in GitHub, by
+`./aos-verify run` on a laptop.
 
 **How.** `discover` lists the batches of your Service, takes the highest version if its batch waits, and takes the
 Units that are in the Verification Set and have the Service. It only reads.
@@ -43,8 +44,8 @@ Units that are in the Verification Set and have the Service. It only reads.
 python verify_batch.py discover --dry-run
 ```
 
-**What you see.** One JSON line, or `no waiting batch`. In the report, Scenarios covered: "found by the watch: batch
-…, version …, Units from the Verification Set".
+**What you see.** One JSON line, or `no waiting batch`. In the report, Scenarios covered: "found by the watch in GitHub: batch
+…, version …, Units from the Verification Set", or "found by ./aos-verify on this computer: …".
 
 **The decision.** None here. With no test Unit: exit 2, and nothing starts.
 
@@ -115,8 +116,8 @@ waits for each; the built-in checks read each again.
 python verify_batch.py check --service-id "$SERVICE_ID" --unit "$UNIT_ID"
 ```
 
-**What you see.** `wait` prints `batch …: {'…': 'installed'}`; the report: `B1 on every listed Unit PASS`, "version
-… active on 1 of 1 Units".
+**What you see.** `wait` prints `batch …: Unit … installed`; the report: `B1 … is installed and running on every test
+Unit PASS`, "version … active on 1 of 1 Units".
 
 **The decision.** Exit 0 only when the version is active on every Unit; then the checks run.
 
@@ -169,7 +170,7 @@ python verify_batch.py decide --batch-id "$BATCH" --approve
 
 **How.** AosCloud reports the instance of the new version as failed: `wait` exits 1, and the built-in checks read it again.
 
-**What you see.** `batch …: {'…': 'failed'}`, then the batch id; in the report `C2 no crash on start FAIL`, with the
+**What you see.** `batch …: Unit … failed`; in the report `C2 the Service did not crash on start FAIL`, with the
 error AosCloud gives.
 
 **The decision.** Reject, without your tests.
@@ -192,17 +193,17 @@ WATCH_SECONDS=180 bash tests/run_tests.sh
 In the job, set the variable `AOS_WATCH_SECONDS` (`0` turns it off). The watch reads the Units from AosCloud, so the
 step of the built-in checks has the certificate; your tests run in another step, with no secret.
 
-**What you see.** `PASS C3/C4 still running`, or `FAIL C3/C4`: "the version stopped running in round … of …".
+**What you see.** `PASS C3/C4 still running after 60 s, no restarts`, or `FAIL C3/C4`: "the version stopped running in round … of …".
 
 **The decision.** A failure in any round rejects the version. If AosCloud cannot be reached or a Unit goes offline,
 nothing is decided.
 
-## C4. Restarts and memory
+## C4. Restarts
 
-**What it checks.** The version does not keep crashing or running out of memory.
+**What it checks.** The version does not keep crashing. Memory is not measured: the report says so.
 
-**How.** When AosCloud reports the instance as failed, `wait`, the built-in C2 and the watch see it. A version that is killed
-and restarted between two rounds can look fine: add a test of your own to `tests/your_tests.sh`, for example the
+**How.** When AosCloud reports the instance as failed, `wait`, the built-in C2 and the watch see it. The watch reads once
+every 60 s, so a version that is killed and restarted between two reads can look fine: add a test of your own to `tests/your_tests.sh`, for example the
 uptime that your Service reports:
 
 ```bash
@@ -241,7 +242,7 @@ aos-signer upload
 ```
 
 **What you see.** The same steps as for any version: `wait` ends with the batch id, the report says PASS → approve,
-`batch …: approved, now Valid`.
+`batch … (amd64): approved, now Verified (Valid)`.
 
 **The decision.** Approve: the batch shows Verified, and the Unit runs the fixed version.
 

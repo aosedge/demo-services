@@ -15,13 +15,14 @@ It runs after `wait`, and takes no arguments. `./aos-verify run` and `./aos-veri
    | A1 | the batch holds exactly this Service and version, and still waits |
    | B1 | the version is installed and active on every test Unit |
    | C2 | no instance of the version failed |
-   | C3/C4 | the watch: every 60 s for `WATCH_SECONDS` (default 60, `0` = off), the version still runs on every Unit |
+   | C3/C4 | the watch: every 60 s for `WATCH_SECONDS` (default 60, `0` = off), the version still runs on every Unit. It reads once every 60 s, and it does not measure memory |
 
 2. **Your tests**, from `tests/your_tests.sh`, when the file exists.
 3. **The report**: `report/report.html` and `report/junit.xml`. In the job: the run page → **Artifacts** →
    **verification-report**.
 
-**Exit 0 approves the version. Exit 1 (a check failed) rejects it.** Exit 2 means a value is missing. Exit 3 means
+**Exit 0 approves the version. Exit 1 (a check failed) rejects it**, unless you changed that with
+[`AOS_DECISION`](../README.md#automatic-decision). After the decision the report says what was done. Exit 2 means a value is missing. Exit 3 means
 AosCloud could not be read or a test Unit is offline: nothing is decided, because neither says anything about the version.
 
 ![The test Unit runs the new version (Unit → Subjects & Services → Service Instances)](img/09-sp-unit-service-instances.png)

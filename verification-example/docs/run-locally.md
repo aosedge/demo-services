@@ -1,7 +1,7 @@
 # Run it from your terminal
 
 To try it, or to find out why the job failed. In GitHub you need none of this: [Put it in GitHub](../README.md#put-it-in-github).
-Three blocks. It needs bash: Terminal on macOS and Linux, Git Bash on Windows (not tested on Windows yet).
+Three blocks, in this order: setup, upload, run. If you start `run` first, it waits up to 2 min for your upload. It needs bash: Terminal on macOS and Linux, Git Bash on Windows (not tested on Windows yet).
 
 ## 1. Clone and set up
 
@@ -10,28 +10,36 @@ git clone -b verification-example https://github.com/aosedge/demo-services && cd
 ```
 
 It checks the tools, creates `.venv`, finds your SP certificate under `~/.aos/security` and makes the PEM file from it,
-copies the root CA from `aos-keys`, and asks two things: the API URL (Enter takes production), and which Service, if your
-SP has several. With several SP certificates it shows a numbered list; pick the one of the AosCloud you call. If it asks
-for a password, that is the password of the `.p12` file, not of your computer.
+copies the root CA from `aos-keys`, and asks three things: the API URL (Enter takes production), which Service, if your
+SP has several, and who decides after the checks ([Automatic decision](../README.md#automatic-decision); Enter takes `ask`).
+With several SP certificates it shows a numbered list, with the SP company next to each; pick the one of the AosCloud you
+call. If it asks for a password, that is the password of the `.p12` file, not of your computer.
 
 You should see (a run on production; ids are shortened to `…` plus 4 characters):
 
 ```text
 OK    tools: python 3.14, curl, jq, openssl
 OK    .venv: created, requests==2.32.3 installed
-OK    certificate: security/prod/aos-user-sp-prod.p12  (aoscloud.io, valid to Oct 25 08:26:35 2036 GMT)
+OK    certificate: security/prod/aos-user-sp-prod.p12  (Your Company, aoscloud.io, valid to Oct 25 08:26:35 2036 GMT)
 OK    .aos-verify/user.pem: 4 certificates and the key, readable only by you
 OK    .aos-verify/aos-root-ca.crt: copied from aos-keys
 AosCloud API URL [https://api.aoscloud.io:10000/api/v11]:
 OK    AosCloud: https://api.aoscloud.io:10000/api/v11
 OK    Service: verification-demo
+After the checks, who decides?
+  auto         it approves or rejects by itself
+  ask          it asks you first
+  report-only  it writes the report and sends nothing; you decide in the UI
+Decision mode [ask]:
+OK    decision mode: ask
 OK    .aos-verify.env: your settings, readable only by you, ignored by git
 
 connection OK: the certificate, the root CA and the API address work
-Service …ec65: latest batch …ef77, version 4.9.0, state Valid
-Unit …318d: online; installed 4.9.0; instances: 4.9.0 active
+Service …ec65: latest batch …bcb1, version 4.10.0, state Valid
+Unit …318d: online; installed 4.10.0; instances: 4.10.0 active
 
 Ready. Upload a new version as you do today, then: ./aos-verify run
+If you start run first, it waits up to 2 min for your upload.
 ```
 
 Setup only reads AosCloud. Got the example as a zip? Unpack it, go into its folder, and run `./aos-verify setup`.
@@ -47,6 +55,8 @@ aos-signer sign && aos-signer upload
 You should see `Deployment bundle successfully uploaded!`. In the SP UI, Verification batches shows your version as
 **Waiting verification**.
 
+Note: `aos-signer` prints your e-mail on upload (`Upload info: user=…`). Mask it in screenshots and videos.
+
 ## 3. Run
 
 ```bash
@@ -54,8 +64,9 @@ You should see `Deployment bundle successfully uploaded!`. In the SP UI, Verific
 ```
 
 This is what the GitHub job does: it finds the batch, waits for the version on the test Units, runs the built-in checks
-and your tests, writes the report and opens it, then asks before it sends the decision. A batch appears some seconds after
-the upload, so it asks AosCloud for up to 2 minutes (`--poll 0`: only once).
+and your tests, writes the report and opens it, then asks before it sends the decision, and writes the decision into the
+report. A batch appears some seconds after the upload, so it asks AosCloud for up to 2 minutes, and says how long is left:
+`asking again in 10 s (1:40 left, Ctrl-C to stop)`. `AOS_DISCOVER_TIMEOUT` changes that limit, in seconds; `0` asks only once.
 
 You should see, in about 2 minutes (from a test against a stand-in for AosCloud; ids shortened):
 
@@ -64,14 +75,14 @@ You should see, in about 2 minutes (from a test against a stand-in for AosCloud;
       batch …a410, version 4.10.0, test Units: …318d
 2. Waiting for version 4.10.0 on the test Units
 test Units: …318d
-batch …a410: {'…318d': 'installed'}
+batch …a410: Unit …318d installed
 3. Built-in checks and your tests
 Built-in checks of version 4.10.0
-PASS A1 exactly this Service and version: batch …a410 holds version 4.10.0 of Service …ec65
-PASS B1 on every listed Unit: version 4.10.0 active on 1 of 1 Units
-PASS C2 no crash on start: no failed instance
+PASS A1 the batch holds exactly this Service and version: batch …a410 holds version 4.10.0 of Service …ec65
+PASS B1 4.10.0 is installed and running on every test Unit: version 4.10.0 active on 1 of 1 Units
+PASS C2 the Service did not crash on start: no failed instance
 watching for 60 s (1 round(s) of 60 s)
-PASS C3/C4 still running (late failure, restarts): active on every Unit for 60 s
+PASS C3/C4 still running after 60 s, no restarts: active on every Unit at each read, one read every 60 s; memory is not measured
 SKIP your tests: no tests/your_tests.sh (start from tests/your_tests.sh.example)
 report: report/report.html (and junit.xml)
 all checks passed: approve
@@ -81,19 +92,20 @@ Report: …/report/report.html
 
 Verdict: approve (all checks passed). Version 4.10.0, batch …a410.
 approve version 4.10.0 in AosCloud? This writes one decision. [y/N] y
-batch …a410: approve amd64
-batch …a410: approved, now Valid
+batch …a410 (amd64): approve
+batch …a410 (amd64): approved, now Verified (Valid)
 Done: reload SP UI → Verification batches.
 ```
 
 Reload the page in the UI: the batch shows **Verified**. For the next version: upload, and `./aos-verify run` again.
+Reload the report too: it now says `Decision: approved, <time>, batch now Verified`.
 
 | Option | What it does |
 |---|---|
 | `--dry-run` | everything up to the decision; sends nothing |
-| `--yes` | decides without asking, as the job does |
+| `--yes` | the short form of `AOS_DECISION=auto`: approves or rejects without asking, as the job does ([Automatic decision](../README.md#automatic-decision)) |
 | `--no-open` | does not open the report |
-| `--poll SECONDS`, `--timeout SECONDS` | how long to ask for a batch (default 120), how long to wait for the version (default 1800) |
+| `--poll SECONDS`, `--timeout SECONDS` | how long to ask for a batch (default 120, or `AOS_DISCOVER_TIMEOUT`), how long to wait for the version (default 1800) |
 
 ## If something is wrong
 
@@ -104,7 +116,7 @@ Every failure prints one line and the command that fixes it. The usual ones:
 | `no SP certificate (.p12)` | it is not under `~/.aos/security` | `./aos-verify setup --p12 /path/to/your-sp.p12` |
 | `unknown ca` | the certificate of another AosCloud, or a PEM with no intermediate certificates | `./aos-verify setup`, and pick the SP certificate of this AosCloud |
 | `not the SP certificate of this AosCloud (403)` | an OEM certificate, or another AosCloud | `./aos-verify setup` |
-| `no waiting batch` | nothing new was uploaded, or the batch is already decided | upload a new version, then `./aos-verify run` |
+| `no waiting batch`, `Nothing to verify after 2 min` | nothing new was uploaded, or the batch is already decided | upload a new version, then `./aos-verify run` |
 | `is offline`, `decide nothing` | a test Unit is not connected, so what AosCloud shows for it is old | `./aos-verify check`; when it says `online`, `./aos-verify run` |
 
 ## Commands for debugging
@@ -132,8 +144,8 @@ source .venv/bin/activate && source .aos-verify.env
 
 | Code | Meaning |
 |---|---|
-| 0 | decided, or you answered no, or nothing waits, or a dry run with the verdict approve |
-| 1 | the verdict is reject (sent, or a dry run or your no) |
+| 0 | the verdict is approve (sent, a dry run, your no, or `report-only`), or nothing waits |
+| 1 | the verdict is reject (sent, a dry run, your no, or `report-only`) |
 | 2 | decide nothing: a setting, an HTTP 4xx answer, a timeout; or the decision was refused |
 | 3 | decide nothing: AosCloud could not be reached or a test Unit is offline; after the question: the decision may have been applied, so look at the batch in the UI |
 
@@ -360,10 +372,11 @@ Back in the first terminal, ask again:
 python verify_batch.py discover --dry-run
 ```
 
-You should see one JSON line with your batch, your version and the test Units:
+You should see one JSON line with your batch, your version and the test Units. On a terminal the ids are shortened; a
+command that reads this line, like `$(…)`, gets them whole:
 
 ```text
-{"batch_id": "<batch id>", "version": "<your version>", "units": ["<unit id>"]}
+{"batch_id": "…ba9b", "version": "<your version>", "units": ["…318d"]}
 ```
 
 If it says `no test Unit`, a Unit is missing from the Verification Set, or the Service is not linked to it
@@ -377,20 +390,19 @@ If it says `no test Unit`, a Unit is missing from the Verification Set, or the S
 **macOS / Linux**
 
 ```bash
-BATCH=$(python verify_batch.py wait --service-id "$SERVICE_ID" --version "$VERSION" --unit "$UNIT_ID"); export BATCH; echo "BATCH=$BATCH"
+BATCH=$(python verify_batch.py wait --service-id "$SERVICE_ID" --version "$VERSION" --unit "$UNIT_ID"); export BATCH
 ```
 
 **Windows (PowerShell)**
 
 ```powershell
-$env:BATCH = python verify_batch.py wait --service-id $env:SERVICE_ID --version $env:VERSION --unit $env:UNIT_ID; "BATCH=$env:BATCH"
+$env:BATCH = python verify_batch.py wait --service-id $env:SERVICE_ID --version $env:VERSION --unit $env:UNIT_ID
 ```
 
-You should see the Unit state, then the batch id:
+You should see the state of the Unit:
 
 ```text
-batch …ba9b: {'…318d': 'installed'}
-BATCH=…ba9b
+batch …ba9b: Unit …318d installed
 ```
 
 In a production run the version was active on the test Unit about 15 s after the upload.
@@ -417,11 +429,11 @@ You should see (a sample run, against a recorded AosCloud state):
 
 ```text
 Built-in checks of version 4.8.0
-PASS A1 exactly this Service and version: batch …4b5a holds version 4.8.0 of Service …5c6d
-PASS B1 on every listed Unit: version 4.8.0 active on 1 of 1 Units
-PASS C2 no crash on start: no failed instance
+PASS A1 the batch holds exactly this Service and version: batch …4b5a holds version 4.8.0 of Service …5c6d
+PASS B1 4.8.0 is installed and running on every test Unit: version 4.8.0 active on 1 of 1 Units
+PASS C2 the Service did not crash on start: no failed instance
 watching for 60 s (1 round(s) of 60 s)
-PASS C3/C4 still running (late failure, restarts): active on every Unit for 60 s
+PASS C3/C4 still running after 60 s, no restarts: active on every Unit at each read, one read every 60 s; memory is not measured
 SKIP your tests: no tests/your_tests.sh (start from tests/your_tests.sh.example)
 report: report/report.html (and junit.xml)
 all checks passed: approve
@@ -465,8 +477,8 @@ python verify_batch.py decide --batch-id "$BATCH" --approve
 python verify_batch.py decide --batch-id $env:BATCH --approve
 ```
 
-You should see `batch …ba9b: approve amd64`, then `batch …ba9b: approved, now Valid`. Reload the page in the UI: the
-batch shows **Verified**.
+You should see `batch …ba9b (amd64): approve`, then `batch …ba9b (amd64): approved, now Verified (Valid)`. Reload the
+page in the UI: the batch shows **Verified**. With `--report-dir report` it also writes the decision into the report.
 
 A check failed: reject.
 

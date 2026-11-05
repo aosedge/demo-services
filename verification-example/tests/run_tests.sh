@@ -9,6 +9,7 @@
 # Your tests: tests/your_tests.sh, when it exists (start from tests/your_tests.sh.example).
 # Writes report/report.html and report/junit.xml (REPORT_DIR changes the folder).
 # RUN_PART: all (default), or builtin and then yours: the job runs them in two steps, so your tests have no key at all.
+# VERSION_FAILED=yes: wait already saw the version fail on a Unit. Only the report: no watch, and not your tests.
 # Exit 0 = every check passed: approve. 1 = a check failed: reject. 2 = a setting is missing.
 # 3 = AosCloud could not be read, or a test Unit is offline: decide nothing, neither says anything about the version.
 # builtin always exits 0.
@@ -20,6 +21,8 @@ units=${AOS_TEST_UNITS:-${UNIT_ID:-}}
 watch=${WATCH_SECONDS:-60}
 out=${REPORT_DIR:-report}
 part=${RUN_PART:-all}
+version_failed=${VERSION_FAILED:-}
+if [ -n "$version_failed" ]; then watch=0; fi
 
 if [ -z "${SERVICE_ID:-}" ] || [ -z "${VERSION:-}" ]; then echo "SERVICE_ID or VERSION is empty: export them first"; exit 2; fi
 if [ -z "$batch" ]; then echo "BATCH is empty: run wait first, it sets BATCH"; exit 2; fi
@@ -47,14 +50,20 @@ echo "Built-in checks of version $VERSION"
 status=$("$python" "$here/../verify_batch.py" status --service-id "$SERVICE_ID" --version "$VERSION" \
          --batch-id "$batch" "${unit_args[@]}")
 if [ $? -eq 2 ]; then
-  record builtin A1 "read the batch and the Units" ERROR "AosCloud could not be read, or a Unit is offline: see the message above"
+  record builtin A1 "read the batch and the Units" ERROR "AosCloud could not be read, or a Unit is offline: see the log"
 else
   while IFS=$'\t' read -r code name result detail; do
     [ -n "$code" ] && record builtin "$code" "$name" "$result" "$detail"
   done <<< "$status"
 fi
 
-# C3, C4: the watch. Every 60 s, wait checks that the version still runs on every Unit.
+# wait saw it fail, even if AosCloud reads differently a moment later: the verdict must stay what wait said.
+if [ -n "$version_failed" ] && ! grep -q $'^[^\t]*\t[^\t]*\t[^\t]*\tFAIL' "$results"; then
+  record builtin B1 "$VERSION is installed and running on every test Unit" FAIL "wait saw the version fail on a test Unit"
+fi
+
+# C3, C4: the watch. Every 60 s, wait checks that the version still runs on every Unit. A restart between two reads
+# is not seen, and memory is not measured: add a check to tests/your_tests.sh if you need them.
 if [ "$watch" -gt 0 ]; then
   rounds=$(( (watch + 59) / 60 ))
   echo "watching for $watch s ($rounds round(s) of 60 s)"
@@ -72,15 +81,18 @@ if [ "$watch" -gt 0 ]; then
       break
     fi
   done
+  still="still running after $watch s, no restarts"
   if [ "$stopped" -eq 0 ]; then
-    record builtin C3/C4 "still running (late failure, restarts)" PASS "active on every Unit for $watch s"
+    record builtin C3/C4 "$still" PASS "active on every Unit at each read, one read every 60 s; memory is not measured"
   elif [ "$lost" -eq 1 ]; then
-    record builtin C3/C4 "still running (late failure, restarts)" ERROR "AosCloud could not be read, or a Unit went offline, in round $stopped of $rounds"
+    record builtin C3/C4 "$still" ERROR "AosCloud could not be read, or a Unit went offline, in round $stopped of $rounds"
   else
-    record builtin C3/C4 "still running (late failure, restarts)" FAIL "the version stopped running in round $stopped of $rounds"
+    record builtin C3/C4 "$still" FAIL "the version stopped running in round $stopped of $rounds"
   fi
+elif [ -n "$version_failed" ]; then
+  record builtin C3/C4 "still running, no restarts" SKIP "not run: the version already failed on a test Unit"
 else
-  record builtin C3/C4 "still running (late failure, restarts)" SKIP "off (WATCH_SECONDS=0)"
+  record builtin C3/C4 "still running, no restarts" SKIP "off (WATCH_SECONDS=0)"
 fi
 
 fi
@@ -96,7 +108,9 @@ if [ "$part" = yours ]; then
 fi
 
 # Your tests: tests/your_tests.sh prints one PASS or FAIL line per test. They run without AOS_CERT.
-if [ -f "$here/your_tests.sh" ]; then
+if [ -n "$version_failed" ]; then
+  record yours "" "your tests" SKIP "not run: the version already failed on a test Unit"
+elif [ -f "$here/your_tests.sh" ]; then
   echo "Your tests"
   yours=$(BATCH_ID=$batch env -u AOS_CERT -u AOS_KEY bash "$here/your_tests.sh" 2>&1)
   code=$?

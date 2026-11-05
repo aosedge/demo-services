@@ -76,14 +76,15 @@ Files: [`aos-verify`](aos-verify) (setup and one command, for a laptop), [`verif
    gh api -X PUT repos/your-org/your-repo/environments/aos-verification
    gh secret set AOS_USER_PEM --repo your-org/your-repo --env aos-verification < '…/.aos-verify/user.pem'
    gh secret set AOS_ROOT_CA_PEM --repo your-org/your-repo --env aos-verification < '…/.aos-verify/aos-root-ca.crt'
-   gh secret set AOS_SERVICE_ID --repo your-org/your-repo --env aos-verification --body '<your service id>'
+   gh secret set AOS_SERVICE_ID --repo your-org/your-repo --env aos-verification < '…/.aos-verify/service_id'
    gh secret set AOS_API_URL --repo your-org/your-repo --env aos-verification --body 'https://api.aoscloud.io:10000/api/v11'
    ```
 
    Creating the environment needs admin rights on the repository.
 
 3. **Commit to the default branch.** Done. The watch finds each new version by itself, and
-   [`verify-release`](.github/workflows/verify-release.yml) checks it and decides. Add your own tests in
+   [`verify-release`](.github/workflows/verify-release.yml) checks it and decides, by itself
+   ([Automatic decision](#automatic-decision) says how to change that). Add your own tests in
    [`tests/your_tests.sh`](docs/tests.md).
 
 ## How to use this repository
@@ -196,7 +197,8 @@ The built-in checks run first: they read the batch and the Units again (exactly 
 watch the version for 60 s (late failure, restarts). Then your tests, from `tests/your_tests.sh` when you add it
 ([Your tests](docs/tests.md)), in a step of their own, with no secret. Exit 0 when every check passed, 1 when a check
 failed, 3 when AosCloud could not be read or a test Unit is offline: neither decides anything. It writes `report/report.html` and
-`report/junit.xml`; the job keeps them: open the run page → **Artifacts** → **verification-report**.
+`report/junit.xml`; the job keeps them, with the decision written into the report: open the run page → **Artifacts** →
+**verification-report**.
 
 ### 3. Decide: `verify_batch.py decide --approve` or `--reject`
 
@@ -214,6 +216,29 @@ fleet through your normal rollout. Rejected: **Invalid**, and it stops here.
 | Approved | Rejected |
 |---|---|
 | ![A Verified batch](docs/img/07-sp-batch-verified.png) | ![An Invalid batch](docs/img/08-sp-batch-invalid.png) |
+
+## Automatic decision
+
+One setting, `AOS_DECISION`, says what happens after the checks:
+
+| Value | What happens | When to use it |
+|---|---|---|
+| `auto` | all checks pass: approve; a check fails: reject. The default in GitHub | you trust the checks, and nobody has to press anything |
+| `ask` | it asks before it sends the decision. The default on a laptop; in GitHub there is no terminal to ask in, so it sends nothing | you run it by hand, and want to read the report first |
+| `report-only` | the report and `junit.xml` only, no decision sent; a person decides in SP UI → Verification batches | you do not want the pipeline to release by itself. GitHub required reviewers are not on every plan; this works on all of them |
+
+Reject is automatic too: with `auto`, a version that fails is rejected with no person involved.
+
+In GitHub, set the variable `AOS_DECISION` in the environment `aos-verification`:
+
+```bash
+gh variable set AOS_DECISION --repo your-org/your-repo --env aos-verification --body report-only
+```
+
+On a laptop, `./aos-verify setup` asks once and keeps your answer in `.aos-verify.env`. `AOS_DECISION` in your environment
+wins over that for one run, and `./aos-verify run --yes` is the short form of `auto`.
+
+With `report-only` the job is still green or red: green when all checks pass, red when one fails.
 
 > **Next**
 > - [Your tests](docs/tests.md): what `tests/run_tests.sh` checks, the report, and how to add your own tests
@@ -324,8 +349,8 @@ To start the verification right after an upload in the same workflow, call `veri
 ## Parameters
 
 `./aos-verify secrets` prints the commands for the four required values: [Put it in GitHub](#put-it-in-github). By hand:
-create the environment `aos-verification`, put the secrets there, and add required reviewers if you want a person to
-confirm (repository Settings → Environments). The variables go in Settings → Secrets and variables → Actions.
+create the environment `aos-verification`, put the secrets there, and, if you want a person to confirm, add required
+reviewers (repository Settings → Environments) or set `AOS_DECISION` to `report-only`. The variables go in Settings → Secrets and variables → Actions.
 
 | Name | Kind | Value |
 |---|---|---|
@@ -334,6 +359,7 @@ confirm (repository Settings → Environments). The variables go in Settings →
 | `AOS_ROOT_CA_PEM` | secret | the AosEdge root CA file `aos-root-ca.crt` (from `aos-keys`, see below; it is not secret) |
 | `AOS_SERVICE_ID` | secret | your Service id; it is not secret, but GitHub masks a secret in the log |
 | `AOS_TEST_UNITS` | variable | optional: test only these Units of the Verification Set; ids separated by spaces. A Unit you leave out is not checked. The job stops if one is outside the Set, or if an architecture of the batch has none |
+| `AOS_DECISION` | variable | `auto` (default), `ask` or `report-only`: [Automatic decision](#automatic-decision) |
 | `AOS_WATCH_SECONDS` | variable | how long the built-in checks watch the version on the test Units; default `60`, `0` turns the watch off. See [Example checks](docs/checks.md#c3-late-failure) |
 | `AOS_WAIT_TIMEOUT` | variable | seconds to wait for the version on the Units; default `1800`. The job stops after 60 minutes |
 | `version` | workflow input | the version to verify; to start the job by hand, this is the only input you need |

@@ -59,13 +59,14 @@ class Pki:
         run('openssl', 'x509', '-req', '-in', folder / f'{name}.csr', '-CA', issuer_cert, '-CAkey',
             folder / f'{issuer}.key', '-CAcreateserial', '-out', folder / f'{name}.crt', '-days', '3', '-extfile', extensions)
 
-    def p12(self, out: Path, role='SP', password='', domain='aoscloud.test'):
+    def p12(self, out: Path, role='SP', password='', domain='aoscloud.test', tenant=None):
         """A user .p12 with its intermediate certificate, as aos-keys saves it."""
         name = f'user-{role}-{out.stem}'
         extensions = self.folder / 'user.ext'
         extensions.write_text('basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\n')
         person = PERSON.replace('+', r'\+')  # as it is in a real certificate, and -subj needs the + escaped
-        self.sign(name, f'/CN={person}/O={domain}/OU={role} {person}', extensions, issuer='intermediate')
+        unit = role if tenant == '' else f"{role} {tenant or person}"
+        self.sign(name, f'/CN={person}/O={domain}/OU={unit}', extensions, issuer='intermediate')
         out.parent.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ, P=password)
         run('openssl', 'pkcs12', '-export', '-inkey', self.folder / f'{name}.key', '-in', self.folder / f'{name}.crt',
@@ -343,7 +344,7 @@ def test_run_with_nothing_waiting_says_so_and_sends_nothing(box):
     box.setup()
     done = box('run', '--poll', '0')
     assert done.returncode == 0 and 'no waiting batch: the highest version 4.9.0 is Valid' in done.stdout
-    assert 'Upload a new version' in done.stdout and Cloud.state['patches'] == []
+    assert 'Nothing to verify. Upload first, then run.' in done.stdout and Cloud.state['patches'] == []
 
 
 def test_run_dry_run_goes_up_to_the_decision_and_sends_nothing(box):
@@ -356,7 +357,7 @@ def test_run_dry_run_goes_up_to_the_decision_and_sends_nothing(box):
     assert 'Verdict: approve (all checks passed)' in done.stdout
     assert 'Dry run: nothing sent to AosCloud' in done.stdout
     assert Cloud.state['patches'] == [] and (box.tree / 'report/report.html').exists()
-    assert 'found by the watch' in (box.tree / 'report/report.html').read_text()
+    assert 'found by ./aos-verify on this computer' in (box.tree / 'report/report.html').read_text()
 
 
 def test_run_asks_before_the_decision_and_no_means_nothing_sent(box):
@@ -380,7 +381,7 @@ def test_run_yes_at_the_prompt_sends_one_approval(box):
     Cloud.state['waiting'] = True
     done = box('run', '--poll', '0', stdin='y\n')
     assert done.returncode == 0, done.stderr
-    assert 'approved, now Valid' in done.stdout
+    assert 'batch …a410 (amd64): approved, now Verified (Valid)' in done.stdout
     assert Cloud.state['patches'] == [[{'architecture': 'amd64', 'is_approved': True}]]
 
 
@@ -441,7 +442,7 @@ def test_the_debug_commands_one_at_a_time(box):
     assert 'no batch found yet' in box('wait').stderr and 'no batch found yet' in box('test').stderr
     Cloud.state['waiting'] = True
     found = box('discover')
-    assert f'"batch_id": "{NEW_BATCH}"' in found.stdout and 'Next: ./aos-verify wait' in found.stdout
+    assert 'batch …a410, version 4.10.0, test Units: …318d' in found.stdout and 'Next: ./aos-verify wait' in found.stdout
     waited = box('wait')
     assert waited.returncode == 0 and 'exit code: 0' in waited.stdout
     tested = box('test')
@@ -474,7 +475,7 @@ def test_secrets_prints_what_to_paste_and_never_the_key(box):
 
 def test_secrets_asks_for_the_repository_and_runs_setup_when_needed(box):
     box.pki.p12(box.home / '.aos/security/aos-user-sp.p12')
-    done = box('secrets', stdin=f'{box.url}\nmine/repo\n')
+    done = box('secrets', stdin=f'{box.url}\n\nmine/repo\n')
     assert done.returncode == 0, done.stderr
     assert 'Ready.' in done.stdout and 'repos/mine/repo/environments' in done.stdout
 
@@ -497,3 +498,236 @@ def test_the_workflows_take_the_api_url_as_a_secret_or_a_variable():
     for name in ('verify-release.yml', 'watch-verification.yml'):
         text = (ROOT / '.github/workflows' / name).read_text(encoding='utf-8')
         assert 'AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}' in text
+
+
+def report_of(box):
+    return (box.tree / 'report/report.html').read_text(encoding='utf-8')
+
+
+def failing_version(box, kind):
+    """A version that fails: on a test Unit (wait sees it), or in your tests."""
+    if kind == 'on a Unit':
+        Cloud.state['run_state'] = 'failed'
+    else:
+        (box.tree / 'tests/your_tests.sh').write_text('echo "FAIL smoke: broken"\n')
+
+
+def test_setup_asks_for_the_decision_mode_once_and_keeps_it(box):
+    done = box.setup(stdin='\n')
+    assert 'After the checks, who decides?' in done.stdout and 'OK    decision mode: ask' in done.stdout
+    assert "export AOS_DECISION='ask'" in (box.tree / '.aos-verify.env').read_text()
+    done = box('setup', '--api-url', box.url, stdin='report-only\n')
+    assert "export AOS_DECISION='report-only'" in (box.tree / '.aos-verify.env').read_text()
+    done = box('setup', '--api-url', box.url, stdin='\n')
+    assert 'Decision mode [report-only]: ' in done.stdout
+    assert "export AOS_DECISION='report-only'" in (box.tree / '.aos-verify.env').read_text()
+
+
+def test_setup_takes_the_decision_mode_as_an_option_or_from_the_environment(box):
+    box.pki.p12(box.home / '.aos/security/aos-user-sp.p12')
+    done = box('setup', '--api-url', box.url, '--decision', 'auto')
+    assert 'who decides' not in done.stdout and "export AOS_DECISION='auto'" in (box.tree / '.aos-verify.env').read_text()
+    done = box('setup', '--api-url', box.url, AOS_DECISION='report-only')
+    assert 'who decides' not in done.stdout and 'decision mode: report-only' in done.stdout
+
+
+def test_a_wrong_decision_mode_stops_with_the_fix(box):
+    box.pki.p12(box.home / '.aos/security/aos-user-sp.p12')
+    done = box('setup', '--api-url', box.url, stdin='maybe\n')
+    assert done.returncode == 2 and "AOS_DECISION must be auto, ask or report-only, not 'maybe'" in done.stderr
+    assert not (box.tree / '.aos-verify.env').exists()
+    box.setup()
+    Cloud.state['waiting'] = True
+    done = box('run', '--poll', '0', AOS_DECISION='sometimes')
+    assert done.returncode == 2 and 'not \'sometimes\'' in done.stderr and Cloud.state['patches'] == []
+
+
+def test_auto_approves_what_passes_without_asking(box):
+    box.setup()
+    Cloud.state['waiting'] = True
+    done = box('run', '--poll', '0', AOS_DECISION='auto')
+    assert done.returncode == 0 and 'This writes one decision' not in done.stdout
+    assert Cloud.state['patches'] == [[{'architecture': 'amd64', 'is_approved': True}]]
+    page = report_of(box)
+    assert 'PASS → approve' in page and 'batch now Verified' in page and 'not sent yet' not in page
+
+
+@pytest.mark.parametrize('kind', ['on a Unit', 'in your tests'])
+def test_auto_rejects_what_fails_without_asking(box, kind):
+    box.setup()
+    Cloud.state['waiting'] = True
+    failing_version(box, kind)
+    done = box('run', '--poll', '0', AOS_DECISION='auto')
+    assert done.returncode == 1 and 'This writes one decision' not in done.stdout
+    assert Cloud.state['patches'] == [[{'architecture': 'amd64', 'is_approved': False}]]
+    page = report_of(box)
+    assert 'FAIL → reject' in page and 'Decision: rejected,' in page and 'batch now Invalid' in page
+
+
+def test_the_mode_from_setup_counts_and_the_environment_overrides_it(box):
+    box.pki.p12(box.home / '.aos/security/aos-user-sp.p12')
+    box('setup', '--api-url', box.url, '--decision', 'auto')
+    Cloud.state['waiting'] = True
+    done = box('run', '--poll', '0', '--dry-run')
+    assert 'It would approve batch …a410 (auto)' in done.stdout
+    done = box('run', '--poll', '0', '--dry-run', AOS_DECISION='report-only')
+    assert 'report-only sends nothing anyway' in done.stdout
+
+
+def test_yes_is_the_short_form_of_auto_whatever_the_setting(box):
+    box.pki.p12(box.home / '.aos/security/aos-user-sp.p12')
+    box('setup', '--api-url', box.url, '--decision', 'report-only')
+    Cloud.state['waiting'] = True
+    assert box('run', '--yes', '--poll', '0').returncode == 0 and len(Cloud.state['patches']) == 1
+
+
+@pytest.mark.parametrize('answer, patches', [('y\n', 1), ('n\n', 0)])
+def test_ask_on_a_version_that_passes(box, answer, patches):
+    box.setup()
+    Cloud.state['waiting'] = True
+    done = box('run', '--poll', '0', stdin=answer)
+    assert done.returncode == 0 and 'approve version 4.10.0 in AosCloud?' in done.stdout
+    assert len(Cloud.state['patches']) == patches
+    assert ('batch now Verified' if patches else 'Decision: not sent (you answered no).') in report_of(box)
+
+
+@pytest.mark.parametrize('kind', ['on a Unit', 'in your tests'])
+@pytest.mark.parametrize('answer, patches', [('y\n', 1), ('n\n', 0)])
+def test_ask_on_a_version_that_fails(box, kind, answer, patches):
+    box.setup()
+    Cloud.state['waiting'] = True
+    failing_version(box, kind)
+    done = box('run', '--poll', '0', stdin=answer)
+    assert done.returncode == 1 and 'reject version 4.10.0 in AosCloud?' in done.stdout
+    assert len(Cloud.state['patches']) == patches
+    assert 'FAIL → reject' in report_of(box)
+
+
+def test_report_only_sends_nothing_on_a_version_that_passes(box):
+    box.setup()
+    Cloud.state['waiting'] = True
+    done = box('run', '--poll', '0', AOS_DECISION='report-only')
+    assert done.returncode == 0 and 'Report only: nothing sent' in done.stdout and Cloud.state['patches'] == []
+    assert 'This writes one decision' not in done.stdout
+    assert (box.tree / 'report/junit.xml').exists()
+    page = report_of(box)
+    assert 'PASS → approve' in page and 'Decision: report-only, nothing sent.' in page
+
+
+@pytest.mark.parametrize('kind', ['on a Unit', 'in your tests'])
+def test_report_only_sends_nothing_on_a_version_that_fails_and_still_writes_it_down(box, kind):
+    box.setup()
+    Cloud.state['waiting'] = True
+    failing_version(box, kind)
+    done = box('run', '--poll', '0', AOS_DECISION='report-only')
+    assert done.returncode == 1 and Cloud.state['patches'] == [] and 'Report only: nothing sent' in done.stdout
+    assert (box.tree / 'report/junit.xml').exists()
+    page = report_of(box)
+    assert 'FAIL → reject' in page and 'Decision: report-only, nothing sent.' in page
+
+
+@pytest.mark.parametrize('mode', ['auto', 'ask', 'report-only'])
+def test_a_dry_run_sends_nothing_in_any_mode(box, mode):
+    box.setup()
+    Cloud.state['waiting'] = True
+    done = box('run', '--poll', '0', '--dry-run', AOS_DECISION=mode)
+    assert done.returncode == 0 and 'Dry run: nothing sent to AosCloud' in done.stdout
+    assert 'This writes one decision' not in done.stdout and Cloud.state['patches'] == []
+    assert 'Decision: not sent (a dry run).' in report_of(box)
+
+
+def test_decide_by_hand_writes_the_decision_into_the_report(box):
+    box.setup()
+    Cloud.state['waiting'] = True
+    assert box('run', '--poll', '0', stdin='n\n').returncode == 0
+    assert box('decide', 'approve').returncode == 0
+    assert 'batch now Verified' in report_of(box)
+
+
+def test_the_report_shows_the_local_time_too(box):
+    box.setup()
+    Cloud.state['waiting'] = True
+    box('run', '--poll', '0', '--dry-run', TZ='Asia/Tokyo')
+    assert re.search(r'\d\d:\d\d UTC \((\d{4}-\d\d-\d\d )?\d\d:\d\d local\)', report_of(box))
+
+
+def test_run_says_how_long_it_will_still_ask(box):
+    box.setup()
+    done = box('run', AOS_DISCOVER_TIMEOUT='2')
+    assert done.returncode == 0 and Cloud.state['patches'] == []
+    assert re.search(r'asking again in \d+ s \(0:0\d left, Ctrl-C to stop\)', done.stdout)
+    assert 'Nothing to verify after 2 s. Upload first, then run.' in done.stdout
+
+
+def test_the_discover_limit_in_words_and_a_wrong_value(box):
+    box.setup()
+    done = box('run', AOS_DISCOVER_TIMEOUT='soon')
+    assert done.returncode == 2 and "must be a number of seconds, not 'soon'" in done.stderr
+    assert '2 min' in box('help').stdout or 'default 120' in box('help').stdout
+
+
+def test_setup_names_the_sp_of_each_certificate(box):
+    box.pki.p12(box.home / '.aos/security/a.p12', tenant='Honda Motor')
+    box.pki.p12(box.home / '.aos/security/b.p12')  # a test tenant: its name is the e-mail of a person
+    box.pki.p12(box.home / '.aos/security/old/c.p12', tenant='')  # no name: the folder says which one
+    done = box.setup(stdin='1\n', p12=False)
+    assert '1) security/a.p12  (Honda Motor, aoscloud.test, valid to' in done.stdout
+    assert '2) security/b.p12  (…+1@example.com, aoscloud.test, valid to' in done.stdout
+    assert '3) security/old/c.p12  (no SP name in it, see the folder, aoscloud.test, valid to' in done.stdout
+    assert PERSON not in done.stdout and 'Some.Person' not in done.stdout
+
+
+FULL_ID = re.compile(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
+
+
+def no_full_id(box, *done):
+    for one in done:
+        for text in (one.stdout, one.stderr):
+            assert not FULL_ID.search(text), text
+    for path in (box.tree / 'report').glob('*'):
+        assert not FULL_ID.search(path.read_text(encoding='utf-8')), path
+
+
+def test_no_full_id_on_the_screen_or_in_the_report_when_it_passes(box):
+    done = [box.setup(), box('check'), box('discover')]
+    Cloud.state['waiting'] = True
+    done += [box('discover'), box('wait'), box('test'), box('decide', 'approve'), box('secrets', '--repo', 'a/b'),
+             box('check'), box('run', '--poll', '0', '--dry-run')]
+    no_full_id(box, *done)
+
+
+@pytest.mark.parametrize('mode', ['auto', 'report-only'])
+@pytest.mark.parametrize('kind', ['on a Unit', 'in your tests'])
+def test_no_full_id_on_the_screen_or_in_the_report_when_it_fails(box, mode, kind):
+    setup = box.setup()
+    Cloud.state['waiting'] = True
+    failing_version(box, kind)
+    no_full_id(box, setup, box('run', '--poll', '0', AOS_DECISION=mode))
+
+
+def test_no_full_id_when_a_unit_is_offline_or_the_batch_is_decided(box):
+    setup = box.setup()
+    Cloud.state.update(waiting=True, offline=True)
+    offline = box('run', '--yes', '--poll', '0', '--timeout', '1')
+    Cloud.state.update(offline=False)
+    first = box('run', '--yes', '--poll', '0')
+    no_full_id(box, setup, offline, first, box('decide', 'approve'), box('wait'))
+
+
+def test_no_full_id_when_aoscloud_is_gone(box):
+    setup = box.setup()
+    Cloud.state['waiting'] = True
+    assert box('discover').returncode == 0
+    settings = box.tree / '.aos-verify.env'
+    settings.write_text(settings.read_text().replace(box.url, 'https://127.0.0.1:9/api/v11'))
+    no_full_id(box, setup, box('check'), box('decide', 'approve'), box('wait', '--timeout', '1'))
+    assert Cloud.state['patches'] == []
+
+
+def test_secrets_never_prints_the_service_id_and_gives_it_from_a_file(box):
+    box.setup()
+    done = box('secrets', '--repo', 'a/b')
+    assert SERVICE not in done.stdout
+    assert f"AOS_SERVICE_ID --repo a/b --env aos-verification < '{box.tree}/.aos-verify/service_id'" in done.stdout
+    assert (box.tree / '.aos-verify/service_id').read_text() == SERVICE
+    assert 'gh variable set AOS_DECISION --repo a/b --env aos-verification --body report-only' in done.stdout

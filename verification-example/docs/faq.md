@@ -28,7 +28,11 @@ it then goes on to the fleet through your normal rollout. A batch that waits is 
 - It never decides after a timed-out wait.
 - It never retries the decision call. If the answer is lost, or AosCloud answers HTTP 5xx, it exits 3: look at the
   batch in the UI before you do anything else.
-- It never ends green without a decision: any error in `wait` stops the job.
+- It never ends green without a decision, unless you asked for that with `report-only`: any error in `wait` stops the job.
+
+**Can a person decide, and not the pipeline?**
+Yes: set `AOS_DECISION` to `report-only`. The job writes the report and sends nothing. See
+[Automatic decision](../README.md#automatic-decision).
 
 ## The watch: timing and old batches
 
@@ -149,5 +153,14 @@ its Enterprise plan; the call ends in HTTP 422 otherwise). The job writes the PE
 folder of the runner that only it can read, only in the steps that call AosCloud (the discover step of the watch, wait,
 the built-in checks, the decision), and deletes it at the end of each. Your tests run in a step of their own, with no
 secret and no key file. Delete local copies of the PEM (`.aos-verify/user.pem`) after you store the secret.
+
+**The certificate leaked.**
+Delete the CI user, not only the certificate. Six permissions cannot be removed from an SP user, among them
+`user_certificates_download` and `users_new_token`, so whoever holds the certificate may already hold another way in.
+Then create a new user with the permissions the job needs, and store its PEM as the secret. Look at the batches decided
+since the leak in SP UI → Verification batches.
+
+**What to hide in screenshots and videos?**
+`aos-signer` prints your e-mail on upload (`Upload info: user=…`). That line is not from this example: mask it.
 
 **Next →** back to the start: [How to use this repository](../README.md#how-to-use-this-repository)

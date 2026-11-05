@@ -69,6 +69,9 @@ jobs:
     env:
       AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
       VERSION: ${{ inputs.version }}
+      # auto: all checks pass, approve; a check fails, reject. Set the variable to report-only and this job sends no
+      # decision: a person decides in the UI. There is no terminal here to ask in, so ask also sends nothing.
+      AOS_DECISION: ${{ vars.AOS_DECISION || 'auto' }}
     steps:
       # First, and from the event file: the header of a step prints its env before any mask can apply.
       - name: Hide the ids in this log
@@ -155,13 +158,14 @@ jobs:
       # It only collects results: step 2b gives the verdict.
       - name: 2a. Run the built-in checks
         id: builtin
-        if: steps.wait.outputs.code == '0'
+        if: steps.wait.outputs.code == '0' || steps.wait.outputs.code == '1'
         env:
           SERVICE_ID: ${{ inputs.service_id || secrets.AOS_SERVICE_ID }}
           BATCH_ID: ${{ steps.wait.outputs.batch_id }}
           AOS_TEST_UNITS: ${{ steps.wait.outputs.units }}
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
           WATCH_SECONDS: ${{ vars.AOS_WATCH_SECONDS || '60' }}
+          VERSION_FAILED: ${{ steps.wait.outputs.code == '1' && 'yes' || '' }}
           RUN_PART: builtin
         run: |
           export AOS_CERT="$RUNNER_TEMP/aos/user.pem"
@@ -172,7 +176,7 @@ jobs:
       # No secret in this step: your tests cannot read the key. Code 0 approves, 1 rejects, 3 decides nothing.
       - name: 2b. Run your tests and write the report
         id: tests
-        if: "!cancelled() && steps.wait.outputs.code == '0'"
+        if: "!cancelled() && (steps.wait.outputs.code == '0' || steps.wait.outputs.code == '1')"
         env:
           SERVICE_ID: ${{ steps.wait.outputs.service_id }}
           BATCH_ID: ${{ steps.wait.outputs.batch_id }}
@@ -180,6 +184,7 @@ jobs:
           WATCH_SECONDS: ${{ vars.AOS_WATCH_SECONDS || '60' }}
           FOUND_BY: ${{ steps.wait.outputs.found_by }}
           UNITS_FROM: ${{ steps.wait.outputs.units_from }}
+          VERSION_FAILED: ${{ steps.wait.outputs.code == '1' && 'yes' || '' }}
           RUN_PART: yours
         run: |
           set +e
@@ -189,16 +194,8 @@ jobs:
           echo "code=$code" >> "$GITHUB_OUTPUT"
           exit "$code"
 
-      - name: Keep the report
-        if: always() && steps.tests.outcome != 'skipped'
-        uses: actions/upload-artifact@v4
-        with:
-          name: verification-report
-          path: report/
-          if-no-files-found: ignore
-
       - name: 3a. Approve
-        if: steps.wait.outputs.code == '0' && steps.tests.outputs.code == '0'
+        if: env.AOS_DECISION == 'auto' && steps.wait.outputs.code == '0' && steps.tests.outputs.code == '0'
         env:
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
           BATCH_ID: ${{ steps.wait.outputs.batch_id }}
@@ -206,11 +203,11 @@ jobs:
           export AOS_CERT="$RUNNER_TEMP/aos/user.pem"
           trap 'rm -f "$AOS_CERT"' EXIT
           (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
-          python verify_batch.py decide --batch-id "$BATCH_ID" --approve
+          python verify_batch.py decide --batch-id "$BATCH_ID" --approve --report-dir report
 
       - name: 3b. Reject
         if: >-
-          always() && steps.wait.outputs.batch_id != '' &&
+          always() && env.AOS_DECISION == 'auto' && steps.wait.outputs.batch_id != '' &&
           (steps.wait.outputs.code == '1' || steps.tests.outputs.code == '1')
         env:
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
@@ -219,8 +216,25 @@ jobs:
           export AOS_CERT="$RUNNER_TEMP/aos/user.pem"
           trap 'rm -f "$AOS_CERT"' EXIT
           (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
-          python verify_batch.py decide --batch-id "$BATCH_ID" --reject
+          python verify_batch.py decide --batch-id "$BATCH_ID" --reject --report-dir report
           echo "Rejected: the new version failed on a test Unit or in the tests." && exit 1
+
+      - name: 3. No decision (AOS_DECISION is not auto)
+        if: always() && env.AOS_DECISION != 'auto' && steps.tests.outcome != 'skipped'
+        env:
+          BATCH_ID: ${{ steps.wait.outputs.batch_id }}
+        run: |
+          echo "AOS_DECISION=$AOS_DECISION: nothing sent. A person decides in the SP UI, Verification batches."
+          python tests/report.py --out report --batch-id "$BATCH_ID" --decision report-only
+
+      # After the decision, so that the report says what was decided.
+      - name: Keep the report
+        if: always() && steps.tests.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-report
+          path: report/
+          if-no-files-found: ignore
 
       - name: Remove the certificates
         if: always()
