@@ -1538,7 +1538,7 @@ def test_the_decision_mode_is_said_before_anything_can_fail_and_the_values_are_n
 
 
 def test_the_watch_says_why_in_its_summary(tmp_path):
-    assert summary_of(WATCH, 'Say why it asks on a schedule', tmp_path)[0].startswith('Why every 5 minutes?')
+    assert plain(summary_of(WATCH, 'Say why it asks on a schedule', tmp_path)[0]) == f'Why every 5 minutes? {WHY}'
     text = WATCH.read_text(encoding='utf-8')
     # after the checkout: the showcase copy of this file runs in a folder that exists only then
     assert text.index('actions/checkout') < text.index('Say why it asks on a schedule')

@@ -8,12 +8,12 @@ A GitHub Actions job finds a new Service version waiting in AosCloud, checks it 
 
 | # | Step | Runs where | What is checked / decided | Where you see it |
 |---|---|---|---|---|
-| 1 | Upload (existing step) | CI pipeline | New Service version sent | SP UI: Deployment bundles |
-| 2 | Verification batch created | AosCloud | State: Waiting verification | SP UI: Verification batches |
-| 0 | Watch asks every 5 min (or Start A) | `watch-batches.yml` | New Service version waiting? | Job log |
-| 5 | Wait | `verify-batch.yml` | Verification Set Units active | Job log |
-| 6 | Test | `verify-batch.yml` | Built-in checks + partner tests | `report.html` |
-| 7 | Decide | `verify-batch.yml` | `auto`: the job. `report-only`: a person | Job log; report |
+| – | Upload (existing step) | CI pipeline | New Service version sent | SP UI: Deployment bundles |
+| – | Verification batch created | AosCloud | State: Waiting verification | SP UI: Verification batches |
+| ⓪ | Watch asks every 5 min (or Start A) | `watch-batches.yml` | New Service version waiting? | Job log |
+| 1 | Wait | `verify-batch.yml` | Verification Set Units active | Job log |
+| 2 | Test | `verify-batch.yml` | Built-in checks + partner tests | `report.html` |
+| 3 | Decide | `verify-batch.yml` | `auto`: the job. `report-only`: a person | Job log; report |
 | – | Result | AosCloud | Verified / Invalid | SP UI: Verification batches |
 
 ## How the job knows it is time
@@ -322,7 +322,10 @@ jobs:
           persist-credentials: false
 
       - name: Say why it asks on a schedule
-        run: echo "Why every 5 minutes? AosCloud does not notify a pipeline, so the watch asks; 5 minutes is the shortest interval GitHub allows. To change it, edit the cron line in watch-batches.yml." >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          Why every 5 minutes? AosCloud does not notify a pipeline when a new Service version waits (no webhook), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub may start runs late or skip them; for a guaranteed start use Start A. Each run takes about 20 s and only reads. To change it, edit one line in `watch-batches.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-batch` right after your upload job (Start A, the chain), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
+          SUMMARY
 
       - uses: actions/setup-python@v5
         with:
