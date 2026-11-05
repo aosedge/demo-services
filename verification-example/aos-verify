@@ -131,7 +131,7 @@ subject_field() {
 }
 
 # The SP company from the OU of the subject ("SP <name>"). On test tenants the name is the e-mail of a person: only its
-# tag stays, enough to tell two tenants apart.
+# tag stays, enough to tell two tenants apart, or its domain if it has no tag.
 tenant_name() {
   local ou=$1 name local_part
   name=${ou#* }
@@ -140,7 +140,7 @@ tenant_name() {
     *@*)
       local_part=${name%%@*}
       case "$local_part" in
-        *+*) name="…+${local_part#*+}@${name#*@}" ;;
+        *+*) name="…+${local_part#*+}" ;;
         *) name="…@${name#*@}" ;;
       esac
       ;;

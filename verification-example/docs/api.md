@@ -128,7 +128,7 @@ curl -sS --cert "$AOS_CERT" --cacert "$AOS_CA" "$AOS_API_URL/units/$UNIT_ID/"
 ```
 
 ```json
-{"id": "<unit id>", "status": "provisioned", "online_status": "Online", "last_online_changed_at": "2026-11-04T10:01:58+00:00"}
+{"id": "<unit id>", "status": "provisioned", "online_status": "Online", "last_online_changed_at": "2026-11-04T11:01:58+00:00"}
 ```
 
 Only `online_status` `Online` counts. An offline Unit is neither ready nor failed: the job waits, and at the timeout it

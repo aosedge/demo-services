@@ -672,7 +672,7 @@ def test_setup_names_the_sp_of_each_certificate(box):
     box.pki.p12(box.home / '.aos/security/old/c.p12', tenant='')  # no name: the folder says which one
     done = box.setup(stdin='1\n', p12=False)
     assert '1) security/a.p12  (Honda Motor, aoscloud.test, valid to' in done.stdout
-    assert '2) security/b.p12  (…+1@example.com, aoscloud.test, valid to' in done.stdout
+    assert '2) security/b.p12  (…+1, aoscloud.test, valid to' in done.stdout
     assert '3) security/old/c.p12  (no SP name in it, see the folder, aoscloud.test, valid to' in done.stdout
     assert PERSON not in done.stdout and 'Some.Person' not in done.stdout
 
