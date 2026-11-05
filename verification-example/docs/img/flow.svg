@@ -1,69 +1,115 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 346" width="1000" height="346" font-family="Roboto, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" role="img" aria-label="Your upload job uploads a new version; AosCloud holds it in a Verification batch and sends it only to the Verification Set; the verification job waits, runs your tests and decides once: approve gives Verified and the version goes on to the fleet, reject gives Invalid and it stops"><title>Your upload job uploads a new version; AosCloud holds it in a Verification batch and sends it only to the Verification Set; the verification job waits, runs your tests and decides once: approve gives Verified and the version goes on to the fleet, reject gives Invalid and it stops</title><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5793CE"/></marker>
-<filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#173D7A" flood-opacity="0.12"/></filter></defs>
-<rect x="0.5" y="0.5" width="999" height="345" rx="14" fill="#ffffff" stroke="#C9DDF0"/><clipPath id="top"><rect x="0.5" y="0.5" width="999" height="200" rx="14"/></clipPath><rect x="0" y="0" width="1000" height="46" fill="#173D7A" clip-path="url(#top)"/>
-<text x="24" y="29" font-size="16" font-weight="600" fill="#fff" text-anchor="start"><tspan fill="#4AA8FF">Aos</tspan><tspan fill="#ffffff">Edge</tspan><tspan fill="#B3E0FF" font-weight="400">  |  </tspan><tspan fill="#ffffff">Verify a new Service version in your pipeline</tspan></text>
-<text x="976" y="29" font-size="12" font-weight="400" fill="#B3E0FF" text-anchor="end">one job · three steps · one decision</text>
-<g filter="url(#sh)"><rect x="24" y="70" width="190" height="200" rx="12" fill="#fff" stroke="#C9DDF0"/></g>
-<clipPath id="c1"><rect x="24" y="70" width="190" height="200" rx="12"/></clipPath>
-<rect x="24" y="70" width="190" height="38" fill="#173D7A" clip-path="url(#c1)"/>
-<text x="40" y="86" font-size="10" font-weight="700" fill="#B3E0FF" text-anchor="start">YOUR CI PIPELINE</text>
-<text x="40" y="101" font-size="14" font-weight="700" fill="#fff" text-anchor="start">Upload job</text>
-<text x="40" y="136" font-size="13" font-weight="400" fill="#4F5F75" text-anchor="start">Build and sign</text>
-<rect x="40" y="146" width="124" height="22" rx="11" fill="#EEF7FF"/>
-<text x="101.75" y="161" font-size="11" font-weight="600" fill="#14243F" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">aos-signer sign</text>
-<text x="40" y="194" font-size="13" font-weight="400" fill="#4F5F75" text-anchor="start">Upload</text>
-<rect x="40" y="204" width="137" height="22" rx="11" fill="#EEF7FF"/>
-<text x="108.65" y="219" font-size="11" font-weight="600" fill="#14243F" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">aos-signer upload</text>
-<text x="40" y="254" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">as you do today</text>
-<g filter="url(#sh)"><rect x="254" y="70" width="230" height="200" rx="12" fill="#fff" stroke="#C9DDF0"/></g>
-<clipPath id="c2"><rect x="254" y="70" width="230" height="200" rx="12"/></clipPath>
-<rect x="254" y="70" width="230" height="38" fill="#4AA8FF" clip-path="url(#c2)"/>
-<text x="270" y="86" font-size="10" font-weight="700" fill="#ffffff" text-anchor="start">AOSCLOUD</text>
-<text x="270" y="101" font-size="14" font-weight="700" fill="#fff" text-anchor="start">Verification batch</text>
-<rect x="270" y="122" width="148" height="22" rx="11" fill="#D2EDFF"/>
-<text x="344.0" y="137" font-size="11" font-weight="600" fill="#173D7A" text-anchor="middle">Waiting verification</text>
-<text x="270" y="166" font-size="12" font-weight="400" fill="#4F5F75" text-anchor="start">The version goes only to</text>
-<text x="270" y="182" font-size="12" font-weight="400" fill="#4F5F75" text-anchor="start">the Verification Set:</text>
-<rect x="270" y="194" width="58" height="40" rx="8" fill="#EEF7FF" stroke="#C9DDF0"/>
-<text x="299" y="211" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">test</text>
-<text x="299" y="225" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">Unit</text>
-<rect x="336" y="194" width="58" height="40" rx="8" fill="#EEF7FF" stroke="#C9DDF0"/>
-<text x="365" y="211" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">test</text>
-<text x="365" y="225" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">Unit</text>
-<rect x="402" y="194" width="58" height="40" rx="8" fill="#EEF7FF" stroke="#C9DDF0"/>
-<text x="431" y="211" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">test</text>
-<text x="431" y="225" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">Unit</text>
-<text x="270" y="256" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">no other Unit gets it yet</text>
-<g filter="url(#sh)"><rect x="524" y="70" width="260" height="200" rx="12" fill="#fff" stroke="#C9DDF0"/></g>
-<clipPath id="c3"><rect x="524" y="70" width="260" height="200" rx="12"/></clipPath>
-<rect x="524" y="70" width="260" height="38" fill="#173D7A" clip-path="url(#c3)"/>
-<text x="540" y="86" font-size="10" font-weight="700" fill="#B3E0FF" text-anchor="start">THIS EXAMPLE</text>
-<text x="540" y="101" font-size="14" font-weight="700" fill="#fff" text-anchor="start">Verification job</text>
-<circle cx="552" cy="136" r="12" fill="#173D7A"/><text x="552" y="141" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">1</text>
-<text x="572" y="134" font-size="13" font-weight="700" fill="#14243F" text-anchor="start">Wait</text>
-<text x="622" y="134" font-size="11" font-weight="500" fill="#173D7A" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify_batch.py wait</text>
-<text x="572" y="151" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">version active on the test Units</text>
-<circle cx="552" cy="184" r="12" fill="#173D7A"/><text x="552" y="189" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">2</text>
-<text x="572" y="182" font-size="13" font-weight="700" fill="#14243F" text-anchor="start">Test</text>
-<text x="622" y="182" font-size="11" font-weight="500" fill="#173D7A" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">tests/run_tests.sh</text>
-<text x="572" y="199" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">your checks: exit 0 or 1</text>
-<circle cx="552" cy="232" r="12" fill="#173D7A"/><text x="552" y="237" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">3</text>
-<text x="572" y="230" font-size="13" font-weight="700" fill="#14243F" text-anchor="start">Decide</text>
-<text x="622" y="230" font-size="11" font-weight="500" fill="#173D7A" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify_batch.py decide</text>
-<text x="572" y="247" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">one API call, sent once</text>
-<rect x="824" y="88" width="152" height="74" rx="10" fill="#E6F5EC" stroke="#1E7A46"/>
-<text x="838" y="112" font-size="14" font-weight="700" fill="#1E7A46" text-anchor="start">✓ Approve</text>
-<text x="838" y="132" font-size="12" font-weight="500" fill="#14243F" text-anchor="start">Verified (API: Valid)</text>
-<text x="838" y="150" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">on to your normal rollout</text>
-<rect x="824" y="180" width="152" height="74" rx="10" fill="#FDEDEC" stroke="#B42318"/>
-<text x="838" y="204" font-size="14" font-weight="700" fill="#B42318" text-anchor="start">✕ Reject</text>
-<text x="838" y="224" font-size="12" font-weight="500" fill="#14243F" text-anchor="start">Invalid</text>
-<text x="838" y="242" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">stops here</text>
-<line x1="217" y1="170.0" x2="250" y2="170.0" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
-<text x="234.0" y="162.0" font-size="10" font-weight="500" fill="#4F5F75" text-anchor="middle">upload</text>
-<line x1="487" y1="170.0" x2="520" y2="170.0" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
-<text x="504.0" y="162.0" font-size="10" font-weight="500" fill="#4F5F75" text-anchor="middle">API</text>
-<path d="M786,234 C806,234 802,125 821,125" fill="none" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
-<path d="M786,234 C806,234 802,217 821,217" fill="none" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
-<rect x="24" y="292" width="952" height="34" rx="8" fill="#D2EDFF"/>
-<text x="500" y="314" font-size="12" font-weight="500" fill="#173D7A" text-anchor="middle">Public AosCloud API v11 over mutual TLS with your SP certificate · the job decides once and never changes a decided batch</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 634" width="1000" height="634" font-family="Roboto, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" role="img" aria-label="Automatic verification of a new Service version. The upload job, an existing step, uploads the version. AosCloud creates a Verification batch, state Waiting verification, and installs the new version only on the Units of the Verification Set. Step 0: watch-batches.yml polls AosCloud every 5 minutes: is a new version of this Service waiting for verification? AosCloud sends no notification to a pipeline, so the job asks. 5 minutes is the shortest GitHub schedule; GitHub may start runs late or skip them; for a guaranteed start use Start A. Two starts: Start A, chain: the upload job starts verify-batch right after the upload. Start B, watch: watch-batches starts verify-batch when it finds a waiting batch. verify-batch.yml: 1 Wait until the version is active on every Verification Set Unit; a timeout or an offline Unit means no decision. 2 Test: built-in checks and partner tests, report.html and junit.xml. 3 Decide: auto, the default, the job approves or rejects; report-only, a person decides in the SP UI. Verified goes on to the normal rollout; Invalid: the rollout stops."><title>Automatic verification of a new Service version. The upload job, an existing step, uploads the version. AosCloud creates a Verification batch, state Waiting verification, and installs the new version only on the Units of the Verification Set. Step 0: watch-batches.yml polls AosCloud every 5 minutes: is a new version of this Service waiting for verification? AosCloud sends no notification to a pipeline, so the job asks. 5 minutes is the shortest GitHub schedule; GitHub may start runs late or skip them; for a guaranteed start use Start A. Two starts: Start A, chain: the upload job starts verify-batch right after the upload. Start B, watch: watch-batches starts verify-batch when it finds a waiting batch. verify-batch.yml: 1 Wait until the version is active on every Verification Set Unit; a timeout or an offline Unit means no decision. 2 Test: built-in checks and partner tests, report.html and junit.xml. 3 Decide: auto, the default, the job approves or rejects; report-only, a person decides in the SP UI. Verified goes on to the normal rollout; Invalid: the rollout stops.</title><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5793CE"/></marker><marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1E7F4F"/></marker><filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#173D7A" flood-opacity="0.12"/></filter></defs>
+<rect class="frame" x="0.5" y="0.5" width="999" height="633" rx="14" fill="#ffffff" stroke="#C9DDF0"/>
+<clipPath id="top"><rect x="0.5" y="0.5" width="999" height="200" rx="14"/></clipPath>
+<rect x="0" y="0" width="1000" height="46" fill="#173D7A" clip-path="url(#top)"/>
+<text x="24" y="29" font-size="16" font-weight="600" fill="#fff" text-anchor="start" xml:space="preserve"><tspan fill="#4AA8FF">Aos</tspan><tspan>Edge</tspan><tspan fill="#B3E0FF">  |  </tspan><tspan>Automatic verification of a new Service version</tspan></text>
+<text x="976" y="29" font-size="12" font-weight="400" fill="#B3E0FF" text-anchor="end">Starts by itself · decides automatically by default</text>
+<g filter="url(#sh)"><rect x="24" y="62" width="160" height="166" rx="10" fill="#fff" stroke="#C9DDF0" stroke-width="1"/></g>
+<clipPath id="c1"><rect x="24" y="62" width="160" height="166" rx="10"/></clipPath>
+<rect x="24" y="62" width="160" height="42" fill="#173D7A" clip-path="url(#c1)"/>
+<text x="38" y="78" font-size="10" font-weight="700" fill="#B3E0FF" text-anchor="start">CI PIPELINE</text>
+<text x="38" y="95" font-size="14" font-weight="700" fill="#fff" text-anchor="start">Upload job</text>
+<rect x="36" y="116" width="136" height="22" rx="11.0" fill="#EEF7FF" stroke="none" stroke-width="1"/>
+<text x="104.0" y="130.96" font-size="11" font-weight="600" fill="#14243F" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">aos-signer sign</text>
+<rect x="36" y="148" width="136" height="22" rx="11.0" fill="#EEF7FF" stroke="none" stroke-width="1"/>
+<text x="104.0" y="162.96" font-size="11" font-weight="600" fill="#14243F" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">aos-signer upload</text>
+<text x="38" y="192" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">Existing step,</text>
+<text x="38" y="206" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">unchanged</text>
+<g filter="url(#sh)"><rect x="240" y="62" width="240" height="236" rx="10" fill="#fff" stroke="#C9DDF0" stroke-width="1"/></g>
+<clipPath id="c2"><rect x="240" y="62" width="240" height="236" rx="10"/></clipPath>
+<rect x="240" y="62" width="240" height="42" fill="#4AA8FF" clip-path="url(#c2)"/>
+<text x="254" y="78" font-size="10" font-weight="700" fill="#ffffff" text-anchor="start">AOSCLOUD</text>
+<text x="254" y="95" font-size="14" font-weight="700" fill="#fff" text-anchor="start">Verification batch</text>
+<rect x="254" y="122" width="212" height="22" rx="11.0" fill="#D2EDFF" stroke="none" stroke-width="1"/>
+<text x="360.0" y="136.96" font-size="11" font-weight="600" fill="#173D7A" text-anchor="middle">State: Waiting verification</text>
+<text x="254" y="170" font-size="12" font-weight="400" fill="#4F5F75" text-anchor="start">The new version is installed</text>
+<text x="254" y="186" font-size="12" font-weight="400" fill="#4F5F75" text-anchor="start">only on the Units of the</text>
+<text x="254" y="202" font-size="12" font-weight="400" fill="#4F5F75" text-anchor="start">Verification Set:</text>
+<rect x="254" y="218" width="68" height="34" rx="7" fill="#EEF7FF" stroke="#C9DDF0" stroke-width="1"/>
+<text x="288" y="239" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">Test Unit</text>
+<rect x="326" y="218" width="68" height="34" rx="7" fill="#EEF7FF" stroke="#C9DDF0" stroke-width="1"/>
+<text x="360" y="239" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">Test Unit</text>
+<rect x="398" y="218" width="68" height="34" rx="7" fill="#EEF7FF" stroke="#C9DDF0" stroke-width="1"/>
+<text x="432" y="239" font-size="10" font-weight="600" fill="#173D7A" text-anchor="middle">Test Unit</text>
+<g filter="url(#sh)"><rect x="664" y="62" width="312" height="236" rx="10" fill="#E6F6EC" stroke="#1E7F4F" stroke-width="2"/></g>
+<circle cx="688" cy="84" r="11" fill="#1E7F4F"/>
+<text x="688" y="88.5" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">0</text>
+<text x="706" y="89" font-size="14" font-weight="700" fill="#14603A" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">watch-batches.yml</text>
+<path class="icon" d="M693.7,107.8 A6.5,6.5 0 1 0 694.5,112.0" fill="none" stroke="#1E7F4F" stroke-width="2" stroke-linecap="round"/>
+<path class="icon" d="M696.1,103.1 L696.1,109.7 L690.0,109.7 z" fill="#1E7F4F"/>
+<text x="706" y="115" font-size="12" font-weight="700" fill="#14603A" text-anchor="start">Polls AosCloud every 5 minutes</text>
+<text x="678" y="137" font-size="12" font-weight="600" fill="#14243F" text-anchor="start">Is a new version of this Service</text>
+<text x="678" y="152" font-size="12" font-weight="600" fill="#14243F" text-anchor="start">waiting for verification?</text>
+<text x="678" y="170" font-size="11" font-weight="400" fill="#14243F" text-anchor="start" xml:space="preserve"><tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify_batch.py discover</tspan><tspan fill="#4F5F75"> (read-only)</tspan></text>
+<rect x="672" y="180" width="296" height="106" rx="7" fill="#ffffff" stroke="none" stroke-width="1"/>
+<text x="682" y="196" font-size="11" font-weight="700" fill="#14603A" text-anchor="start">Why polling, why 5 minutes</text>
+<text x="682" y="211" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">AosCloud sends no notification to a pipeline,</text>
+<text x="682" y="225" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">so the job asks. 5 minutes is the shortest</text>
+<text x="682" y="239" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">GitHub schedule; GitHub may start runs late</text>
+<text x="682" y="253" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">or skip them; for a guaranteed start use</text>
+<text x="682" y="267" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">Start A. Change it in one line of</text>
+<text x="682" y="281" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start" xml:space="preserve"><tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">watch-batches.yml</tspan><tspan>.</tspan></text>
+<line x1="184" y1="159" x2="237" y2="159" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<text x="212" y="151" font-size="11" font-weight="500" fill="#4F5F75" text-anchor="middle">upload</text>
+<text x="572.0" y="120" font-size="11" font-weight="600" fill="#14603A" text-anchor="middle">asks every 5 min:</text>
+<text x="572.0" y="134" font-size="11" font-weight="500" fill="#14603A" text-anchor="middle">GET Verification batches</text>
+<line x1="664" y1="144" x2="483" y2="144" stroke="#1E7F4F" stroke-width="2.5" marker-end="url(#ag)"/>
+<line x1="480" y1="190" x2="661" y2="190" stroke="#1E7F4F" stroke-width="2.5" marker-end="url(#ag)"/>
+<text x="572.0" y="208" font-size="11" font-weight="500" fill="#14603A" text-anchor="middle">batch id · version</text>
+<text x="572.0" y="222" font-size="11" font-weight="500" fill="#14603A" text-anchor="middle">Unit ids of the Set</text>
+<g filter="url(#sh)"><rect x="24" y="372" width="712" height="196" rx="10" fill="#fff" stroke="#C9DDF0" stroke-width="1"/></g>
+<clipPath id="c3"><rect x="24" y="372" width="712" height="196" rx="10"/></clipPath>
+<rect x="24" y="372" width="712" height="42" fill="#173D7A" clip-path="url(#c3)"/>
+<text x="38" y="388" font-size="10" font-weight="700" fill="#B3E0FF" text-anchor="start">VERIFICATION JOB</text>
+<text x="38" y="405" font-size="14" font-weight="700" fill="#fff" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify-batch.yml</text>
+<text x="722" y="390" font-size="11" font-weight="400" fill="#D2EDFF" text-anchor="end">One run per batch: a second run finds</text>
+<text x="722" y="405" font-size="11" font-weight="400" fill="#D2EDFF" text-anchor="end">the batch decided and sends nothing.</text>
+<line x1="104" y1="228" x2="104" y2="369" stroke="#5793CE" stroke-width="2.5" marker-end="url(#ah)"/>
+<text x="118" y="320" font-size="12" font-weight="700" fill="#173D7A" text-anchor="start">Start A: chain</text>
+<text x="118" y="337" font-size="12" font-weight="400" fill="#14243F" text-anchor="start" xml:space="preserve"><tspan>The upload job starts </tspan><tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify-batch</tspan></text>
+<text x="118" y="353" font-size="12" font-weight="400" fill="#14243F" text-anchor="start">right after the upload.</text>
+<line x1="700" y1="298" x2="700" y2="369" stroke="#1E7F4F" stroke-width="2.5" marker-end="url(#ag)"/>
+<text x="686" y="320" font-size="12" font-weight="700" fill="#14603A" text-anchor="end">Start B: watch</text>
+<text x="686" y="337" font-size="12" font-weight="400" fill="#14243F" text-anchor="end" xml:space="preserve"><tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">watch-batches</tspan><tspan> starts </tspan><tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify-batch</tspan></text>
+<text x="686" y="353" font-size="12" font-weight="400" fill="#14243F" text-anchor="end">when it finds a waiting batch.</text>
+<rect x="38" y="426" width="216" height="130" rx="9" fill="#fff" stroke="#173D7A" stroke-width="1.2"/>
+<rect x="272" y="426" width="216" height="130" rx="9" fill="#fff" stroke="#173D7A" stroke-width="1.2"/>
+<rect x="506" y="426" width="216" height="130" rx="9" fill="#fff" stroke="#173D7A" stroke-width="1.2"/>
+<line x1="254" y1="491.0" x2="269" y2="491.0" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<line x1="488" y1="491.0" x2="503" y2="491.0" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<circle cx="60" cy="448" r="11" fill="#173D7A"/>
+<text x="60" y="452.5" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+<text x="78" y="453" font-size="14" font-weight="700" fill="#14243F" text-anchor="start">Wait</text>
+<text x="50" y="478" font-size="11" font-weight="500" fill="#173D7A" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify_batch.py wait</text>
+<text x="50" y="497" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">Until the version is active on</text>
+<text x="50" y="511" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">every Verification Set Unit.</text>
+<text x="50" y="525" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">Timeout or Unit offline:</text>
+<text x="50" y="539" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">no decision.</text>
+<circle cx="294" cy="448" r="11" fill="#173D7A"/>
+<text x="294" y="452.5" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+<text x="312" y="453" font-size="14" font-weight="700" fill="#14243F" text-anchor="start">Test</text>
+<text x="284" y="478" font-size="11" font-weight="500" fill="#173D7A" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">tests/run_tests.sh</text>
+<text x="284" y="497" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">Built-in checks + partner tests</text>
+<text x="284" y="511" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">→ report.html, junit.xml</text>
+<circle cx="528" cy="448" r="11" fill="#173D7A"/>
+<text x="528" y="452.5" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+<text x="546" y="453" font-size="14" font-weight="700" fill="#14243F" text-anchor="start">Decide</text>
+<text x="518" y="478" font-size="11" font-weight="500" fill="#173D7A" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify_batch.py decide</text>
+<text x="518" y="497" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start" xml:space="preserve"><tspan font-weight="700" fill="#173D7A">auto</tspan><tspan> (default): the job</tspan></text>
+<text x="518" y="511" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">approves or rejects</text>
+<text x="518" y="527" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start" xml:space="preserve"><tspan font-weight="700" fill="#173D7A">report-only</tspan><tspan>: a person</tspan></text>
+<text x="518" y="541" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">decides in the SP UI</text>
+<rect x="776" y="372" width="200" height="90" rx="10" fill="#E6F6EC" stroke="#1E7F4F" stroke-width="1"/>
+<text x="790" y="397" font-size="14" font-weight="700" fill="#14603A" text-anchor="start">✓ Verified</text>
+<text x="790" y="416" font-size="11" font-weight="500" fill="#14243F" text-anchor="start">API: Valid</text>
+<text x="790" y="432" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">Goes on to the normal</text>
+<text x="790" y="446" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">rollout</text>
+<rect x="776" y="478" width="200" height="90" rx="10" fill="#FDEDEC" stroke="#B42318" stroke-width="1"/>
+<text x="790" y="503" font-size="14" font-weight="700" fill="#8F1D13" text-anchor="start">✕ Invalid</text>
+<text x="790" y="522" font-size="11" font-weight="500" fill="#14243F" text-anchor="start">API: Invalid</text>
+<text x="790" y="538" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">The rollout stops</text>
+<path d="M722,491.0 C752,491.0 746,417.0 773,417.0" fill="none" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M722,491.0 C752,491.0 746,523.0 773,523.0" fill="none" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="24" y="584" width="952" height="32" rx="8" fill="#D2EDFF" stroke="none" stroke-width="1"/>
+<text x="500" y="604" font-size="11" font-weight="500" fill="#173D7A" text-anchor="middle">AosCloud API v11 · mutual TLS with the SP certificate · at most one decision, sent only while the batch is in Waiting verification</text>
+</svg>

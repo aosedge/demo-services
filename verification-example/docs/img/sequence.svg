@@ -1,60 +1,90 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 650" width="1000" height="650" font-family="Roboto, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" role="img" aria-label="How the pipeline knows it is time. 1, your upload job uploads a version. 2, AosCloud makes a batch that waits for verification. 3 and 4, the version goes to the test Units, and they report installed and active, or failed. 0, new: every 5 minutes the watch asks AosCloud whether a new version waits, and gets the batch id, the version and the Unit ids of the Verification Set; it starts one verify-batch run per batch. 5, wait checks each Unit until active or failed. 6, the built-in checks and your tests run. 7, one PATCH approves or rejects, only if the batch still waits: Verified goes on to your normal rollout, Invalid stops."><title>How the pipeline knows it is time. 1, your upload job uploads a version. 2, AosCloud makes a batch that waits for verification. 3 and 4, the version goes to the test Units, and they report installed and active, or failed. 0, new: every 5 minutes the watch asks AosCloud whether a new version waits, and gets the batch id, the version and the Unit ids of the Verification Set; it starts one verify-batch run per batch. 5, wait checks each Unit until active or failed. 6, the built-in checks and your tests run. 7, one PATCH approves or rejects, only if the batch still waits: Verified goes on to your normal rollout, Invalid stops.</title><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5793CE"/></marker><marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1E7F4F"/></marker><filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#173D7A" flood-opacity="0.12"/></filter></defs>
-<rect x="0.5" y="0.5" width="999" height="649" rx="14" fill="#ffffff" stroke="#C9DDF0"/>
-<line x1="170" y1="70" x2="170" y2="632" stroke="#C9DDF0" stroke-width="1.5" stroke-dasharray="4 5"/>
-<rect x="50" y="18" width="240" height="52" rx="10" fill="#173D7A"/>
-<text x="170" y="40" font-size="15" font-weight="700" fill="#fff" text-anchor="middle">Your pipeline</text>
-<text x="170" y="59" font-size="12" font-weight="400" fill="#D2EDFF" text-anchor="middle">GitHub, SP certificate</text>
-<line x1="500" y1="70" x2="500" y2="632" stroke="#C9DDF0" stroke-width="1.5" stroke-dasharray="4 5"/>
-<rect x="380" y="18" width="240" height="52" rx="10" fill="#4AA8FF"/>
-<text x="500" y="50" font-size="15" font-weight="700" fill="#fff" text-anchor="middle">AosCloud</text>
-<line x1="830" y1="70" x2="830" y2="632" stroke="#C9DDF0" stroke-width="1.5" stroke-dasharray="4 5"/>
-<rect x="710" y="18" width="240" height="52" rx="10" fill="#173D7A"/>
-<text x="830" y="40" font-size="15" font-weight="700" fill="#fff" text-anchor="middle">Test Units</text>
-<text x="830" y="59" font-size="12" font-weight="400" fill="#D2EDFF" text-anchor="middle">the Verification Set</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 902" width="1000" height="902" font-family="Roboto, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" role="img" aria-label="How the pipeline learns that a version waits. 1, upload with aos-signer upload, an existing step. 2, AosCloud creates a Verification batch, Waiting verification; the version goes only to the Set. 3 and 4, the version is installed on the Test Units, and they report installed, active or failed. 0, the new step: watch-batches.yml repeats every 5 minutes: is a new version of this Service waiting for verification? GET Verification batches, statistics and Units returns the batch id, the version and the Unit ids of the Set. It starts verify-batch.yml, one run per batch; or Start A: the upload job starts it right after the upload. 5, wait: each Unit until active or failed. 6, built-in checks and partner tests, then the report. 7, decision: auto, one PATCH, approve or reject, only while still Waiting verification; report-only, no PATCH, a person decides in the SP UI. Verified goes to the normal rollout; Invalid: the rollout stops."><title>How the pipeline learns that a version waits. 1, upload with aos-signer upload, an existing step. 2, AosCloud creates a Verification batch, Waiting verification; the version goes only to the Set. 3 and 4, the version is installed on the Test Units, and they report installed, active or failed. 0, the new step: watch-batches.yml repeats every 5 minutes: is a new version of this Service waiting for verification? GET Verification batches, statistics and Units returns the batch id, the version and the Unit ids of the Set. It starts verify-batch.yml, one run per batch; or Start A: the upload job starts it right after the upload. 5, wait: each Unit until active or failed. 6, built-in checks and partner tests, then the report. 7, decision: auto, one PATCH, approve or reject, only while still Waiting verification; report-only, no PATCH, a person decides in the SP UI. Verified goes to the normal rollout; Invalid: the rollout stops.</title><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5793CE"/></marker><marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1E7F4F"/></marker><filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#173D7A" flood-opacity="0.12"/></filter></defs>
+<rect class="frame" x="0.5" y="0.5" width="999" height="901" rx="14" fill="#ffffff" stroke="#C9DDF0"/>
+<line x1="170" y1="70" x2="170" y2="276" stroke="#C9DDF0" stroke-width="1.5" stroke-dasharray="4 5"/>
+<line x1="170" y1="276" x2="170" y2="304" stroke="#C9DDF0" stroke-width="1.5" stroke-dasharray="4 5"/>
+<line x1="170" y1="510" x2="170" y2="536" stroke="#C9DDF0" stroke-width="1.5" stroke-dasharray="4 5"/>
+<line x1="170" y1="620" x2="170" y2="674" stroke="#C9DDF0" stroke-width="1.5" stroke-dasharray="4 5"/>
+<line x1="170" y1="714" x2="170" y2="866" stroke="#C9DDF0" stroke-width="1.5" stroke-dasharray="4 5"/>
+<line x1="600" y1="70" x2="600" y2="120" stroke="#C9DDF0" stroke-width="1.5" stroke-dasharray="4 5"/>
+<line x1="600" y1="186" x2="600" y2="800" stroke="#C9DDF0" stroke-width="1.5" stroke-dasharray="4 5"/>
+<line x1="600" y1="854" x2="600" y2="866" stroke="#C9DDF0" stroke-width="1.5" stroke-dasharray="4 5"/>
+<line x1="880" y1="70" x2="880" y2="866" stroke="#C9DDF0" stroke-width="1.5" stroke-dasharray="4 5"/>
+<rect x="24.0" y="18" width="292" height="52" rx="10" fill="#173D7A" stroke="none" stroke-width="1"/>
+<text x="170" y="40" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">CI pipeline</text>
+<text x="170" y="59" font-size="11" font-weight="400" fill="#D2EDFF" text-anchor="middle">GitHub Actions · SP certificate</text>
+<rect x="480.0" y="18" width="240" height="52" rx="10" fill="#4AA8FF" stroke="none" stroke-width="1"/>
+<text x="600" y="49" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">AosCloud</text>
+<rect x="785.0" y="18" width="190" height="52" rx="10" fill="#173D7A" stroke="none" stroke-width="1"/>
+<text x="880" y="40" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">Test Units</text>
+<text x="880" y="59" font-size="11" font-weight="400" fill="#D2EDFF" text-anchor="middle">the Verification Set</text>
 <circle cx="198" cy="92" r="11" fill="#173D7A"/>
-<text x="198" y="96.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">1</text>
-<line x1="170" y1="104" x2="497" y2="104" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
-<text x="218" y="96" font-size="13" font-weight="500" fill="#14243F" text-anchor="start">aos-signer upload, as you do today</text>
-<g filter="url(#sh)"><rect x="378" y="118" width="244" height="50" rx="10" fill="#EEF7FF" stroke="#4AA8FF" stroke-width="1"/></g>
-<circle cx="398" cy="143" r="11" fill="#173D7A"/>
-<text x="398" y="147.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">2</text>
-<text x="512" y="138" font-size="12.5" font-weight="700" fill="#14243F" text-anchor="middle">A batch: Waiting verification</text>
-<text x="512" y="155" font-size="12" font-weight="400" fill="#4F5F75" text-anchor="middle">the version goes only to the Set</text>
-<circle cx="528" cy="182" r="11" fill="#173D7A"/>
-<text x="528" y="186.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">3</text>
-<line x1="500" y1="194" x2="827" y2="194" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
-<text x="548" y="186" font-size="13" font-weight="500" fill="#14243F" text-anchor="start">installs the version</text>
-<circle cx="528" cy="216" r="11" fill="#173D7A"/>
-<text x="528" y="220.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">4</text>
-<line x1="830" y1="228" x2="503" y2="228" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
-<text x="548" y="220" font-size="13" font-weight="500" fill="#14243F" text-anchor="start">installed, active or failed</text>
-<g filter="url(#sh)"><rect x="32" y="250" width="276" height="106" rx="10" fill="#E6F6EC" stroke="#1E7F4F" stroke-width="2"/></g>
-<circle cx="56" cy="274" r="11" fill="#1E7F4F"/>
-<text x="56" y="278.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">0</text>
-<text x="74" y="279" font-size="13.5" font-weight="700" fill="#1E7F4F" text-anchor="start">New: watch-batches.yml</text>
-<text x="170" y="300" font-size="12" font-weight="500" fill="#14243F" text-anchor="middle">finds any upload; every 5 min, best effort</text>
-<text x="170" y="320" font-size="12" font-weight="400" fill="#14243F" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify_batch.py discover</text>
-<text x="170" y="340" font-size="12" font-weight="400" fill="#4F5F75" text-anchor="middle">is a new version of my Service waiting?</text>
-<line x1="308" y1="282" x2="497" y2="282" stroke="#1E7F4F" stroke-width="2.5" marker-end="url(#ag)"/>
-<text x="322" y="274" font-size="11.5" font-weight="500" fill="#1E7F4F" text-anchor="start">GET verification-batch/, statistics, units</text>
-<line x1="500" y1="326" x2="311" y2="326" stroke="#1E7F4F" stroke-width="2.5" marker-end="url(#ag)"/>
-<text x="322" y="318" font-size="11.5" font-weight="500" fill="#1E7F4F" text-anchor="start">batch id, version, Unit ids of the Set</text>
-<g filter="url(#sh)"><rect x="32" y="372" width="276" height="52" rx="10" fill="#173D7A" stroke="#173D7A" stroke-width="1"/></g>
-<text x="170" y="393" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">starts verify-batch</text>
-<text x="170" y="412" font-size="11.5" font-weight="400" fill="#D2EDFF" text-anchor="middle">one run per batch; the title carries its id</text>
-<text x="170" y="440" font-size="11.5" font-weight="500" fill="#4F5F75" text-anchor="middle">or the chain: your upload job, right after upload</text>
-<circle cx="198" cy="458" r="11" fill="#173D7A"/>
-<text x="198" y="462.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">5</text>
-<line x1="170" y1="470" x2="497" y2="470" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
-<text x="218" y="462" font-size="13" font-weight="500" fill="#14243F" text-anchor="start">wait: each Unit, until active or failed</text>
-<g filter="url(#sh)"><rect x="32" y="484" width="276" height="40" rx="10" fill="#fff" stroke="#173D7A" stroke-width="1.5"/></g>
-<circle cx="56" cy="504" r="11" fill="#173D7A"/>
-<text x="56" y="508.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">6</text>
-<text x="182" y="509" font-size="13" font-weight="600" fill="#14243F" text-anchor="middle">built-in checks and your tests</text>
-<circle cx="198" cy="540" r="11" fill="#173D7A"/>
-<text x="198" y="544.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">7</text>
-<line x1="170" y1="552" x2="497" y2="552" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
-<text x="218" y="544" font-size="12.5" font-weight="500" fill="#14243F" text-anchor="start">one PATCH: approve or reject, if still waiting</text>
-<g filter="url(#sh)"><rect x="378" y="566" width="244" height="56" rx="10" fill="#EEF7FF" stroke="#4AA8FF" stroke-width="1"/></g>
-<text x="500" y="588" font-size="12.5" font-weight="700" fill="#14603A" text-anchor="middle">Verified: on to your normal rollout</text>
-<text x="500" y="608" font-size="12.5" font-weight="700" fill="#8F1D13" text-anchor="middle">Invalid: it stops here</text></svg>
+<text x="198" y="96.5" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+<text x="218" y="96" font-size="12" font-weight="500" fill="#14243F" text-anchor="start" xml:space="preserve"><tspan>Upload: </tspan><tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">aos-signer upload</tspan><tspan> (existing step)</tspan></text>
+<line x1="170" y1="106" x2="597" y2="106" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<g filter="url(#sh)"><rect x="475" y="120" width="250" height="66" rx="10" fill="#EEF7FF" stroke="#4AA8FF" stroke-width="1"/></g>
+<circle cx="497" cy="153.0" r="11" fill="#173D7A"/>
+<text x="497" y="157.5" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+<text x="517" y="140" font-size="12" font-weight="500" fill="#14243F" text-anchor="start">Verification batch created:</text>
+<text x="517" y="156" font-size="12" font-weight="700" fill="#14243F" text-anchor="start">Waiting verification</text>
+<text x="517" y="173" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">the version goes only to the Set</text>
+<circle cx="628" cy="204" r="11" fill="#173D7A"/>
+<text x="628" y="208.5" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+<text x="648" y="208" font-size="12" font-weight="500" fill="#14243F" text-anchor="start" xml:space="preserve"><tspan>Installs the version</tspan></text>
+<line x1="600" y1="218" x2="877" y2="218" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<circle cx="628" cy="240" r="11" fill="#173D7A"/>
+<text x="628" y="244.5" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+<text x="648" y="244" font-size="12" font-weight="500" fill="#14243F" text-anchor="start">Reports: installed, active or failed</text>
+<line x1="880" y1="254" x2="603" y2="254" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="14" y="276" width="670" height="246" rx="12" fill="none" stroke="#1E7F4F" stroke-width="1.5" stroke-dasharray="6 4"/>
+<path class="icon" d="M345.7,288.8 A6.5,6.5 0 1 0 346.5,293.0" fill="none" stroke="#1E7F4F" stroke-width="2" stroke-linecap="round"/>
+<path class="icon" d="M348.1,284.1 L348.1,290.7 L341.9,290.7 z" fill="#1E7F4F"/>
+<text x="358" y="296" font-size="12" font-weight="700" fill="#14603A" text-anchor="start">Repeats every 5 minutes</text>
+<g filter="url(#sh)"><rect x="24" y="304" width="292" height="206" rx="10" fill="#E6F6EC" stroke="#1E7F4F" stroke-width="2"/></g>
+<circle cx="46" cy="326" r="11" fill="#1E7F4F"/>
+<text x="46" y="330.5" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">0</text>
+<text x="64" y="331" font-size="14" font-weight="700" fill="#14603A" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">watch-batches.yml</text>
+<text x="36" y="356" font-size="12" font-weight="600" fill="#14243F" text-anchor="start">Is a new version of this Service</text>
+<text x="36" y="371" font-size="12" font-weight="600" fill="#14243F" text-anchor="start">waiting for verification?</text>
+<text x="36" y="388" font-size="11" font-weight="400" fill="#14243F" text-anchor="start" xml:space="preserve"><tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify_batch.py discover</tspan><tspan fill="#4F5F75"> (read-only)</tspan></text>
+<rect x="30" y="396" width="280" height="106" rx="7" fill="#ffffff" stroke="none" stroke-width="1"/>
+<text x="40" y="412" font-size="11" font-weight="700" fill="#14603A" text-anchor="start">Why polling, why 5 minutes</text>
+<text x="40" y="427" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">AosCloud sends no notification to a pipeline,</text>
+<text x="40" y="441" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">so the job asks. 5 minutes is the shortest</text>
+<text x="40" y="455" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">GitHub schedule; GitHub may start runs late</text>
+<text x="40" y="469" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">or skip them; for a guaranteed start use</text>
+<text x="40" y="483" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">Start A. Change it in one line of</text>
+<text x="40" y="497" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start" xml:space="preserve"><tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">watch-batches.yml</tspan><tspan>.</tspan></text>
+<text x="458.0" y="370" font-size="11" font-weight="500" fill="#14603A" text-anchor="middle">GET Verification batches · statistics · Units</text>
+<line x1="316" y1="380" x2="597" y2="380" stroke="#1E7F4F" stroke-width="2.5" marker-end="url(#ag)"/>
+<line x1="600" y1="434" x2="319" y2="434" stroke="#1E7F4F" stroke-width="2.5" marker-end="url(#ag)"/>
+<text x="458.0" y="452" font-size="11" font-weight="500" fill="#14603A" text-anchor="middle">batch id · version · Unit ids of the Set</text>
+<g filter="url(#sh)"><rect x="24" y="536" width="292" height="84" rx="10" fill="#173D7A" stroke="#173D7A" stroke-width="1"/></g>
+<text x="170.0" y="557" font-size="12" font-weight="700" fill="#fff" text-anchor="middle" xml:space="preserve"><tspan>Starts </tspan><tspan font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify-batch.yml</tspan></text>
+<text x="170.0" y="573" font-size="12" font-weight="400" fill="#fff" text-anchor="middle">(one run per batch)</text>
+<text x="170.0" y="592" font-size="11" font-weight="400" fill="#D2EDFF" text-anchor="middle">or Start A: the upload job starts it</text>
+<text x="170.0" y="607" font-size="11" font-weight="400" fill="#D2EDFF" text-anchor="middle">right after the upload</text>
+<circle cx="198" cy="646" r="11" fill="#173D7A"/>
+<text x="198" y="650.5" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">5</text>
+<text x="218" y="650" font-size="12" font-weight="500" fill="#14243F" text-anchor="start" xml:space="preserve"><tspan>Wait: each Unit until active or failed</tspan></text>
+<line x1="170" y1="660" x2="597" y2="660" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<g filter="url(#sh)"><rect x="24" y="674" width="292" height="40" rx="10" fill="#fff" stroke="#173D7A" stroke-width="1.5"/></g>
+<circle cx="46" cy="694.0" r="11" fill="#173D7A"/>
+<text x="46" y="698.5" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">6</text>
+<text x="64" y="693" font-size="12" font-weight="600" fill="#14243F" text-anchor="start">Built-in checks + partner tests</text>
+<text x="64" y="707" font-size="12" font-weight="600" fill="#14243F" text-anchor="start">→ report</text>
+<circle cx="198" cy="738" r="11" fill="#173D7A"/>
+<text x="198" y="742.5" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">7</text>
+<text x="218" y="742" font-size="12" font-weight="700" fill="#14243F" text-anchor="start">Decision</text>
+<text x="218" y="760" font-size="12" font-weight="400" fill="#14243F" text-anchor="start" xml:space="preserve"><tspan font-weight="700" fill="#173D7A">auto</tspan><tspan>: one PATCH, approve or reject,</tspan></text>
+<text x="218" y="776" font-size="12" font-weight="400" fill="#14243F" text-anchor="start">only while still Waiting verification</text>
+<line x1="170" y1="786" x2="597" y2="786" stroke="#5793CE" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="206" y="796" width="250" height="46" rx="8" fill="#F4F6F8" stroke="#8A97A8" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="218" y="815" font-size="12" font-weight="400" fill="#4F5F75" text-anchor="start" xml:space="preserve"><tspan font-weight="700">report-only</tspan><tspan>: no PATCH,</tspan></text>
+<text x="218" y="831" font-size="12" font-weight="400" fill="#4F5F75" text-anchor="start">a person decides in the SP UI</text>
+<g filter="url(#sh)"><rect x="475" y="800" width="250" height="54" rx="10" fill="#EEF7FF" stroke="#4AA8FF" stroke-width="1"/></g>
+<text x="600" y="822" font-size="12" font-weight="400" fill="#14243F" text-anchor="middle" xml:space="preserve"><tspan font-weight="700" fill="#14603A">Verified</tspan><tspan> → normal rollout</tspan></text>
+<text x="600" y="842" font-size="12" font-weight="400" fill="#14243F" text-anchor="middle" xml:space="preserve"><tspan font-weight="700" fill="#8F1D13">Invalid</tspan><tspan> → the rollout stops</tspan></text>
+<circle cx="46" cy="882" r="8" fill="#1E7F4F"/>
+<text x="46" y="885.5" font-size="10" font-weight="700" fill="#fff" text-anchor="middle">0</text>
+<text x="60" y="886" font-size="11" font-weight="400" fill="#4F5F75" text-anchor="start">is the new step: how the pipeline learns that a version waits.</text>
+</svg>

@@ -1461,12 +1461,12 @@ BOX = ('Defaults: the job decides by itself (AOS_DECISION=auto). Want a person t
        'Built-in checks run on every version (A1, B1, C2; C3/C4 unless AOS_WATCH_SECONDS=0). Add your own tests in '
        'tests/your_tests.sh (start from tests/your_tests.sh.example): they run after the built-in checks. If any check or '
        'test fails, the verdict is reject; in auto mode the job sends it, in report-only a person decides.')
-WHY = ('AosCloud does not notify a pipeline when a new version waits (no webhook in 6.1/6.2), so the watch asks every 5 '
-       'minutes. 5 minutes is the shortest interval GitHub allows. GitHub runs scheduled jobs on a best-effort basis: they '
-       'can start late or be skipped, sometimes for long periods (in our test repository, delays of over an hour). Each run takes about 20 s and only reads. To change it, edit one '
+WHY = ('AosCloud does not notify a pipeline when a new version waits (no webhook), so the watch asks every 5 '
+       'minutes. 5 minutes is the shortest interval GitHub allows. GitHub may start runs late or skip them; for a '
+       'guaranteed start use Start A. Each run takes about 20 s and only reads. To change it, edit one '
        'line in watch-batches.yml: cron: "*/5 * * * *" → "*/10 * * * *" (every 10 min), "*/30 * * * *", "0 * * * *" '
        '(hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start verify-batch right '
-       'after your upload job (the chain), or use an external scheduler. A webhook from AosCloud would make it instant '
+       'after your upload job (Start A, the chain), or use an external scheduler. A webhook from AosCloud would make it instant '
        '(feature request).')
 
 
@@ -1486,7 +1486,7 @@ def test_the_box_is_right_under_what_it_does_in_the_readme_and_start_here():
     for line in BOX:
         assert line in plain(box), line
         assert line in plain(start_here_overview()), line
-    assert readme.index('AosCloud API call.') < readme.index('> [!IMPORTANT]') < readme.index('![Your upload job')
+    assert readme.index('AosCloud API call.') < readme.index('> [!IMPORTANT]') < readme.index('](docs/img/flow.svg)')
     assert '<blockquote class="alert">' in start_here_overview() and '[!IMPORTANT]' not in start_here_overview()
 
 

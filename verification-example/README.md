@@ -21,21 +21,21 @@ AosCloud API call.
 <details>
 <summary>Why every 5 minutes?</summary>
 
-AosCloud does not notify a pipeline when a new version waits (no webhook in 6.1/6.2), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub runs scheduled jobs on a best-effort basis: they can start late or be skipped, sometimes for long periods (in our test repository, delays of over an hour). Each run takes about 20 s and only reads. To change it, edit one line in `watch-batches.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-batch` right after your upload job (the chain), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
+AosCloud does not notify a pipeline when a new version waits (no webhook), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub may start runs late or skip them; for a guaranteed start use Start A. Each run takes about 20 s and only reads. To change it, edit one line in `watch-batches.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-batch` right after your upload job (Start A, the chain), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
 
 </details>
 
-![Your upload job uploads a new version; AosCloud holds it in a Verification batch (Waiting verification) and sends it only to the test Units of the Verification Set; the verification job waits, runs your tests and decides once: approve makes it Verified, on to your normal rollout; reject makes it Invalid, and it stops here](docs/img/flow.svg)
+![Automatic verification of a new Service version. The upload job, an existing step, uploads the version. AosCloud creates a Verification batch, state Waiting verification, and installs the new version only on the Units of the Verification Set. Step 0: watch-batches.yml polls AosCloud every 5 minutes: is a new version of this Service waiting for verification? AosCloud sends no notification to a pipeline, so the job asks. 5 minutes is the shortest GitHub schedule; GitHub may start runs late or skip them; for a guaranteed start use Start A. Two starts: Start A, chain: the upload job starts verify-batch right after the upload. Start B, watch: watch-batches starts verify-batch when it finds a waiting batch. verify-batch.yml: 1 Wait until the version is active on every Verification Set Unit; a timeout or an offline Unit means no decision. 2 Test: built-in checks and partner tests, report.html and junit.xml. 3 Decide: auto, the default, the job approves or rejects; report-only, a person decides in the SP UI. Verified goes on to the normal rollout; Invalid: the rollout stops.](docs/img/flow.svg)
 
 Tested end to end from a terminal on production AosCloud 6.1.97 on 30.10.2026, with the same three steps the job
 runs: upload → the version active on the test Unit in about 15 s → tests → approved → Verified.
 
 ## How the pipeline knows it is time
 
-AosCloud 6.1 and 6.2 send no notification to a pipeline; a webhook would replace the watch. So the pipeline asks, on a
+AosCloud sends no notification to a pipeline; a webhook would replace the watch. So the pipeline asks, on a
 schedule, with the SP certificate alone. Nobody presses anything.
 
-![1, your upload job uploads a version. 2, AosCloud makes a batch that waits. 3 and 4, the version goes to the test Units, and they report installed and active, or failed. 0, new: about every 5 minutes, best effort, the watch asks AosCloud whether a new version waits, and gets the batch id, the version and the Unit ids; it starts one verify-batch run per batch; or your upload job starts it right after the upload. 5, wait checks each Unit. 6, the built-in checks and your tests run. 7, one PATCH approves or rejects, only if the batch still waits](docs/img/sequence.svg)
+![How the pipeline learns that a version waits. 1, upload with aos-signer upload, an existing step. 2, AosCloud creates a Verification batch, Waiting verification; the version goes only to the Set. 3 and 4, the version is installed on the Test Units, and they report installed, active or failed. 0, the new step: watch-batches.yml repeats every 5 minutes: is a new version of this Service waiting for verification? GET Verification batches, statistics and Units returns the batch id, the version and the Unit ids of the Set. It starts verify-batch.yml, one run per batch; or Start A: the upload job starts it right after the upload. 5, wait: each Unit until active or failed. 6, built-in checks and partner tests, then the report. 7, decision: auto, one PATCH, approve or reject, only while still Waiting verification; report-only, no PATCH, a person decides in the SP UI. Verified goes to the normal rollout; Invalid: the rollout stops.](docs/img/sequence.svg)
 
 | Who | Tells whom | What | Where you see it |
 |---|---|---|---|
@@ -111,6 +111,10 @@ Files: [`aos-verify`](aos-verify) (setup and one command, for a laptop), [`verif
 8. [FAQ and tips](docs/faq.md).
 
 ## Prerequisites
+
+### Before you start
+
+GitHub Actions must be enabled for the repository. Organisation owners can switch Actions off for a repository or allow only selected actions; a maintainer cannot see this setting. Workflows used: actions/checkout, actions/setup-python, actions/upload-artifact.
 
 ### 1. A Service that your pipeline already deploys (SP)
 
@@ -280,13 +284,12 @@ name: watch-batches
 
 on:
   schedule:
-    # AosCloud does not notify a pipeline when a new version waits (no webhook in 6.1/6.2), so the watch asks
-    # every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub runs scheduled jobs on a
-    # best-effort basis: they can start late or be skipped, sometimes for long periods (in our test
-    # repository, delays of over an hour). Each run takes about 20 s and only reads. To change it, edit one
+    # AosCloud does not notify a pipeline when a new version waits (no webhook), so the watch asks
+    # every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub may start runs late or skip
+    # them; for a guaranteed start use Start A. Each run takes about 20 s and only reads. To change it, edit one
     # line in watch-batches.yml: cron: "*/5 * * * *" → "*/10 * * * *" (every 10 min), "*/30 * * * *", "0 * * *
     # *" (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start
-    # verify-batch right after your upload job (the chain), or use an external scheduler. A webhook from
+    # verify-batch right after your upload job (Start A, the chain), or use an external scheduler. A webhook from
     # AosCloud would make it instant (feature request).
     - cron: "*/5 * * * *"
   workflow_dispatch:

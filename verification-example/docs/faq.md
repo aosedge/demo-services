@@ -3,6 +3,14 @@
 Short answers for running the verification job day to day. For the setup, see the [README](../README.md); for the
 calls, see the [API reference](api.md).
 
+## Before you start
+
+GitHub Actions must be enabled for the repository. Organisation owners can switch Actions off for a repository or allow only selected actions; a maintainer cannot see this setting. Workflows used: actions/checkout, actions/setup-python, actions/upload-artifact.
+
+**No run ever appears, no Actions tab.**
+Ask an organisation owner to enable Actions for the repository. After enabling, a push to `main` makes GitHub pick up
+the schedule.
+
 ## Decisions
 
 **Who may approve or reject?**
@@ -37,7 +45,7 @@ Yes: set `AOS_DECISION` to `report-only`. The job writes the report and sends no
 ## The watch: timing and old batches
 
 **Why every 5 minutes?**
-AosCloud does not notify a pipeline when a new version waits (no webhook in 6.1/6.2), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub runs scheduled jobs on a best-effort basis: they can start late or be skipped, sometimes for long periods (in our test repository, delays of over an hour). Each run takes about 20 s and only reads. To change it, edit one line in `watch-batches.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-batch` right after your upload job (the chain), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
+AosCloud does not notify a pipeline when a new version waits (no webhook), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub may start runs late or skip them; for a guaranteed start use Start A. Each run takes about 20 s and only reads. To change it, edit one line in `watch-batches.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-batch` right after your upload job (Start A, the chain), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
 
 The chain is in [`examples/release-caller.yml`](../examples/release-caller.yml).
 
@@ -46,7 +54,7 @@ days without activity. In a private repository every run uses runner minutes: at
 each run counts as one minute, so check your plan or use a longer interval.
 
 **Why not instant?**
-AosCloud 6.1 and 6.2 send no notification to a pipeline, so the job has to ask. A webhook would make it instant: that
+AosCloud sends no notification to a pipeline, so the job has to ask. A webhook would make it instant: that
 is a feature request for AosCloud. If the upload runs in the same workflow, the chained start begins right after it
 ([`examples/release-caller.yml`](../examples/release-caller.yml)).
 
