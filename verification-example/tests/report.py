@@ -5,7 +5,7 @@
 
     python tests/report.py --results report/results.tsv --out report --service-id ID --version X.Y.Z
                            --batch-id ID --units "UNIT_ID ..." --observe SECONDS
-                           [--found-by watch|run|version] [--units-from TEXT] [--decision-mode MODE]
+                           [--found-by watch|run|version] [--units-from TEXT] [--decision-mode MODE] [--service-name NAME]
     python tests/report.py --out report --batch-id ID --decision approved|rejected|not-sent|report-only|unknown
                            [--state STATE] [--why TEXT]
 
@@ -22,18 +22,18 @@ from pathlib import Path
 from types import SimpleNamespace
 from xml.sax.saxutils import quoteattr
 
-GROUPS = [('A', 'upload and batch'), ('B', 'delivery to the Units'), ('C', 'the Service runs'),
+GROUPS = [('A', 'upload and Verification batch'), ('B', 'delivery to the Verification Set Units'), ('C', 'the Service runs'),
           ('D', 'next to other Services'), ('E', 'configuration and recovery')]
 SCENARIOS = [
     ('⓪', 'Found automatically (discover)'),
-    ('A1', 'Exactly this Service and version'), ('A2', 'Upload processed'), ('A3', 'Same version uploaded again'),
-    ('A4', 'Evidence for every release'), ('B1', 'On every test Unit'), ('B2', 'A Unit that never gets it'),
+    ('A1', 'Exactly this Service and Service version'), ('A2', 'Upload processed'), ('A3', 'Same Service version uploaded again'),
+    ('A4', 'Evidence for every release'), ('B1', 'On every Verification Set Unit'), ('B2', 'A Unit that never gets it'),
     ('C1', "The Service's own tests"), ('C2', 'Crash on start'), ('C3', 'Late failure'), ('C4', 'Restarts'),
     ('D1', 'Resource conflict'), ('D2', 'Other Services on the same Unit'),
-    ('E1', 'Bad configuration'), ('E2', 'Recovery: the fixed version'),
+    ('E1', 'Bad configuration'), ('E2', 'Recovery: the fixed Service version'),
 ]
 CHECKED, WAITING_LOGIC, NOT_RUN, NEEDS_62, NEXT = ('Checked now', 'Covered by the waiting logic', 'Not run',
-                                                   'Needs AosCloud 6.2', 'Next version')
+                                                   'Needs AosCloud 6.2', 'Next Service version')
 STATUS_CLASS = {CHECKED: 'pass', WAITING_LOGIC: 'skip', NOT_RUN: 'amber', NEEDS_62: 'skip', NEXT: 'skip'}
 OBSERVATION_OFF = '60-second observation was off, AOS_WATCH_SECONDS=0'
 # What you can change for each scenario; a scenario that is not here has nothing to change.
@@ -74,7 +74,7 @@ def found_how(found_by: str) -> tuple[str, str]:
         return CHECKED, 'found by the watch in GitHub'
     if found_by == 'run':
         return CHECKED, 'found by ./aos-verify on this computer'
-    return NOT_RUN, 'not needed: started with the version'
+    return NOT_RUN, 'not needed: started with the Service version'
 
 
 def coverage(rows: list[dict], observe: int, found: tuple[str, str]) -> dict[str, tuple[str, str]]:
@@ -90,33 +90,37 @@ def coverage(rows: list[dict], observe: int, found: tuple[str, str]) -> dict[str
     return {
         '⓪': found,
         'A1': (CHECKED, builtin.get('A1', 'FAIL')),
-        'A2': (CHECKED, 'The batch exists, so AosCloud processed the upload.'),
-        'A3': (WAITING_LOGIC, 'Did not happen in this run. If it does: a version that already exists gets no new '
-                              'batch, and nothing is decided.'),
-        'A4': (CHECKED, 'This report, junit.xml and the job log; the batch keeps its state in AosCloud.'),
+        'A2': (CHECKED, 'The Verification batch exists, so AosCloud processed the upload.'),
+        'A3': (WAITING_LOGIC, 'Did not happen in this run. If it does: a Service version that already exists gets no '
+                              'new Verification batch, and nothing is decided.'),
+        'A4': (CHECKED, 'This report, junit.xml and the job log; the Verification batch keeps its state in AosCloud.'),
         'B1': (CHECKED, builtin.get('B1', 'FAIL')),
-        'B2': (WAITING_LOGIC, 'Did not happen in this run. If it does: a Unit that never gets the version ends in a '
+        'B2': (WAITING_LOGIC, 'Did not happen in this run. If it does: a Unit that never gets the Service version ends in a '
                               'timeout, with no decision.'),
-        'C1': (CHECKED, f'{len(yours)} of your tests ran') if yours else no_tests,
+        'C1': (CHECKED, f'{len(yours)} partner tests ran') if yours else no_tests,
         'C2': (CHECKED, builtin.get('C2', 'FAIL')),
         'C3': (CHECKED, f'{late}: still running after {observe} s') if observed else off,
         'C4': (CHECKED, f'{late}: no restarts in {observe} s; memory is not measured') if observed else off,
         'D1': (NEEDS_62, 'AosCloud 6.1 cannot show this.'),
         'D2': (NEEDS_62, 'AosCloud 6.1 cannot show this.'),
-        'E1': (CHECKED, f'only if your tests hold a config test; {len(yours)} of your tests ran') if yours else no_tests,
-        'E2': (NEXT, 'Did not happen in this run. The next version goes through the same steps.'),
+        'E1': (CHECKED, f'only if the partner tests hold a config test; {len(yours)} partner tests ran') if yours else no_tests,
+        'E2': (NEXT, 'Did not happen in this run. The next Service version goes through the same steps.'),
     }
 
 
 def summary(rows: list[dict]) -> str:
-    """4 of 4 built-in checks passed; your tests: none added (tests/your_tests.sh)."""
+    """3 passed, 1 skipped (C3/C4), 0 failed; partner tests: none added (tests/your_tests.sh)."""
     builtin = [r for r in rows if r['part'] == 'builtin']
     yours = [r for r in rows if r['part'] == 'yours' and r['result'] != 'SKIP']
-    passed = sum(r['result'] == 'PASS' for r in builtin)
-    text = f'{passed} of {len(builtin)} built-in checks passed; your tests: '
+    count = lambda result: [r['code'] for r in builtin if r['result'] == result]  # pylint: disable=unnecessary-lambda-assignment
+    skipped, unread = count('SKIP'), count('ERROR')
+    text = f"{len(count('PASS'))} passed, {len(skipped)} skipped"
+    text += f" ({', '.join(skipped)})" if skipped else ''
+    text += f", {len(count('FAIL'))} failed"
+    text += f", {len(unread)} could not be read ({', '.join(unread)})" if unread else ''
     if not yours:
-        return text + 'none added (tests/your_tests.sh)'
-    return text + f"{sum(r['result'] == 'PASS' for r in yours)} of {len(yours)} passed"
+        return text + '; partner tests: none added (tests/your_tests.sh)'
+    return text + f"; partner tests: {sum(r['result'] == 'PASS' for r in yours)} of {len(yours)} passed"
 
 
 def decision_line(decided: dict | None) -> str:
@@ -126,11 +130,11 @@ def decision_line(decided: dict | None) -> str:
     kind, when, why = decided['decision'], decided['when'], decided.get('why')
     if kind in ('approved', 'rejected'):
         state = decided.get('state')
-        return f"Decision: {kind}, {when}, " + (f'batch now {STATE_NAMES.get(state, state)}' if state else 'sent')
+        return f"Decision: {kind}, {when}, " + (f'Verification batch now {STATE_NAMES.get(state, state)}' if state else 'sent')
     if kind == 'report-only':
         return 'Decision: report-only, nothing sent. A person decides in SP UI → Verification batches.'
     if kind == 'unknown':
-        return (f'Decision: unknown, {when}: it was sent and the answer was lost. Look at the batch in SP UI → '
+        return (f'Decision: unknown, {when}: it was sent and the answer was lost. Look at the Verification batch in SP UI → '
                 f'Verification batches, and do not send it again.')
     return f"Decision: not sent{f' ({why})' if why else ''}. {BY_HAND}"
 
@@ -150,7 +154,7 @@ def table(rows: list[dict], with_code: bool) -> str:
 def your_tests_section(yours: list[dict]) -> str:
     """The table of your tests, or, when you have none yet, what to do about it."""
     if all(r['result'] == 'SKIP' and r['detail'] == NO_TESTS_YET for r in yours):
-        return ('<p class="todo"><b>No tests of yours yet: add tests/your_tests.sh</b> (start from '
+        return ('<p class="todo"><b>No partner tests yet: add tests/your_tests.sh</b> (start from '
                 'tests/your_tests.sh.example): they run after the built-in checks. If any check or test fails, the verdict '
                 'is reject; in auto mode the job sends it, in report-only a person decides.</p>')
     return table(yours, False)
@@ -168,7 +172,7 @@ def render(args, rows: list[dict], when: str, decided: dict | None = None) -> st
     builtin = [r for r in rows if r['part'] == 'builtin']
     yours = [r for r in rows if r['part'] == 'yours']
     status, how = found_how(args.found_by)
-    found = (status, f'{how}: batch {short(args.batch_id)}, version {args.version}, Units from {args.units_from}')
+    found = (status, f'{how}: Verification batch {short(args.batch_id)}, Service version {args.version}, Units from {args.units_from}')
     cover = coverage(rows, args.observe, found)
     scenario_rows = ''.join(f'<tr><td>{code}</td><td>{html.escape(name)}</td>'
                             f'<td><span class="s {STATUS_CLASS[cover[code][0]]}">{html.escape(cover[code][0])}</span></td>'
@@ -180,16 +184,18 @@ def render(args, rows: list[dict], when: str, decided: dict | None = None) -> st
         badges.append(('ERROR', 'AosCloud could not be read: no decision'))
     legend = ' · '.join(f'{badge(name)} = {html.escape(text)}' for name, text in badges)
     units = ', '.join(short(u) for u in args.units.split()) or '-'
-    facts = [('Service', short(args.service_id)), ('Version', args.version), ('Batch', short(args.batch_id))]
+    name = getattr(args, 'service_name', '')
+    service = f'{name} ({short(args.service_id)})' if name else short(args.service_id)
+    facts = [('Service', service), ('Service version', args.version), ('Verification batch', short(args.batch_id))]
     if getattr(args, 'decision_mode', ''):
         facts.append(('Decision mode', args.decision_mode))
-    facts += [('Test Units', units), ('Time', when)]
+    facts += [('Verification Set Units', units), ('Report time', when)]
     return f'''<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Verification report: {html.escape(args.version)}</title>
+<title>Verification report: Service version {html.escape(args.version)}</title>
 <style>
 :root{{--navy:#173D7A;--sky:#4AA8FF;--pale:#D2EDFF;--ink:#14243F;--muted:#4F5F75;--line:#C9DDF0;--bg:#F6FAFE}}
 *{{box-sizing:border-box}}
@@ -230,7 +236,7 @@ th{{background:var(--pale);color:var(--navy)}}
 <p class="legend">{groups}</p>
 {table(builtin, True)}
 <p class="legend">{legend}</p>
-<h2>Your tests</h2>
+<h2>Partner tests</h2>
 {your_tests_section(yours)}
 <h2>Scenarios covered</h2>
 <div class="t"><table><thead><tr><th>#</th><th>Scenario</th><th>Status</th><th>In this run</th><th>You can change it</th></tr></thead>
@@ -252,12 +258,12 @@ def junit(args, rows: list[dict], when: str) -> str:
             inner = f'<error message={quoteattr(r["detail"])}/>'
         elif r['result'] == 'SKIP':
             inner = f'<skipped message={quoteattr(r["detail"])}/>'
-        kind = 'built-in checks' if r['part'] == 'builtin' else 'your tests'
+        kind = 'built-in checks' if r['part'] == 'builtin' else 'partner tests'
         cases.append(f'  <testcase classname="{kind}" name={name}>{inner}</testcase>')
     failures = sum(r['result'] == 'FAIL' for r in rows)
     skipped = sum(r['result'] == 'SKIP' for r in rows)
     errors = sum(r['result'] == 'ERROR' for r in rows)
-    suite = quoteattr(f'verification {args.version}')
+    suite = quoteattr(f'verification of Service version {args.version}')
     return (f'<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name={suite} tests="{len(rows)}" '
             f'failures="{failures}" errors="{errors}" skipped="{skipped}" timestamp="{when}">\n' + '\n'.join(cases) + '\n</testsuite>\n')
 
@@ -271,12 +277,13 @@ def write_decision(args) -> int:
         print('no report to update', file=sys.stderr)
         return 0
     if meta['batch_id'] != short(args.batch_id or ''):
-        print(f"the report is of batch {meta['batch_id']}, not {short(args.batch_id or '')}: left alone", file=sys.stderr)
+        print(f"the report is of Verification batch {meta['batch_id']}, not {short(args.batch_id or '')}: left alone", file=sys.stderr)
         return 0
     decided = {'decision': args.decision, 'state': args.state, 'why': args.why,
                'when': stamp(datetime.now(timezone.utc))}
     report = SimpleNamespace(**{k: meta[k] for k in ('service_id', 'version', 'batch_id', 'units', 'observe', 'found_by',
-                                                     'units_from')}, decision_mode=meta.get('decision_mode', ''))
+                                                     'units_from')}, decision_mode=meta.get('decision_mode', ''),
+                             service_name=meta.get('service_name', ''))
     (args.out / 'report.html').write_text(render(report, meta['rows'], meta['when'], decided), encoding='utf-8')
     print(f'report: {args.out / "report.html"} (with the decision)')
     return 0
@@ -294,6 +301,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--found-by', default='version')
     parser.add_argument('--units-from', default='the values you gave')
     parser.add_argument('--decision-mode', default='')
+    parser.add_argument('--service-name', default='')
     parser.add_argument('--decision', choices=['approved', 'rejected', 'not-sent', 'report-only', 'unknown'])
     parser.add_argument('--state')
     parser.add_argument('--why')
@@ -311,7 +319,7 @@ def main(argv: list[str] | None = None) -> int:
     # What the decision needs to render this report again, with the ids shortened: the folder is kept as an artifact.
     meta = {'service_id': short(args.service_id), 'version': args.version, 'batch_id': short(args.batch_id),
             'units': ' '.join(short(u) for u in args.units.split()), 'observe': args.observe, 'found_by': args.found_by,
-            'units_from': args.units_from, 'decision_mode': args.decision_mode, 'when': when, 'rows': rows}
+            'units_from': args.units_from, 'decision_mode': args.decision_mode, 'service_name': args.service_name, 'when': when, 'rows': rows}
     (args.out / META).write_text(json.dumps(meta, ensure_ascii=False), encoding='utf-8')
     print(f'report: {args.out / "report.html"} (and junit.xml)')
     return 0

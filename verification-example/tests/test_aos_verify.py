@@ -200,7 +200,7 @@ def test_setup_with_one_certificate_says_what_it_did_and_ends_with_the_check(box
     assert done.stdout.count('OK    ') >= 6
     assert '.aos/' not in done.stdout.split('certificate: ')[1].split('\n')[0]
     assert 'security/aos-user-sp.p12' in done.stdout
-    assert 'connection OK' in done.stdout and 'latest batch …ef77, version 4.9.0' in done.stdout
+    assert 'connection OK' in done.stdout and 'latest Verification batch …ef77, Service version 4.9.0' in done.stdout
     assert 'Unit …318d: online; installed 4.9.0; instances: 4.9.0 active' in done.stdout
     assert 'Ready.' in done.stdout
 
@@ -343,7 +343,7 @@ def test_run_before_setup_says_setup(box):
 def test_run_with_nothing_waiting_says_so_and_sends_nothing(box):
     box.setup()
     done = box('run', '--poll', '0')
-    assert done.returncode == 0 and 'no waiting batch: the highest version 4.9.0 is Valid' in done.stdout
+    assert done.returncode == 0 and 'no waiting Verification batch: the highest Service version 4.9.0 is Valid' in done.stdout
     assert 'Nothing to verify. Upload first, then run.' in done.stdout and Cloud.state['patches'] == []
 
 
@@ -352,7 +352,7 @@ def test_run_dry_run_goes_up_to_the_decision_and_sends_nothing(box):
     Cloud.state['waiting'] = True
     done = box('run', '--dry-run', '--poll', '0')
     assert done.returncode == 0, done.stderr
-    assert 'batch …a410, version 4.10.0, test Units: …318d' in done.stdout
+    assert 'Verification batch …a410, Service version 4.10.0, Verification Set Units: …318d' in done.stdout
     assert 'PASS A1' in done.stdout and 'PASS B1' in done.stdout and 'PASS C2' in done.stdout
     assert 'Verdict: approve (all checks passed)' in done.stdout
     assert 'Dry run: nothing sent to AosCloud' in done.stdout
@@ -364,7 +364,7 @@ def test_run_asks_before_the_decision_and_no_means_nothing_sent(box):
     box.setup()
     Cloud.state['waiting'] = True
     done = box('run', '--poll', '0', stdin='n\n')
-    assert done.returncode == 0 and 'approve version 4.10.0 in AosCloud?' in done.stdout
+    assert done.returncode == 0 and 'approve Service version 4.10.0 in AosCloud?' in done.stdout
     assert 'Nothing sent. To decide later: ./aos-verify decide approve' in done.stdout
     assert Cloud.state['patches'] == []
 
@@ -398,7 +398,7 @@ def test_run_twice_does_not_decide_twice(box):
     Cloud.state['waiting'] = True
     assert box('run', '--yes', '--poll', '0').returncode == 0
     again = box('run', '--yes', '--poll', '0')
-    assert again.returncode == 0 and 'no waiting batch: the highest version 4.10.0 is Valid' in again.stdout
+    assert again.returncode == 0 and 'no waiting Verification batch: the highest Service version 4.10.0 is Valid' in again.stdout
     assert len(Cloud.state['patches']) == 1
 
 
@@ -406,7 +406,7 @@ def test_a_failed_unit_ends_in_a_reject_after_asking(box):
     box.setup()
     Cloud.state.update(waiting=True, run_state='failed')
     done = box('run', '--poll', '0', stdin='y\n')
-    assert done.returncode == 1 and 'Verdict: reject (the version failed on a test Unit)' in done.stdout
+    assert done.returncode == 1 and 'Verdict: reject (the Service version failed on a Verification Set Unit)' in done.stdout
     assert Cloud.state['patches'] == [[{'architecture': 'amd64', 'is_approved': False}]]
 
 
@@ -438,11 +438,11 @@ def test_the_debug_commands_one_at_a_time(box):
     box.setup()
     assert 'connection OK' in box('check').stdout
     nothing = box('discover')
-    assert nothing.returncode == 0 and 'no waiting batch' in nothing.stdout
-    assert 'no batch found yet' in box('wait').stderr and 'no batch found yet' in box('test').stderr
+    assert nothing.returncode == 0 and 'no waiting Verification batch' in nothing.stdout
+    assert 'no Verification batch found yet' in box('wait').stderr and 'no Verification batch found yet' in box('test').stderr
     Cloud.state['waiting'] = True
     found = box('discover')
-    assert 'batch …a410, version 4.10.0, test Units: …318d' in found.stdout and 'Next: ./aos-verify wait' in found.stdout
+    assert 'Verification batch …a410, Service version 4.10.0, Verification Set Units: …318d' in found.stdout and 'Next: ./aos-verify wait' in found.stdout
     waited = box('wait')
     assert waited.returncode == 0 and 'exit code: 0' in waited.stdout
     tested = box('test')
@@ -569,7 +569,7 @@ def test_the_mode_from_setup_counts_and_the_environment_overrides_it(box):
     box('setup', '--api-url', box.url, '--decision', 'auto')
     Cloud.state['waiting'] = True
     done = box('run', '--poll', '0', '--dry-run')
-    assert 'It would approve batch …a410 (auto)' in done.stdout
+    assert 'It would approve Verification batch …a410 (auto)' in done.stdout
     done = box('run', '--poll', '0', '--dry-run', AOS_DECISION='report-only')
     assert 'report-only sends nothing anyway' in done.stdout
 
@@ -586,7 +586,7 @@ def test_ask_on_a_version_that_passes(box, answer, patches):
     box.setup()
     Cloud.state['waiting'] = True
     done = box('run', '--poll', '0', stdin=answer)
-    assert done.returncode == 0 and 'approve version 4.10.0 in AosCloud?' in done.stdout
+    assert done.returncode == 0 and 'approve Service version 4.10.0 in AosCloud?' in done.stdout
     assert len(Cloud.state['patches']) == patches
     assert ('batch now Verified' if patches else 'Decision: not sent (you answered no).') in report_of(box)
 
@@ -598,7 +598,7 @@ def test_ask_on_a_version_that_fails(box, kind, answer, patches):
     Cloud.state['waiting'] = True
     failing_version(box, kind)
     done = box('run', '--poll', '0', stdin=answer)
-    assert done.returncode == 1 and 'reject version 4.10.0 in AosCloud?' in done.stdout
+    assert done.returncode == 1 and 'reject Service version 4.10.0 in AosCloud?' in done.stdout
     assert len(Cloud.state['patches']) == patches
     assert 'FAIL → reject' in report_of(box)
 
@@ -764,4 +764,11 @@ def test_the_report_of_a_run_with_no_tests_of_yours_says_so_in_amber(box):
     box.setup()
     Cloud.state['waiting'] = True
     box('run', '--poll', '0', '--dry-run')
-    assert '<p class="todo"><b>No tests of yours yet: add tests/your_tests.sh</b>' in report_of(box)
+    assert '<p class="todo"><b>No partner tests yet: add tests/your_tests.sh</b>' in report_of(box)
+
+
+def test_the_report_of_a_run_names_the_service(box):
+    box.setup()
+    Cloud.state['waiting'] = True
+    box('run', '--poll', '0', '--dry-run')
+    assert re.search(r'<div><span>Service</span>demo \(…[0-9a-f-]{4}\)</div>', report_of(box))

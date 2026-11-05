@@ -16,16 +16,16 @@ the schedule.
 **Who may approve or reject?**
 The Service Provider, with the SP certificate.
 
-**What if a test Unit never gets the version?**
+**What if a test Unit never gets the Service version?**
 `wait` times out with exit 2, or exit 3 if the Unit is offline, and the job decides nothing. An offline Unit does not
-count, even if AosCloud still shows the new version active: that state is old. The batch keeps waiting, with no time
+count, even if AosCloud still shows the new Service version active: that state is old. The Verification batch keeps waiting, with no time
 limit. Check that the
 Unit is online, in the Verification Set, and linked to the Service through the Subject
 ([README, prerequisite 2](../README.md#2-verification-configured-oem)). Then run the job again with
-`workflow_dispatch`, with the same version. The watch does not start a batch a second time.
+`workflow_dispatch`, with the same Service version. The watch does not start a batch a second time.
 
 **Valid or Verified?**
-They are the same. The API says `Valid`, and the UI shows **Verified**. Verified means the version passed the gate;
+They are the same. The API says `Valid`, and the UI shows **Verified**. Verified means the Service version passed the gate;
 it then goes on to the fleet through your normal rollout. A batch that waits is `Waiting_validation` in the API and
 **Waiting verification** in the UI.
 
@@ -42,10 +42,10 @@ it then goes on to the fleet through your normal rollout. A batch that waits is 
 Yes: set `AOS_DECISION` to `report-only`. The job writes the report and sends nothing. See
 [Automatic decision](../README.md#automatic-decision).
 
-## The watch: timing and old batches
+## The watch: timing and old Verification batches
 
 **Why every 5 minutes?**
-AosCloud does not notify a pipeline when a new version waits (no webhook), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub may start runs late or skip them; for a guaranteed start use Start A. Each run takes about 20 s and only reads. To change it, edit one line in `watch-batches.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-batch` right after your upload job (Start A, the chain), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
+AosCloud does not notify a pipeline when a new Service version waits (no webhook), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub may start runs late or skip them; for a guaranteed start use Start A. Each run takes about 20 s and only reads. To change it, edit one line in `watch-batches.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-batch` right after your upload job (Start A, the chain), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
 
 The chain is in [`examples/release-caller.yml`](../examples/release-caller.yml).
 
@@ -59,20 +59,20 @@ is a feature request for AosCloud. If the upload runs in the same workflow, the 
 ([`examples/release-caller.yml`](../examples/release-caller.yml)).
 
 **What about old batches that keep waiting?**
-They are ignored. AosCloud moves the Units on to the newest version, and never closes the older batch, so it waits for
-ever. The watch takes only the highest version of your Service, even if that one is already decided, and lists the
+They are ignored. AosCloud moves the Units on to the newest Service version, and never closes the older batch, so it waits for
+ever. The watch takes only the highest Service version, even if that one is already decided, and lists the
 others as `stale, left alone`. Decide them in the UI if you want the list clean.
 
 **A run timed out. Does the watch try again?**
 No: when `verify-batch` already has a run for the batch, in any state, the watch starts no other, so a broken Unit
 does not start a job every 5 minutes. That also holds for a run that was cancelled or died on the runner. Fix the
-cause, then start `verify-batch` by hand with the version.
+cause, then start `verify-batch` by hand with the Service version.
 
-**A new version arrives during the tests.**
-The Units move on to it, so the older version stops running: its checks fail and its batch is rejected, even if it was
-good. The new version gets its own run. Nothing wrong gets approved.
+**A new Service version arrives during the tests.**
+The Units move on to it, so the older Service version stops running: its checks fail and its batch is rejected, even if it was
+good. The new Service version gets its own run. Nothing wrong gets approved.
 
-**Two runs for one version?**
+**Two runs for one Service version?**
 It can happen: the watch does not see a chained run, because GitHub lists it under the calling workflow. If the watch
 asks during a chained run, the two queue, one after the other. The second finds the batch decided, stops with
 `no longer Waiting_validation`, sends nothing, and shows red. No harm is done.
@@ -86,25 +86,25 @@ Required reviewers on the environment `aos-verification` would stop the watch at
 environment of its own, with the same secrets and no reviewers: change the `environment:` line of
 `watch-batches.yml`.
 
-**`no test Unit for arm64`.**
+**`no Verification Set Unit for arm64`.**
 The batch needs a decision for an architecture that has no test Unit. The job will not approve what it did not test,
 so the watch run stays red and nothing starts until you add a Unit of that architecture to the Verification Set, or
 decide in the UI.
 
 ## Running it
 
-**Where do I see the batch?**
+**Where do I see the Verification batch?**
 SP UI → Verification batches. The job prints the batch id in its log.
 
-**I uploaded the same version again, and no batch appeared.**
-A version can be uploaded only once. The bundle ends in **Error** ("Item version … already exists"), and no batch is
+**I uploaded the same Service version again, and no batch appeared.**
+A Service version can be uploaded only once. The bundle ends in **Error** ("Item Service version … already exists"), and no batch is
 created, so `wait` times out. Raise `items[].version` in `config.yaml` and upload again.
 
-![Deployment bundles: a reused version 4.3.0 ends in Error](img/05-sp-deployment-bundles.png)
+![Deployment bundles: a reused Service version 4.3.0 ends in Error](img/05-sp-deployment-bundles.png)
 
-**A broken version.**
-A version that cannot start may restart a few times on the Unit before its instance is marked failed. `wait` then
-stops with exit 1 and prints the batch id, and the job rejects it without running your tests.
+**A broken Service version.**
+A Service version that cannot start may restart a few times on the Unit before its instance is marked failed. `wait` then
+stops with exit 1 and prints the batch id, and the job rejects it without running partner tests.
 
 **`aos-signer` prints my user name and e-mail.**
 On `sign` and `upload`, `aos-signer` prints the user of the certificate (its common name, which holds your user name
@@ -151,7 +151,7 @@ TLS inspection.
 ## Security
 
 **What does a public run show?**
-The job masks the batch, Unit and Service ids in its log. Two things stay visible: the run title carries the batch id,
+The job masks the Verification batch, Unit and Service ids in its log. Two things stay visible: the run title carries the batch id,
 because the watch finds its runs by it; and the variable `AOS_API_URL` shows your API host. Keep the repository private
 if that matters.
 
@@ -160,7 +160,7 @@ Anyone who can run a workflow with this secret can act as your SP user. The job 
 environment `aos-verification`: add required reviewers and protected branches there (GitHub offers required reviewers in a private repository only on
 its Enterprise plan; the call ends in HTTP 422 otherwise). The job writes the PEM to a
 folder of the runner that only it can read, only in the steps that call AosCloud (the discover step of the watch, wait,
-the built-in checks, the decision), and deletes it at the end of each. Your tests run in a step of their own, with no
+the built-in checks, the decision), and deletes it at the end of each. Partner tests run in a step of their own, with no
 secret and no key file. Delete local copies of the PEM (`.aos-verify/user.pem`) after you store the secret.
 
 **The certificate leaked.**

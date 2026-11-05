@@ -218,7 +218,7 @@ def units_of_batch(batch_id: str, service_id: str, given: list[str]) -> tuple[li
     if outside:
         return units, f"Unit {', '.join(short(unit) for unit in outside)} is not in the Verification Set"
     if bare or not units:
-        return units, (f"batch {short(batch_id)}: no test Unit for {', '.join(bare) or 'any architecture'}: the batch "
+        return units, (f"Verification batch {short(batch_id)}: no Verification Set Unit for {', '.join(bare) or 'any architecture'}: the batch "
                        f'cannot be verified. Check the Verification Set and the Subject of the Service '
                        f'(README, prerequisite 2)')
     return units, None
@@ -282,10 +282,10 @@ def check(args) -> int:
         units = units or linked
     if latest:
         version = next(i.get('version') for i in latest['update_items'] if i.get('identity_id') == args.service_id)
-        print(f"Service {short(args.service_id)}: latest batch {short(latest.get('id'))}, version {version}, "
+        print(f"Service {short(args.service_id)}: latest Verification batch {short(latest.get('id'))}, Service version {version}, "
               f"state {latest.get('state')}")
     else:
-        print(f'Service {short(args.service_id)}: no batch among the latest {PAGE}')
+        print(f'Service {short(args.service_id)}: no Verification batch among the latest {PAGE}')
     for unit in units:
         installed, instances = on_unit(unit, args.service_id)
         states = ', '.join(f"{i.get('version')} {i.get('run_state')}" for i in instances) or 'no instance'
@@ -296,20 +296,29 @@ def check(args) -> int:
     return 0
 
 
+def service_name(args) -> int:
+    """The codename of the Service, for the report. Reads only."""
+    for service in pages('services/'):
+        if service.get('id') == args.service_id:
+            print(service.get('codename') or service.get('title') or '')
+            break
+    return 0
+
+
 def status(args) -> int:
     """A1, B1 and C2, read again: what wait proved, as report lines."""
     units = [unit for unit in args.unit if unit.strip()]
     if not units:
-        raise Stop('no test Units given (--unit)')
+        raise Stop('no Verification Set Units given (--unit)')
     batch = get(f'verification-batch/{args.batch_id}/')
     exact, state = holds(batch, args.service_id, args.version), batch.get('state')
     if not exact:
-        a1 = f'batch {short(args.batch_id)} does not hold version {args.version} of Service {short(args.service_id)}'
+        a1 = f'Verification batch {short(args.batch_id)} is not for Service version {args.version} of Service {short(args.service_id)}'
     elif state != WAITING:
-        a1 = f'batch {short(args.batch_id)} is {state}, not {WAITING}'
+        a1 = f'Verification batch {short(args.batch_id)} is {state}, not {WAITING}'
     else:
-        a1 = f'batch {short(args.batch_id)} holds version {args.version} of Service {short(args.service_id)}'
-    rows = [('A1', 'the batch holds exactly this Service and version', exact and state == WAITING, a1)]
+        a1 = f'Verification batch {short(args.batch_id)} is for Service version {args.version} of Service {short(args.service_id)}'
+    rows = [('A1', 'the Verification batch is for this Service and this Service version', exact and state == WAITING, a1)]
     running, failed = [], []
     for unit in units:
         if not is_online(unit):  # neither a pass nor a fail: its state in AosCloud says nothing about this version
@@ -321,8 +330,8 @@ def status(args) -> int:
         for i in mine:
             if i.get('run_state') == 'failed':
                 failed.append(f"{short(unit)}: {i.get('error_message') or i.get('error_exit_code') or 'failed'}")
-    rows.append(('B1', f'{args.version} is installed and running on every test Unit', len(running) == len(units),
-                 f'version {args.version} active on {len(running)} of {len(units)} Units'))
+    rows.append(('B1', f'Service version {args.version} is installed and running on every Verification Set Unit', len(running) == len(units),
+                 f'Service version {args.version} active on {len(running)} of {len(units)} Units'))
     rows.append(('C2', 'the Service did not crash on start', not failed,
                  'no failed instance' if not failed else 'failed instance on ' + '; '.join(failed)))
     for code, name, passed, detail in rows:
@@ -345,26 +354,26 @@ def discover(args) -> int:
                 else:
                     unusable.append(item.get('version'))
     if unusable:
-        tell(f'left out, not SemVer versions: {unusable}')
+        tell(f'left out, not SemVer Service versions: {unusable}')
     if args.dry_run:
         for _, version, batch in rows[:10]:
-            tell(f"batch {short(batch.get('id'))}: version {version}, {batch.get('state')}")
+            tell(f"Verification batch {short(batch.get('id'))}: Service version {version}, {batch.get('state')}")
         if len(rows) > 10:
-            tell(f'... and {len(rows) - 10} older batches')
+            tell(f'... and {len(rows) - 10} older Verification batches')
     # Only the highest version of all counts, decided or not. AosCloud moves the Units on to a newer version and never
     # closes the older batch, so an older batch can wait forever while its version will never run again.
     top = max(rows, key=lambda row: row[0], default=None)  # the newest one, if two have the same precedence
     chosen = top if top and still_open(top[2]) else None
     for row in rows:
         if row[2].get('state') == WAITING and row is not chosen:
-            tell(f"stale, left alone: batch {short(row[2].get('id'))}, version {row[1]}")
+            tell(f"stale, left alone: Verification batch {short(row[2].get('id'))}, Service version {row[1]}")
     if not chosen:
         state = top and ('locked' if top[2].get('is_locked') else top[2].get('state'))
-        tell('no waiting batch' + (f': the highest version {top[1]} is {state}' if top else ''))
+        tell('no waiting Verification batch' + (f': the highest Service version {top[1]} is {state}' if top else ''))
         return 0
     _, version, batch = chosen
     if not AN_ID.fullmatch(str(batch.get('id'))):
-        raise Stop(f'an unexpected batch id: {batch.get("id")!r}')
+        raise Stop(f'an unexpected Verification batch id: {batch.get("id")!r}')
     hide(batch['id'])
     units, problem = units_of_batch(batch['id'], args.service_id, given)
     if problem:
@@ -397,11 +406,11 @@ def wait(args) -> int:
             batch = batch or find_batch(args.service_id, args.version)
             hide(batch and batch.get('id'))
             if batch and args.batch_id and batch['id'] != args.batch_id:
-                tell(f"version {args.version} is in batch {short(batch['id'])}, not in {short(args.batch_id)}: "
+                tell(f"Service version {args.version} is in Verification batch {short(batch['id'])}, not in {short(args.batch_id)}: "
                      f'decide nothing')
                 return 2
             if batch and not still_open(get(f"verification-batch/{batch['id']}/")):
-                tell(f"batch {short(batch['id'])} is no longer {WAITING}: nothing to decide")
+                tell(f"Verification batch {short(batch['id'])} is no longer {WAITING}: nothing to decide")
                 return 2
             unreachable = False
             if batch and not covered:  # every test Unit in the Set, every architecture covered, or no decision at all
@@ -413,7 +422,7 @@ def wait(args) -> int:
                     time.sleep(args.interval)
                     continue
                 units, covered = found, True
-                tell(f"test Units: {', '.join(short(unit) for unit in units)}")
+                tell(f"Verification Set Units: {', '.join(short(unit) for unit in units)}")
             if batch:
                 if args.units_file:
                     Path(args.units_file).write_text(' '.join(units), encoding='utf-8')
@@ -421,7 +430,7 @@ def wait(args) -> int:
                 offline = [short(unit) for unit, state in states.items() if state == 'offline']
                 if states != last:  # print only changes, so the log stays short
                     told_units = ', '.join(f'Unit {short(unit)} {state}' for unit, state in states.items())
-                    tell(f"batch {short(batch['id'])}: {told_units}")
+                    tell(f"Verification batch {short(batch['id'])}: {told_units}")
                     if offline:
                         tell(f"Unit {', '.join(offline)} is offline: what AosCloud shows for it is old, so it does "
                              f'not count; waiting until it is online')
@@ -433,7 +442,7 @@ def wait(args) -> int:
                     machine(batch['id'])
                     return 0
             elif last is None:
-                tell(f'no batch yet for {args.version}, waiting')
+                tell(f'no Verification batch yet for {args.version}, waiting')
                 last = {}
         except Unavailable as e:  # a short outage is no reason to stop waiting
             tell(f'AosCloud not reachable, retrying: {e}')
@@ -470,37 +479,37 @@ def send_decision(args, outcome: dict) -> int:
     try:
         batch = get(f'verification-batch/{args.batch_id}/')
     except Unavailable as e:
-        tell(f'cannot read batch {name}, nothing sent: {e}')
+        tell(f'cannot read Verification batch {name}, nothing sent: {e}')
         outcome['why'] = 'AosCloud could not be read'
         return 2
     if batch.get('state') != WAITING:
-        tell(f"refused: batch {name} is {batch.get('state')}, not {WAITING}")
-        outcome['why'] = f"the batch is already {batch.get('state')}"
+        tell(f"refused: Verification batch {name} is {batch.get('state')}, not {WAITING}")
+        outcome['why'] = f"the Verification batch is already {batch.get('state')}"
         return 2
     architectures = batch.get('architectures') or []
     if not architectures:
-        tell(f'refused: batch {name} lists no architectures, nothing sent')
-        outcome['why'] = 'the batch lists no architectures'
+        tell(f'refused: Verification batch {name} lists no architectures, nothing sent')
+        outcome['why'] = 'the Verification batch lists no architectures'
         return 2
     chosen = args.arch or architectures
     unknown = [arch for arch in chosen if arch not in architectures]
     if unknown:
-        tell(f'refused: batch {name} has no architecture {", ".join(unknown)} '
+        tell(f'refused: Verification batch {name} has no architecture {", ".join(unknown)} '
              f'(it has {", ".join(architectures)}), nothing sent')
-        outcome['why'] = f'the batch has no architecture {", ".join(unknown)}'
+        outcome['why'] = f'the Verification batch has no architecture {", ".join(unknown)}'
         return 2
     arches = ', '.join(chosen)
-    tell(f"batch {name} ({arches}): {'approve' if args.approve else 'reject'}")
+    tell(f"Verification batch {name} ({arches}): {'approve' if args.approve else 'reject'}")
     body = [{'architecture': arch, 'is_approved': args.approve} for arch in chosen]
     base, session = api()
     outcome.update(decision='unknown')  # from here on, it may have been applied
     try:  # sent exactly once: a retry could apply a second decision
         answer = session.patch(f'{base}/verification-batch/{args.batch_id}/', json=body, timeout=60)
     except requests.RequestException as e:
-        tell(f'no answer, the decision may have been applied; check the batch in the UI: {e}')
+        tell(f'no answer, the decision may have been applied; check the Verification batch in the UI: {e}')
         return 3
     if answer.status_code >= 500:
-        tell(f'HTTP {answer.status_code}: the decision may have been applied; check the batch in the UI')
+        tell(f'HTTP {answer.status_code}: the decision may have been applied; check the Verification batch in the UI')
         return 3
     if answer.status_code >= 400:
         tell(f'refused by AosCloud: HTTP {answer.status_code} {answer.text[:200]}')
@@ -513,48 +522,51 @@ def send_decision(args, outcome: dict) -> int:
     state = result.get('state') if isinstance(result, dict) else None
     done = 'approved' if args.approve else 'rejected'
     outcome.update(decision=done, state=state)
-    print(f'batch {name} ({arches}): {done}, {f"now {state_name(state)}" if state else "sent"}')
+    print(f'Verification batch {name} ({arches}): {done}, {f"now {state_name(state)}" if state else "sent"}')
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n', 1)[0])
     commands = parser.add_subparsers(dest='command', required=True)
-    f = commands.add_parser('discover', help='read only: the batch to verify, and its test Units')
+    f = commands.add_parser('discover', help='read only: the Verification batch to verify, and its Verification Set Units')
     f.add_argument('--service-id', default=os.environ.get('SERVICE_ID'))
-    f.add_argument('--unit', action='append', default=[], help='use these test Units, not the ones AosCloud lists')
-    f.add_argument('--dry-run', action='store_true', help='also list the batches; start nothing, exit 0, write nothing')
-    c = commands.add_parser('check', help='read only: the connection, the latest batch, what the Units run')
+    f.add_argument('--unit', action='append', default=[], help='use these Verification Set Units, not the ones AosCloud lists')
+    f.add_argument('--dry-run', action='store_true', help='also list the Verification batches; start nothing, exit 0, write nothing')
+    c = commands.add_parser('check', help='read only: the connection, the latest Verification batch, what the Units run')
     c.add_argument('--service-id', default=os.environ.get('SERVICE_ID'))
-    c.add_argument('--unit', action='append', default=[], help='a test Unit (repeat it); default: from AosCloud')
+    c.add_argument('--unit', action='append', default=[], help='a Verification Set Unit (repeat it); default: from AosCloud')
     commands.add_parser('services', help='read only: the Services this certificate sees')
     s = commands.add_parser('status', help='read only: the checks that wait proved, read again')
     s.add_argument('--service-id', required=True)
     s.add_argument('--version', required=True)
     s.add_argument('--batch-id', required=True)
-    s.add_argument('--unit', action='append', default=[], help='a test Unit (repeat it)')
-    w = commands.add_parser('wait', help='wait until the batch waits and the version is on every Unit')
+    s.add_argument('--unit', action='append', default=[], help='a Verification Set Unit (repeat it)')
+    n = commands.add_parser('service-name', help='read only: the codename of the Service')
+    n.add_argument('--service-id', required=True)
+    w = commands.add_parser('wait', help='wait until the Verification batch waits and the Service version is on every Unit')
     w.add_argument('--service-id', required=True)
     w.add_argument('--version', required=True)
     w.add_argument('--unit', action='append', default=[],
-                   help='a test Unit (repeat it); default: the Units of the Verification Set that have the Service')
-    w.add_argument('--batch-id', help='stop unless the version is in this batch')
-    w.add_argument('--units-file', help='write the test Units to this file, separated by spaces')
+                   help='a Verification Set Unit (repeat it); default: the Units of the Verification Set that have the Service')
+    w.add_argument('--batch-id', help='stop unless the Service version is in this Verification batch')
+    w.add_argument('--units-file', help='write the Verification Set Units to this file, separated by spaces')
     w.add_argument('--timeout', type=float, default=1800, help='seconds (default 1800)')
     w.add_argument('--interval', type=float, default=15, help='seconds between checks (default 15)')
-    d = commands.add_parser('decide', help='approve or reject the batch, once')
+    d = commands.add_parser('decide', help='approve or reject the Verification batch, once')
     d.add_argument('--batch-id', required=True)
     choice = d.add_mutually_exclusive_group(required=True)
     choice.add_argument('--approve', action='store_true')
     choice.add_argument('--reject', action='store_true')
-    d.add_argument('--arch', action='append', help='an architecture you tested (repeat it); default: all of the batch')
+    d.add_argument('--arch', action='append', help='an architecture you tested (repeat it); default: all of the Verification batch')
     d.add_argument('--report-dir', help='write the decision into the report in this folder')
     args = parser.parse_args(argv)
     hide(getattr(args, 'service_id', None), getattr(args, 'batch_id', None), *getattr(args, 'unit', []))
     outcome = {'discover': 'start nothing', 'wait': 'decide nothing',
                'decide': 'nothing sent'}.get(args.command, 'nothing was changed')
     try:
-        return {'discover': discover, 'services': services, 'check': check, 'status': status, 'wait': wait,
+        return {'discover': discover, 'services': services, 'check': check, 'status': status,
+                'service-name': service_name, 'wait': wait,
                 'decide': decide}[args.command](args)
     except (Stop, Unavailable) as e:
         tell(f'stopped, {outcome}: {e}')

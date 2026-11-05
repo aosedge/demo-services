@@ -22,23 +22,23 @@ usage() {
     checks the tools, creates .venv, finds the certificates, asks for the API URL, the Service and the decision mode,
     tests the connection
 ./aos-verify run [--yes] [--dry-run] [--no-open] [--poll SECONDS] [--timeout SECONDS]
-    the whole flow: discover, wait, built-in checks and your tests, report, decide
+    the whole flow: discover, wait, built-in checks and partner tests, report, decide
 
 AOS_DECISION, from setup or the environment: auto (it decides by itself; --yes is the short form), ask (it asks first; the
 default here), report-only (it sends nothing; you decide in the UI).
-AOS_DISCOVER_TIMEOUT: how long run waits for a batch, in seconds; default 120. --poll says the same for one run.
-AOS_WAIT_TIMEOUT: how long it waits for the version on the Units, in seconds; default 1800. --timeout says the same.
-AOS_WATCH_SECONDS: how long it keeps observing the version after the checks; default 60, 0 = off.
+AOS_DISCOVER_TIMEOUT: how long run waits for a Verification batch, in seconds; default 120. --poll says the same for one run.
+AOS_WAIT_TIMEOUT: how long it waits for the Service version on the Units, in seconds; default 1800. --timeout says the same.
+AOS_WATCH_SECONDS: how long it keeps observing the Service version after the checks; default 60, 0 = off.
 ./aos-verify secrets [--repo ORG/REPO]
     prints the gh commands that fill the GitHub secrets; it never prints the key
 
 For debugging, one step at a time:
-./aos-verify check                     the connection, the latest batch, what the Units run (reads only)
-./aos-verify discover                  is a new version waiting? (reads only)
-./aos-verify wait [--timeout SECONDS]  wait until the version runs on the test Units (reads only)
-./aos-verify test                      built-in checks and your tests, then the report (reads only)
+./aos-verify check                     the connection, the latest Verification batch, what the Units run (reads only)
+./aos-verify discover                  is a new Service version waiting? (reads only)
+./aos-verify wait [--timeout SECONDS]  wait until the Service version runs on the Verification Set Units (reads only)
+./aos-verify test                      built-in checks and partner tests, then the report (reads only)
 ./aos-verify report                    open the report
-./aos-verify decide approve|reject     send the decision for the batch found last
+./aos-verify decide approve|reject     send the decision for the Verification batch found last
 E
 }
 
@@ -303,7 +303,7 @@ choose_service() {
   fi
   rm -f "$said"
   if [ -z "$rows" ]; then
-    fail 'this SP has no Service yet: create one in SP UI → Services, or upload a first version' "$SETUP"
+    fail 'this SP has no Service yet: create one in SP UI → Services, or upload a first Service version' "$SETUP"
   fi
   if [ -n "$SERVICE_WANTED" ]; then
     rows=$(printf '%s\n' "$rows" | awk -F'\t' -v w="$SERVICE_WANTED" '$1 == w || $2 == w')
@@ -416,7 +416,7 @@ cmd_setup() {
   fi
   rm -f "$said"
   say ''
-  say 'Ready. Upload a new version as you do today, then: ./aos-verify run'
+  say 'Ready. Upload a new Service version as you do today, then: ./aos-verify run'
   say 'If you start run first, it waits up to 2 min for your upload.'
 }
 
@@ -446,7 +446,7 @@ save_state() {
 }
 
 load_state() {
-  if [ ! -f "$STATE" ]; then fail 'no batch found yet' './aos-verify discover'; fi
+  if [ ! -f "$STATE" ]; then fail 'no Verification batch found yet' './aos-verify discover'; fi
   # shellcheck disable=SC1090
   . "./$STATE"
   UNITS=$AOS_TEST_UNITS
@@ -464,7 +464,7 @@ remember() {
 found_line() {
   local unit units=''
   for unit in $UNITS; do units="$units $(short "$unit")"; done
-  say "batch $(short "$BATCH_ID"), version $VERSION, test Units:$units"
+  say "Verification batch $(short "$BATCH_ID"), Service version $VERSION, Verification Set Units:$units"
 }
 
 # One question to AosCloud. Sets FOUND (the JSON line, or empty) and SAID (the last line of the explanation).
@@ -519,7 +519,7 @@ cmd_wait() {
 
 run_checks() {
   AOS_TEST_UNITS=$UNITS BATCH_ID=$BATCH_ID VERSION=$VERSION SERVICE_ID=$SERVICE_ID PYTHON="$HERE/$PY" \
-    AOS_DECISION=$DECISION FOUND_BY=run UNITS_FROM='the Verification Set' bash tests/run_tests.sh
+    AOS_DECISION=$DECISION SERVICE_NAME=${SERVICE_CODENAME:-} FOUND_BY=run UNITS_FROM='the Verification Set' bash tests/run_tests.sh
 }
 
 # The decision, or that none was sent, into the report of this batch. It never changes the outcome.
@@ -558,7 +558,7 @@ send_decision() {  # send_decision approve|reject [more arguments for decide]
   code=$?
   case "$code" in
     0) say "Done: reload SP UI → Verification batches." ;;
-    3) say 'The decision may have been applied. Look at the batch in the UI, and do NOT send it again.' ;;
+    3) say 'The decision may have been applied. Look at the Verification batch in the UI, and do NOT send it again.' ;;
     *) say 'Nothing was sent.' ;;
   esac
   return "$code"
@@ -572,7 +572,7 @@ cmd_decide() {
   esac
   load
   load_state
-  say "Version $VERSION, batch $(short "$BATCH_ID"): $choice"
+  say "Service version $VERSION, Verification batch $(short "$BATCH_ID"): $choice"
   send_decision "$choice" "$@"
 }
 
@@ -596,13 +596,13 @@ cmd_check() {
 decide_step() {  # decide_step approve|reject <why>
   local choice=$1 why=$2 answer=''
   say ''
-  say "Verdict: $choice ($why). Version $VERSION, batch $(short "$BATCH_ID")."
+  say "Verdict: $choice ($why). Service version $VERSION, Verification batch $(short "$BATCH_ID")."
   if [ "$DRY_RUN" = yes ]; then
     note_decision not-sent 'a dry run'
     if [ "$DECISION" = report-only ]; then
       say 'Dry run: nothing sent to AosCloud. report-only sends nothing anyway: a person decides in the UI.'
     else
-      say "Dry run: nothing sent to AosCloud. It would $choice batch $(short "$BATCH_ID") ($DECISION)."
+      say "Dry run: nothing sent to AosCloud. It would $choice Verification batch $(short "$BATCH_ID") ($DECISION)."
     fi
     return 0
   fi
@@ -612,7 +612,7 @@ decide_step() {  # decide_step approve|reject <why>
     return 0
   fi
   if [ "$DECISION" = ask ]; then
-    printf '%s version %s in AosCloud? This writes one decision. [y/N] ' "$choice" "$VERSION"
+    printf '%s Service version %s in AosCloud? This writes one decision. [y/N] ' "$choice" "$VERSION"
     IFS= read -r answer || answer=''
     case "$answer" in
       y | Y | yes | YES) ;;
@@ -672,7 +672,7 @@ cmd_run() {
   esac
 
   # A batch appears some seconds after an upload, so ask for a while before saying that nothing waits.
-  say "1. Is a new version of $SERVICE_CODENAME waiting?"
+  say "1. Is a new Service version of $SERVICE_CODENAME waiting?"
   local started last='' code left step
   started=$SECONDS
   while :; do
@@ -681,7 +681,7 @@ cmd_run() {
     if [ "$code" -ne 0 ]; then
       say "$ALL_SAID"
       case "$ALL_SAID" in
-        *'no test Unit'*) fail 'decide nothing: the batch has no test Unit' './aos-verify check' ;;
+        *'no Verification Set Unit'*) fail 'decide nothing: the Verification batch has no Verification Set Unit' './aos-verify check' ;;
         *) explain_failure "$ALL_SAID" 'discover stopped' ;;
       esac
     fi
@@ -707,28 +707,28 @@ cmd_run() {
   remember "$FOUND"
   say "      $(found_line)"
 
-  say "2. Waiting for version $VERSION on the test Units"
+  say "2. Waiting for Service version $VERSION on the Verification Set Units"
   run_wait
   code=$?
   case "$code" in
     0) ;;
     1)
-      say '3. The report (the version failed: no observation, not your tests)'
+      say '3. The report (the Service version failed: no observation, not partner tests)'
       VERSION_FAILED=yes run_checks
-      finish reject 'the version failed on a test Unit'
+      finish reject 'the Service version failed on a Verification Set Unit'
       return $?
       ;;
-    3) fail 'decide nothing: AosCloud could not be reached, or a test Unit is offline' './aos-verify check' 3 ;;
+    3) fail 'decide nothing: AosCloud could not be reached, or a Verification Set Unit is offline' './aos-verify check' 3 ;;
     *) fail 'decide nothing: see the line above' './aos-verify check' "$code" ;;
   esac
 
-  say '3. Built-in checks and your tests'
+  say '3. Built-in checks and partner tests'
   run_checks
   code=$?
   case "$code" in
     0) finish approve 'all checks passed' ;;
     1) finish reject 'a check failed' ;;
-    3) show_report; fail 'decide nothing: AosCloud could not be read, or a test Unit is offline' './aos-verify test' 3 ;;
+    3) show_report; fail 'decide nothing: AosCloud could not be read, or a Verification Set Unit is offline' './aos-verify test' 3 ;;
     *) fail 'decide nothing: the checks could not run' './aos-verify test' "$code" ;;
   esac
 }

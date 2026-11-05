@@ -121,7 +121,7 @@ jobs:
 
       # The private key exists only while steps 1, 2a and 3 run: each writes it and deletes it when it ends.
       # Step 2b, your tests, has no secret at all.
-      - name: 1. Wait for the batch and the version on the test Units
+      - name: 1. Wait for the Verification batch and the Service version on the Verification Set Units
         id: wait
         env:
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
@@ -190,7 +190,7 @@ jobs:
           tests/run_tests.sh
 
       # No secret in this step: your tests cannot read the key. Code 0 approves, 1 rejects, 3 decides nothing.
-      - name: 2b. Run your tests and write the report
+      - name: 2b. Run the partner tests and write the report
         id: tests
         if: "!cancelled() && (steps.wait.outputs.code == '0' || steps.wait.outputs.code == '1')"
         env:
@@ -233,7 +233,7 @@ jobs:
           trap 'rm -f "$AOS_CERT"' EXIT
           (umask 077 && printf '%s\n' "$USER_PEM" > "$AOS_CERT")
           python verify_batch.py decide --batch-id "$BATCH_ID" --reject --report-dir report
-          echo "Rejected: the new version failed on a test Unit or in the tests." && exit 1
+          echo "Rejected: the new Service version failed on a Verification Set Unit or in the tests." && exit 1
 
       - name: 3. No decision (AOS_DECISION is not auto)
         if: always() && env.AOS_DECISION != 'auto' && steps.tests.outcome != 'skipped'

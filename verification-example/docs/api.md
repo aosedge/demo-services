@@ -37,16 +37,16 @@ Every example uses `curl -sS --cert "$AOS_CERT" --cacert "$AOS_CA"`. The ids in 
 |---|---|---|
 | TLS error, before any HTTP code | a wrong or missing certificate, or a PEM without the intermediate CAs | make the PEM again without `-clcerts`; check `AOS_CERT` and `AOS_CA` |
 | 403 | the wrong role (for example an SP certificate on `unit-sets/`) | use the certificate of the role named for the call |
-| 404 | the id does not exist, or your account cannot see it | check the id; Units and batches are per tenant |
+| 404 | the id does not exist, or your account cannot see it | check the id; Units and Verification batches are per tenant |
 | 405 | the decision is not allowed for this certificate or batch | see [Approve or reject](#approve-or-reject) |
 | 400, 422 | the body is wrong: a missing field, a wrong type | compare with the body shown for the call |
 | 5xx | an error inside AosCloud | `wait` tries again; after a decision, look at the batch in the UI |
 
 ## Calls of the job
 
-### Find the batch
+### Find the Verification batch
 
-Lists the newest Verification batches, so the job can find the one of your Service and version.
+Lists the newest Verification batches, so the job can find the one of your Service and Service version.
 **GET `verification-batch/`** · SP · read ·
 Swagger: [verification_batch_list](https://api.aoscloud.io/api/v11/docs#/verification-batch/verification_batch_list)
 
@@ -61,13 +61,13 @@ curl -sS --cert "$AOS_CERT" --cacert "$AOS_CA" "$AOS_API_URL/verification-batch/
 ```
 
 The job reads the pages (`offset` 0, 50, 100, …) up to `total`, and takes the batch whose
-`update_items[].identity_id` is your Service id and whose `version` is the uploaded version. It prefers a batch in
-`Waiting_validation`, and stops reading once it finds one. There is one batch per uploaded version.
+`update_items[].identity_id` is your Service id and whose `version` is the uploaded Service version. It prefers a batch in
+`Waiting_validation`, and stops reading once it finds one. There is one batch per uploaded Service version.
 
-`discover` reads all the pages, and takes a batch only if its version is the highest of your Service. Filter on your
+`discover` reads all the pages, and takes a batch only if its Service version is the highest of your Service. Filter on your
 side: AosCloud ignores `state=` and `created_at__gte=` here, and answers 200 with every batch.
 
-### Read the batch
+### Read the Verification batch
 
 Reads one batch again, to check that it still waits for a decision.
 **GET `verification-batch/{batch_id}/`** · SP · read ·
@@ -114,8 +114,8 @@ curl -sS --cert "$AOS_CERT" --cacert "$AOS_CA" "$AOS_API_URL/services/$SERVICE_I
 {"total": 1, "offset": 0, "items": [{"id": "<unit id>", "system_uid": "<system uid>", "subjects": ["<subject id>"]}]}
 ```
 
-The Units linked to your Service through a Subject, whether they are in the Set or not. An architecture of the batch with no Unit in both lists stops
-the job with no decision: `no test Unit for arm64`.
+The Units linked to your Service through a Subject, whether they are in the Set or not. An architecture of the Verification batch with no Unit in both lists stops
+the job with no decision: `no Verification Set Unit for arm64`.
 
 ### Is the Unit online
 
@@ -134,9 +134,9 @@ curl -sS --cert "$AOS_CERT" --cacert "$AOS_CA" "$AOS_API_URL/units/$UNIT_ID/"
 Only `online_status` `Online` counts. An offline Unit is neither ready nor failed: the job waits, and at the timeout it
 decides nothing.
 
-### Read the version on a Unit
+### Read the Service version on a Unit
 
-Shows which version of your Service a test Unit has installed, and whether it runs.
+Shows which Service version a test Unit has installed, and whether it runs.
 **GET `units/{unit_id}/subjects-services/{service_id}/`** · SP · read ·
 Swagger: [units_subjects_services_read](https://api.aoscloud.io/api/v11/docs#/units/units_subjects_services_read)
 
@@ -144,7 +144,7 @@ Swagger: [units_subjects_services_read](https://api.aoscloud.io/api/v11/docs#/un
 curl -sS --cert "$AOS_CERT" --cacert "$AOS_CA" "$AOS_API_URL/units/$UNIT_ID/subjects-services/$SERVICE_ID/"
 ```
 
-While the new version is on its way:
+While the new Service version is on its way:
 
 ```json
 {"items": [{"service_versions": {
@@ -160,15 +160,15 @@ When it runs:
   "installed_service_version": {"version": "4.6.0"}}, "instances": [{"version": "4.6.0", "run_state": "active"}]}]}
 ```
 
-The job counts a Unit as **ready** when `installed_service_version` is the new version and an instance of the new
-version has `run_state` `active`; an instance that is still starting is not ready yet. It counts a Unit as
-**failed** when an instance of the new version has `run_state` `failed`, or when `pending_service_version_status` is
+The job counts a Unit as **ready** when `installed_service_version` is the new Service version and an instance of the new
+Service version has `run_state` `active`; an instance that is still starting is not ready yet. It counts a Unit as
+**failed** when an instance of the new Service version has `run_state` `failed`, or when `pending_service_version_status` is
 `error`, `resource conflict` or `rejected`. An empty `items` list means that
 the Unit is not linked to the Service through a Subject (prerequisite 2, steps 3 and 4).
 
 ### Approve or reject
 
-Records the decision for every architecture of the batch, or for the ones you name with `--arch`. The job sends it
+Records the decision for every architecture of the Verification batch, or for the ones you name with `--arch`. The job sends it
 **once**, and only while the state is `Waiting_validation`.
 **PATCH `verification-batch/{batch_id}/`** · SP · **write** ·
 Swagger: [verification_batch_approval](https://api.aoscloud.io/api/v11/docs#/verification-batch/verification_batch_approval)
