@@ -82,6 +82,7 @@ Both would verify the same Verification batch, and each would send its decision.
 to `off` in the repository you want to pause: its scheduled watch stops at once with `watch paused`, with no call to
 AosCloud. Not set or `on`, it runs. A run you start by hand still goes on. A fork does not need this: GitHub keeps
 schedules off in a fork until you turn them on.
+
 The scheduled watch is paused in this repository while the try-it kit is out; use demo-release.
 
 **Can a decision be overwritten?**

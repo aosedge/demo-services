@@ -109,7 +109,7 @@ jobs:
           sed -E -e $'s/\x1b\\[[0-9;]*m//g' -e 's/user=[^,]*/user=(hidden)/' -e 's/[^[:space:]]+@[^[:space:]]+/(hidden)/g' \
                  -e 's/[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}/(hidden)/g' <<<"$out"
           if [ "$code" -ne 0 ]; then
-            echo "::error::Upload of Service version $VERSION failed. The user of AOS_USER_PEM needs the permission deployment_bundles_create; 'already exists' means run it again"
+            echo "::error::Upload of Service version $VERSION failed. The user of AOS_USER_PEM needs the permission deployment_bundles_create"
             exit "$code"
           fi
           echo "uploaded Service version $VERSION"

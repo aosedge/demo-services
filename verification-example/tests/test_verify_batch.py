@@ -1774,5 +1774,6 @@ def test_try_it_has_the_five_steps_and_the_readme_links_it():
         assert name in page
     assert verify_batch.AN_UUID.search(page) is None and '@' not in page
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    assert readme.index('TRY_IT.md') > readme.index('| – | Result |') and readme.index('TRY_IT.md') < readme.index('## How the job knows')
+    assert readme.index('TRY_IT.md') > readme.index('| – | Result |') and readme.index('TRY_IT.md') < readme.index('> [!IMPORTANT]')
+    assert readme.index('## How the job knows') < readme.index('![Automatic verification')
     assert '**Two pipelines on one Service: pause one.**' in (ROOT / 'docs' / 'faq.md').read_text(encoding='utf-8')

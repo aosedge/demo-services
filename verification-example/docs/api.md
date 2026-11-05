@@ -311,6 +311,9 @@ curl -sS --cert "$AOS_CERT" --cacert "$AOS_CA" -X POST -H 'Content-Type: applica
 
 ## More calls
 
+demo-release (demo only) reads GET verification-batch/ for the next version and uploads with aos-signer upload (POST
+deployment-bundles/upload/, permission deployment_bundles_create). The job itself never uploads.
+
 Every call above is part of the public AosCloud API v11. The Swagger reference lists all the other calls.
 
 **Next →** [FAQ and tips](faq.md) · back to the [README](../README.md)

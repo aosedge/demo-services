@@ -24,11 +24,18 @@ sent you separately:
 | `AOS_SERVICE_ID` | the id of the demo Service |
 | `AOS_API_URL` | the address of AosCloud |
 
+The certificate comes as an encrypted `.7z`: open it with 7-Zip (Windows) or Keka (macOS) and the password we sent, then
+paste the whole text of the file, from the first `-----BEGIN` line to the last `-----END` line.
+
 Nobody can read a secret back, and pull requests from other forks do not get it.
 
 ## 3. Turn on Actions
 
 Open the **Actions** tab of your fork and press **I understand my workflows, go ahead and enable them**.
+
+If the list of workflows stays empty: in your fork open `.github/workflows/demo-release.yml`, press the pencil (Edit this
+file), add a space at the end of the first comment line, press **Commit changes** twice (commit directly to `main`), and
+reload the Actions tab after a minute.
 
 The scheduled `watch-batches` stays off in a fork: GitHub keeps schedules off there. You do not need it here.
 
@@ -65,10 +72,10 @@ If you also have a login: **SP UI → Verification batches** shows the new Servi
 | What you see | What to do |
 |---|---|
 | No workflows in the Actions tab, or no **Run workflow** button | Actions are not enabled yet: step 3. |
-| Actions enabled, no banner, but "No workflows found" | GitHub has not registered the files yet. Make one small commit on your default branch that touches `.github/workflows/` (a comment line is enough) and wait a minute. |
+| Actions enabled, no banner, but "No workflows found" | GitHub has not registered the files yet. Make the one-space edit of step 3 and wait a minute. |
 | `Missing secrets: ...` | Add the secrets it names: step 2. Check the spelling, and add them as secrets, not variables. |
 | `The user of AOS_USER_PEM needs the permission deployment_bundles_create` | This certificate may not upload. Tell us. |
-| `already exists` in step 3 | Someone uploaded the same Service version at that moment. Run it again. |
+| demo-release is green, but verify-batch is red with `no longer Waiting_validation` | Someone pressed the button in another fork at the same moment and got the same Service version; AosCloud keeps the first upload. Run demo-release again. |
 | `TLS error` or `HTTP 401` or `HTTP 403` | A secret has a wrong value, or the demo user was removed. Paste it again, or tell us. |
 | `Unit ... is offline` and a timeout, red, no decision | The demo Unit is off, so the job rightly decides nothing. Tell us. |
 | `no longer Waiting_validation`, red | Another pipeline decided first, or someone decided in the UI. No harm is done. |
