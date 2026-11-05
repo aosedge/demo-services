@@ -18,8 +18,9 @@ It runs after `wait`, and takes no arguments. `./aos-verify run` and `./aos-veri
    | C3/C4 | the observation: every 60 s for `WATCH_SECONDS` (default 60, `0` = off), the Service version still runs on every Unit. It reads once every 60 s, and it does not measure memory |
 
 2. **Partner tests**, from `tests/your_tests.sh`, when the file exists.
-3. **The report**: `report/report.html` and `report/junit.xml`. In the job: the run page → **Artifacts** →
-   **verification-report**.
+3. **The report**: `report/report.html`, `report/report.md` and `report/junit.xml`, from the same results. In the job the
+   whole report is on the run page, as the job summary; `report.html` and `junit.xml` are under **Artifacts** →
+   **verification-report** at the bottom of that page.
 
 **Exit 0 approves the Service version. Exit 1 (a check failed) rejects it**, unless you changed that with
 [`AOS_DECISION`](../README.md#automatic-decision). After the decision the report says what was done. Exit 2 means a value is missing. Exit 3 means

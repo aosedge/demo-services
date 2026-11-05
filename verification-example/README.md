@@ -23,7 +23,8 @@ The calls: six GETs and one PATCH, see [API reference](docs/api.md).
 
 | Date | Where | What ran | Result |
 |---|---|---|---|
-| 05.11.2026 | GitHub | `demo-release`, pressed once: it uploaded 4.11.1 and started `verify-batch` (Start A) | Verified about 1.5 min after the upload, with no further step |
+| 06.11.2026 | GitHub | A fresh fork, only a browser: `demo-upload`, pressed once, uploaded 4.11.2 and started `verify-batch` | Verified, the `verify-batch` run took 1 min 22 s |
+| 05.11.2026 | GitHub | `demo-upload`, pressed once: it uploaded 4.11.1 and started `verify-batch` (Start A) | Verified about 1.5 min after the upload, with no further step |
 | 05.11.2026 | GitHub | Start B: the watch, started by hand, found 4.11.0 | Verified in 1 min 23 s |
 | 30.10.2026 | Terminal | The same three steps | Active on the test Unit in about 15 s, Verified |
 
@@ -35,7 +36,7 @@ Production AosCloud 6.1.97.
 - GitHub runs schedules on a best-effort basis; it has not yet started the watch in this repository. Use Start A as the main start.
 - AosCloud accepts a second decision on a decided batch. The job reads the state right before its one call; two pipelines on one Service are not locked against each other.
 - A test Unit that is offline means no decision: a person has to look.
-- Not yet run on GitHub: a reject, report-only, Start A through `workflow_call` (`demo-release` starts the job with a dispatch).
+- Not yet run on GitHub: a reject, report-only, Start A through `workflow_call` (`demo-upload` starts the job with a dispatch).
 - AosCloud versions: proven on 6.1.97; on 6.2.31 only `discover` ran.
 - The watch handles one Service per repository.
 
@@ -50,8 +51,8 @@ More on each: [FAQ, the watch](docs/faq.md#the-watch-timing-and-old-verification
 | ③④ | Service version installed, then reported | Verification Set Units | Installed, active or failed | SP UI: Unit → Subjects & Services |
 | ⓪ | Start A (main), or Start B: the watch asks every 5 min (fallback) | upload job, or `watch-batches.yml` | New Service version waiting? | Job log |
 | ⑤ | Wait | `verify-batch.yml` | test Units active | Job log |
-| ⑥ | Test | `verify-batch.yml` | Built-in checks + partner tests | `report.html` |
-| ⑦ | Decide | `verify-batch.yml` | `auto`: the job. `report-only`: a person | Job log; report |
+| ⑥ | Test | `verify-batch.yml` | Built-in checks + partner tests | The run page: the whole report |
+| ⑦ | Decide | `verify-batch.yml` | `auto`: the job. `report-only`: a person | The run page; job log |
 | – | Result | AosCloud | Verified / Invalid | SP UI: Verification batches |
 
 **Try it yourself, in a browser:** fork the repository, add 4 secrets, press one button. See [Run it yourself in 5 steps](https://github.com/aosedge/demo-services/blob/main/verification-example/TRY_IT.md).
@@ -80,7 +81,7 @@ Who has to act before the first run:
 | What | Who |
 |---|---|
 | Verification Set, test Units, Subject with your Service | OEM, once |
-| A CI user with 9 permissions and its certificate | SP admin, once |
+| A CI user with 9 permissions and its certificate | SP, once (a user who may create users) |
 | Actions enabled; environment `aos-verification` | GitHub organisation owner; repository admin |
 | Two workflow files, `verify_batch.py`, `tests/`, four secrets | You |
 
@@ -92,7 +93,7 @@ Who has to act before the first run:
    cp -R verify_batch.py tests /path/to/your-repo/
    ```
 
-   Demo only, not for your repository: `.github/workflows/demo-release.yml`, `demo-service/`, `TRY_IT.md`.
+   Demo only, not for your repository: `.github/workflows/demo-upload.yml`, `demo-service/`, `TRY_IT.md`.
 
 2. **Add the secrets.** One helper prints exactly what to paste. It makes the PEM from your `.p12`, finds the root CA and
    your Service (the first time it asks, as `setup` does), and never prints the key:
@@ -136,7 +137,7 @@ GitHub Actions must be enabled for the repository. Organisation owners can switc
 4. **A CI user for the job**: an SP user of its own, so that its certificate can be revoked alone. It needs these
    permissions: `verification_batch_list`, `verification_batch_read`, `verification_batch_statistics`,
    `verification_batch_approval`, `services_units_list`, `units_read`, `units_subjects_services_read`, `users_me`,
-   `user_certificates_create`. Add `deployment_bundles_create` only if the same user uploads, as `demo-release` does.
+   `user_certificates_create`. Add `deployment_bundles_create` only if the same user uploads, as `demo-upload` does.
    `POST users/` also gives it the group `sp_management`; take it away with `PATCH users/{id}/ {"permission_groups": []}`.
 
 ### B. Verification configured (OEM)
@@ -227,9 +228,13 @@ reached or a test Unit was offline; the job decides nothing. Only a lost connect
 The built-in checks run first: they read the Verification batch and the Units again (exactly this Service version, on every Unit, no crash) and
 observe the Service version for 60 s (late failure, restarts). Then partner tests, from `tests/your_tests.sh` when you add it
 ([Partner tests](docs/tests.md)), in a step of their own, with no secret. Exit 0 when every check passed, 1 when a check
-failed, 3 when AosCloud could not be read or a test Unit is offline: neither decides anything. It writes `report/report.html` and
-`report/junit.xml`; the job keeps them, with the decision written into the report: open the run page → **Artifacts** →
-**verification-report**.
+failed, 3 when AosCloud could not be read or a test Unit is offline: neither decides anything. It writes `report/report.html`,
+`report/report.md` and `report/junit.xml`, from the same results.
+
+The whole report is on the run page, as the job summary, with the decision in it: the verdict, the Service, the Service
+version, the Verification batch, the test Units, every check, the partner tests and the scenarios covered. Nothing to
+download. `report.html` and `junit.xml` are under **Artifacts** → **verification-report** at the bottom of the run page.
+When nothing ran (a timeout, no Verification batch), the summary says "No decision" and why.
 
 ### 7. Decide: `verify_batch.py decide --approve` or `--reject`
 
@@ -271,7 +276,7 @@ wins over that for one run, and `./aos-verify run --yes` is the short form of `a
 
 With `report-only` the job is still green or red: green when all checks pass, red when one fails.
 
-The mode in use is on the first line of `./aos-verify run`, on the first line of the GitHub job summary, and in the header of the report.
+The mode in use is on the first line of `./aos-verify run` and in the header of the report, which is also the GitHub job summary.
 
 ## The watch (Start B)
 

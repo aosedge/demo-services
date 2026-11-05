@@ -4,15 +4,15 @@
 # never picks a version like this.
 # Reads the highest Service version in AosCloud, builds the next one (patch + 1) of the demo Service, signs it, uploads
 # it, and starts verify-batch for it. The decision is made in that verify-batch run.
-name: demo-release (demo only)
-run-name: demo-release (demo only)
+name: demo-upload (demo only)
+run-name: demo-upload (demo only)
 
 on:
   workflow_dispatch:
 
 # One at a time in this repository: a second press waits, and then takes the next free version.
 concurrency:
-  group: demo-release
+  group: demo-upload
   cancel-in-progress: false
 
 permissions:
@@ -20,8 +20,8 @@ permissions:
   contents: read
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  upload:
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     # In a fork the repository secrets are enough: GitHub creates this empty environment on the first run.
     environment: aos-verification
@@ -29,59 +29,66 @@ jobs:
       run:
         working-directory: verification-example
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      # A value pasted into GitHub often ends with a new line or a space: a Service id with one broke the sed of step b.
+      # Trimmed once, here: the API URL and the Service id go to the next steps, the root CA to a file. The key never
+      # goes in the env: each step trims it as it writes it.
+      - name: Check and trim the secrets
+        env:
+          PASTED_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
+          PASTED_SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
+          USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          ROOT_CA: ${{ secrets.AOS_ROOT_CA_PEM }}
+        run: |
+          api_url=$(printf '%s' "$PASTED_URL" | tr -d '[:space:]')
+          service_id=$(printf '%s' "$PASTED_SERVICE_ID" | tr -d '[:space:]')
+          missing=
+          if [ -z "$USER_PEM" ]; then missing="$missing AOS_USER_PEM"; fi
+          if [ -z "$ROOT_CA" ]; then missing="$missing AOS_ROOT_CA_PEM"; fi
+          if [ -z "$service_id" ]; then missing="$missing AOS_SERVICE_ID"; fi
+          if [ -z "$api_url" ]; then missing="$missing AOS_API_URL"; fi
+          if [ -n "$missing" ]; then
+            echo "::error::Missing secrets:$missing. Add them in Settings, Secrets and variables, Actions (see TRY_IT.md)"
+            exit 1
+          fi
+          echo "::add-mask::$service_id"
+          { echo "AOS_API_URL=$api_url"; echo "SERVICE_ID=$service_id"; } >> "$GITHUB_ENV"
+          dir="$RUNNER_TEMP/aos" && mkdir -p "$dir" && chmod 700 "$dir"
+          printf '%s\n' "$ROOT_CA" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > "$dir/aos-root-ca.crt"
+          echo "AOS_CA=$dir/aos-root-ca.crt" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
       - name: Install requests and aos-signer
         run: python -m pip install requests==2.32.3 aos-signer==2.0.2
 
-      - name: Check the secrets
-        env:
-          AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
-          AOS_SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
-          AOS_USER_PEM: ${{ secrets.AOS_USER_PEM }}
-          AOS_ROOT_CA_PEM: ${{ secrets.AOS_ROOT_CA_PEM }}
-        run: |
-          missing=
-          for name in AOS_USER_PEM AOS_ROOT_CA_PEM AOS_SERVICE_ID AOS_API_URL; do
-            if [ -z "${!name}" ]; then missing="$missing $name"; fi
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::Missing secrets:$missing. Add them in Settings, Secrets and variables, Actions (see TRY_IT.md)"
-            exit 1
-          fi
-
       # The private key exists only while a step needs it: each step writes it and deletes it when it ends.
       - name: a. Read the next free Service version
         id: next
         env:
-          AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
-          SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
-          ROOT_CA: ${{ secrets.AOS_ROOT_CA_PEM }}
         run: |
-          dir="$RUNNER_TEMP/aos" && mkdir -p "$dir" && chmod 700 "$dir"
+          dir="$RUNNER_TEMP/aos"
           trap 'rm -f "$dir/user.pem"' EXIT
-          (umask 077 && printf '%s\n' "$USER_PEM" > "$dir/user.pem" && printf '%s\n' "$ROOT_CA" > "$dir/aos-root-ca.crt")
-          export AOS_CERT="$dir/user.pem" AOS_CA="$dir/aos-root-ca.crt"
+          (umask 077 && printf '%s\n' "$USER_PEM" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > "$dir/user.pem")
+          export AOS_CERT="$dir/user.pem"
           version=$(python verify_batch.py next-version --service-id "$SERVICE_ID")
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       # aos-signer prints the user name of the certificate, an e-mail address: its output never reaches the log as it is.
       - name: b. Build and sign the demo Service
         env:
-          SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
           VERSION: ${{ steps.next.outputs.version }}
         run: |
           dir="$RUNNER_TEMP/aos"
           trap 'rm -f "$dir/user.pem" "$dir/user.p12"' EXIT
-          (umask 077 && printf '%s\n' "$USER_PEM" > "$dir/user.pem")
+          (umask 077 && printf '%s\n' "$USER_PEM" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > "$dir/user.pem")
           openssl pkcs12 -export -in "$dir/user.pem" -out "$dir/user.p12" -passout pass:
           cp -R demo-service "$dir/bundle"
           sed -i -e "s|__AOS_SERVICE_ID__|$SERVICE_ID|" -e "s|__DEMO_VERSION__|$VERSION|" "$dir/bundle/config.yaml"
@@ -104,7 +111,7 @@ jobs:
         run: |
           dir="$RUNNER_TEMP/aos"
           trap 'rm -f "$dir/user.pem" "$dir/user.p12"' EXIT
-          (umask 077 && printf '%s\n' "$USER_PEM" > "$dir/user.pem")
+          (umask 077 && printf '%s\n' "$USER_PEM" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > "$dir/user.pem")
           openssl pkcs12 -export -in "$dir/user.pem" -out "$dir/user.p12" -passout pass:
           cd "$dir/bundle"
           set +e

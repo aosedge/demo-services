@@ -18,7 +18,7 @@ source .venv/bin/activate && source .aos-verify.env && source .aos-verify/state
 
 | # | Scenario | What can go wrong | Covered by | Row in the report | Result on production |
 |---|---|---|---|---|---|
-| ⓪ | Found automatically (discover) | nobody starts the job, or it starts on an old Verification batch | `discover`: the highest Service version, Units from the Verification Set | Scenarios covered: batch …, Service version …, Units from the Verification Set | read-only on production and on staging, 04.11: right batch, stale ones left alone. The scheduled watch ran only against a mock so far |
+| ⓪ | Found automatically (discover) | nobody starts the job, or it starts on an old Verification batch | `discover`: the highest Service version, Units from the Verification Set | Scenarios covered: batch …, Service version …, Units from the Verification Set | read-only on production and on staging, 04.11: right batch, stale ones left alone. On GitHub, 05.11: the watch, started by hand, found 4.11.0 and started verify-batch; demo-upload started verify-batch on 05.11 (4.11.1) and 06.11 (4.11.2). GitHub has not yet run the watch on its schedule in this repository |
 | A1 | Exactly this Service and Service version | a decision on the wrong batch | `wait`, then the built-in checks read it again | Built-in checks: A1 | seen on production, 30.10: the batch of the uploaded Service version found |
 | A2 | Upload processed | the bundle is refused, and nobody notices | `aos-signer upload` output; SP UI Deployment bundles; `wait` says `no Verification batch yet` | Scenarios covered: Checked now | Done: seen on production, 30.10; Error with the reason: seen on production, 28.10 |
 | A3 | Same Service version uploaded again | a decision on an old Service version | `wait`: no batch, exit 2, nothing decided | Scenarios covered: Covered by the waiting logic | seen on production, 28.10 |
@@ -94,8 +94,8 @@ and `wait` does not touch it.
 
 **What it checks.** You can show later what was checked and who approved.
 
-**How.** `tests/run_tests.sh` writes `report/report.html` and `report/junit.xml`; the job keeps them as the artifact
-**verification-report**. The job log holds the Verification batch id, the Unit states and the decision. The batch keeps its state
+**How.** `tests/run_tests.sh` writes `report/report.html` and `report/junit.xml`; the job shows the whole report on the run
+page and keeps the files as the artifact **verification-report**. The job log holds the Verification batch id, the Unit states and the decision. The batch keeps its state
 in the UI (SP → Verification batches). GitHub deletes artifacts and logs after the retention period of your
 repository (Settings → Actions → General): keep a copy if you need it longer.
 

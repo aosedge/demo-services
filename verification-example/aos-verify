@@ -43,6 +43,8 @@ E
 }
 
 say() { printf '%s\n' "$*"; }
+# A value as pasted: no space, tab or new line at all (ids and URLs have none inside).
+trim() { printf '%s' "$1" | tr -d '[:space:]'; }
 short() { printf '…%s' "${1: -4}"; }
 
 # One clear line, and the one command that fixes it.
@@ -256,8 +258,9 @@ ask_url() {
   if [ -z "$API_URL" ]; then
     printf 'AosCloud API URL [%s]: ' "$PROD_URL"
     IFS= read -r API_URL || API_URL=''
-    API_URL=${API_URL:-$PROD_URL}
   fi
+  API_URL=$(trim "$API_URL")
+  API_URL=${API_URL:-$PROD_URL}
   case "$API_URL" in
     https://*) ;;
     *) fail "the API URL must start with https://, not '$API_URL'" "$SETUP --api-url $PROD_URL" ;;
@@ -385,6 +388,7 @@ cmd_setup() {
       *) fail "unknown option: $1" './aos-verify help' ;;
     esac
   done
+  SERVICE_WANTED=$(trim "$SERVICE_WANTED")
   check_tools
   mkdir -p "$DIR" && chmod 700 "$DIR"
   make_venv
@@ -427,7 +431,8 @@ load() {
   local from_environment=${AOS_DECISION:-}
   # shellcheck disable=SC1090
   . "./$ENV_FILE"
-  DECISION=${from_environment:-${AOS_DECISION:-ask}}
+  AOS_API_URL=$(trim "${AOS_API_URL:-}") SERVICE_ID=$(trim "${SERVICE_ID:-}")
+  DECISION=$(trim "${from_environment:-${AOS_DECISION:-ask}}")
   check_decision "$DECISION"
   if [ ! -f "$AOS_CERT" ] || [ ! -f "$AOS_CA" ]; then fail 'the certificate files are missing' "$SETUP"; fi
 }

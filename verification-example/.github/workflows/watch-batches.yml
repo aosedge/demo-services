@@ -29,7 +29,7 @@ jobs:
   # In a fork a scheduled run always stops here: a fork with the secrets would verify the uploads of the repository
   # it came from.
   switch:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       paused: ${{ steps.switch.outputs.paused }}
     steps:
@@ -55,14 +55,40 @@ jobs:
   watch:
     needs: switch
     if: needs.switch.outputs.paused != 'yes'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     # the secrets live in this environment; required reviewers on it would stop every run of this job (see the FAQ)
     environment: aos-verification
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      # A value pasted into GitHub often ends with a new line or a space. Trimmed once, here: the API URL and the Service
+      # id go to the next steps, the root CA to a file. The key never goes in the env: step 0 trims it as it writes it.
+      - name: Check and trim the secrets
+        env:
+          PASTED_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
+          PASTED_SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
+          USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          ROOT_CA: ${{ secrets.AOS_ROOT_CA_PEM }}
+        run: |
+          api_url=$(printf '%s' "$PASTED_URL" | tr -d '[:space:]')
+          service_id=$(printf '%s' "$PASTED_SERVICE_ID" | tr -d '[:space:]')
+          missing=
+          if [ -z "$USER_PEM" ]; then missing="$missing AOS_USER_PEM"; fi
+          if [ -z "$ROOT_CA" ]; then missing="$missing AOS_ROOT_CA_PEM"; fi
+          if [ -z "$service_id" ]; then missing="$missing AOS_SERVICE_ID"; fi
+          if [ -z "$api_url" ]; then missing="$missing AOS_API_URL"; fi
+          if [ -n "$missing" ]; then
+            echo "::error::Empty:$missing. Put them in the environment aos-verification (see the README, Parameters)"
+            exit 1
+          fi
+          echo "::add-mask::$service_id"
+          { echo "AOS_API_URL=$api_url"; echo "SERVICE_ID=$service_id"; } >> "$GITHUB_ENV"
+          dir="$RUNNER_TEMP/aos" && mkdir -p "$dir" && chmod 700 "$dir"
+          printf '%s\n' "$ROOT_CA" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > "$dir/aos-root-ca.crt"
+          echo "AOS_CA=$dir/aos-root-ca.crt" >> "$GITHUB_ENV"
 
       - name: Say why it asks on a schedule
         run: |
@@ -70,7 +96,7 @@ jobs:
           Why every 5 minutes? AosCloud does not notify a pipeline when a new Service version waits (no webhook), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub may start runs late or skip them; for a guaranteed start use Start A. Each run takes about 20 s and only reads. To change it, edit one line in `watch-batches.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-batch` right after your upload job (Start A), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
           SUMMARY
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -81,24 +107,17 @@ jobs:
       - name: 0. Ask AosCloud for a waiting Verification batch
         id: discover
         env:
-          AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
-          SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
           TEST_UNITS: ${{ vars.AOS_TEST_UNITS }}
           USER_PEM: ${{ secrets.AOS_USER_PEM }}
-          ROOT_CA: ${{ secrets.AOS_ROOT_CA_PEM }}
         run: |
-          if [ -z "$USER_PEM" ] || [ -z "$ROOT_CA" ] || [ -z "$SERVICE_ID" ]; then
-            echo "::error::AOS_USER_PEM, AOS_ROOT_CA_PEM or AOS_SERVICE_ID is empty: put them in the environment aos-verification"
-            exit 1
-          fi
           units=()
           set -f
           for unit in $TEST_UNITS; do units+=(--unit "$unit"); done
           set +f
-          dir="$RUNNER_TEMP/aos" && mkdir -p "$dir" && chmod 700 "$dir"
+          dir="$RUNNER_TEMP/aos"
           trap 'rm -rf "$dir"' EXIT
-          (umask 077 && printf '%s\n' "$USER_PEM" > "$dir/user.pem" && printf '%s\n' "$ROOT_CA" > "$dir/aos-root-ca.crt")
-          export AOS_CERT="$dir/user.pem" AOS_CA="$dir/aos-root-ca.crt"
+          (umask 077 && printf '%s\n' "$USER_PEM" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' > "$dir/user.pem")
+          export AOS_CERT="$dir/user.pem"
           python verify_batch.py discover "${units[@]}"
 
       # No key here. A run with this batch in its title, in any state, means the batch was handled: a run that

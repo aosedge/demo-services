@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) 2018-2026 EPAM Systems Inc.
 # SPDX-License-Identifier: Apache-2.0
-"""Write report.html and junit.xml from the results that tests/run_tests.sh collected.
+"""Write report.html, report.md and junit.xml from the results that tests/run_tests.sh collected.
 
     python tests/report.py --results report/results.tsv --out report --service-id ID --version X.Y.Z
                            --batch-id ID --units "UNIT_ID ..." --observe SECONDS
@@ -160,36 +160,99 @@ def your_tests_section(yours: list[dict]) -> str:
     return table(yours, False)
 
 
-def render(args, rows: list[dict], when: str, decided: dict | None = None) -> str:
+def verdict(rows: list[dict], decided: dict | None = None) -> tuple[str, str]:
+    """The big line of the report, and its colour: the verdict of the checks, then what was done with it."""
     failed = any(r['result'] == 'FAIL' for r in rows)
     unread = any(r['result'] == 'ERROR' for r in rows)
-    if failed or (not unread and not any(r['result'] == 'PASS' for r in rows)):
-        verdict, tone = 'FAIL → reject', 'fail'
-    elif unread:
-        verdict, tone = 'AosCloud unreadable or a Unit offline → no decision', 'none'
-    else:
-        verdict, tone = 'PASS → approve', 'pass'
-    builtin = [r for r in rows if r['part'] == 'builtin']
-    yours = [r for r in rows if r['part'] == 'yours']
-    status, how = found_how(args.found_by)
-    found = (status, f'{how}: Verification batch {short(args.batch_id)}, Service version {args.version}, Units from {args.units_from}')
-    cover = coverage(rows, args.observe, found)
-    scenario_rows = ''.join(f'<tr><td>{code}</td><td>{html.escape(name)}</td>'
-                            f'<td><span class="s {STATUS_CLASS[cover[code][0]]}">{html.escape(cover[code][0])}</span></td>'
-                            f'<td>{html.escape(cover[code][1])}</td><td>{html.escape(CHANGE_IT.get(code, "—"))}</td></tr>'
-                            for code, name in SCENARIOS)
-    groups = ' · '.join(f'<b>{letter}</b> = {html.escape(name)}' for letter, name in GROUPS)
-    badges = [('PASS', 'checked, good'), ('FAIL', 'checked, bad, leads to reject'), ('SKIP', 'not run')]
-    if unread:
-        badges.append(('ERROR', 'AosCloud could not be read: no decision'))
-    legend = ' · '.join(f'{badge(name)} = {html.escape(text)}' for name, text in badges)
+    if unread and not failed:
+        return 'AosCloud unreadable or a Unit offline → no decision', 'none'
+    ok = not failed and any(r['result'] == 'PASS' for r in rows)
+    checks, tone = ('PASS → approve', 'pass') if ok else ('FAIL → reject', 'fail')
+    kind, state = (decided or {}).get('decision'), (decided or {}).get('state')
+    now = f', now {STATE_NAMES.get(state, state)}' if state else ''
+    if kind == 'approved':
+        return f"{checks.split(' ')[0]} → approved{now}", tone
+    if kind == 'rejected':
+        return f"{checks.split(' ')[0]} → rejected{now}", tone
+    if kind == 'report-only':
+        return f'{checks}; report-only: not sent', tone
+    if kind == 'unknown':
+        return f'{checks}; sent, the answer was lost', tone
+    if kind == 'not-sent':
+        return f'{checks}; not sent', tone
+    return checks, tone
+
+
+def facts_of(args, when: str) -> list[tuple[str, str]]:
     units = ', '.join(short(u) for u in args.units.split()) or '-'
     name = getattr(args, 'service_name', '')
     service = f'{name} ({short(args.service_id)})' if name else short(args.service_id)
     facts = [('Service', service), ('Service version', args.version), ('Verification batch', short(args.batch_id))]
     if getattr(args, 'decision_mode', ''):
         facts.append(('Decision mode', args.decision_mode))
-    facts += [('Verification Set Units', units), ('Report time', when)]
+    return facts + [('Verification Set Units', units), ('Report time', when)]
+
+
+def cover_of(args, rows: list[dict]) -> dict[str, tuple[str, str]]:
+    status, how = found_how(args.found_by)
+    found = (status, f'{how}: Verification batch {short(args.batch_id)}, Service version {args.version}, Units from {args.units_from}')
+    return coverage(rows, args.observe, found)
+
+
+def md(text: str, cell: bool = True) -> str:
+    """One line of Markdown, or a table cell (its pipes escaped): no HTML, no line break."""
+    line = html.escape(' '.join(str(text).split()), quote=False)
+    return line.replace('|', '\\|') if cell else line
+
+
+ARTIFACTS = 'Full report.html and junit.xml: Artifacts at the bottom of this page'
+
+
+def render_md(args, rows: list[dict], when: str, decided: dict | None = None) -> str:
+    """The same report as report.html, in Markdown: the job summary of verify-batch."""
+    big, _ = verdict(rows, decided)
+    mark = {'PASS': '✅ ', 'FAIL': '❌ '}.get(big.split(' ', 1)[0], '')
+    lines = ['### Verification report', '', f'# {mark}{md(big, False)}', '', f'**{md(summary(rows), False)}**', '',
+             md(decision_line(decided), False), '', '| What | Value |', '|---|---|']
+    lines += [f'| {k} | {md(v)} |' for k, v in facts_of(args, when)]
+    table_md = lambda part, with_code: ([('| # ' if with_code else '') + '| Check | Result | Detail |',  # pylint: disable=unnecessary-lambda-assignment
+                                          ('|---' if with_code else '') + '|---|---|---|']
+                                         + [(f"| {md(r['code'])} " if with_code else '') + f"| {md(r['name'])} | **{md(r['result'])}** | {md(r['detail'])} |"
+                                            for r in rows if r['part'] == part])
+    lines += ['', '### Built-in checks', '', ' · '.join(f'**{letter}** = {name}' for letter, name in GROUPS), '']
+    lines += table_md('builtin', True)
+    lines += ['', 'PASS = checked, good · FAIL = checked, bad, leads to reject · SKIP = not run'
+              + (' · ERROR = AosCloud could not be read: no decision' if any(r['result'] == 'ERROR' for r in rows) else '')]
+    lines += ['', '### Partner tests', '']
+    yours = [r for r in rows if r['part'] == 'yours']
+    if all(r['result'] == 'SKIP' and r['detail'] == NO_TESTS_YET for r in yours):
+        lines += ['> **No partner tests yet: add tests/your_tests.sh** (start from tests/your_tests.sh.example): they run after '
+                  'the built-in checks. If any check or test fails, the verdict is reject; in auto mode the job sends it, in '
+                  'report-only a person decides.']
+    else:
+        lines += table_md('yours', False)
+    cover = cover_of(args, rows)
+    lines += ['', '### Scenarios covered', '', '| # | Scenario | Status | In this run | You can change it |', '|---|---|---|---|---|']
+    lines += [f'| {code} | {md(name)} | {md(cover[code][0])} | {md(cover[code][1])} | {md(CHANGE_IT.get(code, "—"))} |'
+              for code, name in SCENARIOS]
+    return '\n'.join(lines + ['', ARTIFACTS, ''])
+
+
+def render(args, rows: list[dict], when: str, decided: dict | None = None) -> str:
+    big, tone = verdict(rows, decided)
+    builtin = [r for r in rows if r['part'] == 'builtin']
+    yours = [r for r in rows if r['part'] == 'yours']
+    cover = cover_of(args, rows)
+    scenario_rows = ''.join(f'<tr><td>{code}</td><td>{html.escape(name)}</td>'
+                            f'<td><span class="s {STATUS_CLASS[cover[code][0]]}">{html.escape(cover[code][0])}</span></td>'
+                            f'<td>{html.escape(cover[code][1])}</td><td>{html.escape(CHANGE_IT.get(code, "—"))}</td></tr>'
+                            for code, name in SCENARIOS)
+    groups = ' · '.join(f'<b>{letter}</b> = {html.escape(name)}' for letter, name in GROUPS)
+    badges = [('PASS', 'checked, good'), ('FAIL', 'checked, bad, leads to reject'), ('SKIP', 'not run')]
+    if any(r['result'] == 'ERROR' for r in rows):
+        badges.append(('ERROR', 'AosCloud could not be read: no decision'))
+    legend = ' · '.join(f'{badge(name)} = {html.escape(text)}' for name, text in badges)
+    facts = facts_of(args, when)
     return f'''<!doctype html>
 <html lang="en">
 <head>
@@ -228,7 +291,7 @@ th{{background:var(--pale);color:var(--navy)}}
 <header><b>Aos</b>Edge · Verify a new Service version</header>
 <main>
 <h1>Verification report</h1>
-<div class="verdict {tone}">{verdict}</div>
+<div class="verdict {tone}">{html.escape(big)}</div>
 <p class="summary">{html.escape(summary(rows))}</p>
 <p class="decision">{html.escape(decision_line(decided))}</p>
 <div class="facts">{''.join(f'<div><span>{k}</span>{html.escape(v)}</div>' for k, v in facts)}</div>
@@ -285,6 +348,7 @@ def write_decision(args) -> int:
                                                      'units_from')}, decision_mode=meta.get('decision_mode', ''),
                              service_name=meta.get('service_name', ''))
     (args.out / 'report.html').write_text(render(report, meta['rows'], meta['when'], decided), encoding='utf-8')
+    (args.out / 'report.md').write_text(render_md(report, meta['rows'], meta['when'], decided), encoding='utf-8')
     print(f'report: {args.out / "report.html"} (with the decision)')
     return 0
 
@@ -315,6 +379,7 @@ def main(argv: list[str] | None = None) -> int:
     when = stamp(now)
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / 'report.html').write_text(render(args, rows, when), encoding='utf-8')
+    (args.out / 'report.md').write_text(render_md(args, rows, when), encoding='utf-8')
     (args.out / 'junit.xml').write_text(junit(args, rows, now.strftime('%Y-%m-%d %H:%M')), encoding='utf-8')
     # What the decision needs to render this report again, with the ids shortened: the folder is kept as an artifact.
     meta = {'service_id': short(args.service_id), 'version': args.version, 'batch_id': short(args.batch_id),
