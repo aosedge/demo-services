@@ -27,9 +27,9 @@ on:
         type: string
         required: false
     secrets:
-      # not required here: they come from the environment aos-verification (see the README, Parameters)
+      # not required here: they come from the environment aos-verification (see docs/setup.md, Parameters)
       # AOS_USER_PEM: one PEM file with the SP user certificate, the intermediate certificates and the key
-      # (openssl pkcs12 -in aos-user-sp.p12 -nodes -out user.pem; without -clcerts, see the README)
+      # (openssl pkcs12 -in aos-user-sp.p12 -nodes -out user.pem; without -clcerts, see docs/faq.md, unknown ca)
       AOS_USER_PEM:
         required: false
       AOS_ROOT_CA_PEM:
@@ -108,7 +108,7 @@ jobs:
           if [ -z "$service_id" ]; then missing="$missing AOS_SERVICE_ID"; fi
           if [ -z "$api_url" ]; then missing="$missing AOS_API_URL"; fi
           if [ -n "$missing" ]; then
-            echo "::error::Empty:$missing. Put them in the environment aos-verification (see the README, Parameters)"
+            echo "::error::Empty:$missing. Put them in the environment aos-verification (see docs/setup.md, Parameters)"
             exit 1
           fi
           echo "::add-mask::$service_id"

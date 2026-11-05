@@ -48,7 +48,7 @@ other forks do not get it.
 
 Using your own AosCloud account instead? Put your own values in the same 4 secrets. Then skip demo-upload (it builds our
 demo Service) and upload your own Service version as you do today; verify-batch and the watch work with your Service
-unchanged. See [Set it up in GitHub](README.md#set-it-up-in-github).
+unchanged. See [Setup](docs/setup.md).
 
 ## 3. Turn on Actions
 

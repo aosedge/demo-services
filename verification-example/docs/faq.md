@@ -1,7 +1,19 @@
 # FAQ and tips
 
-Short answers for running the verification job day to day. For the setup, see the [README](../README.md); for the
+Short answers for running the verification job day to day. For the setup, see [Setup](setup.md); for the
 calls, see the [API reference](api.md).
+
+## Limits
+
+- AosCloud has no webhook, so the job is started by your upload job (Start A) or asks on a schedule (Start B).
+- GitHub runs schedules on a best-effort basis; it has not yet started the watch in this repository. Use Start A as the main start.
+- AosCloud accepts a second decision on a decided batch. The job reads the state right before its one call; two pipelines on one Service are not locked against each other.
+- A test Unit that is offline means no decision: a person has to look.
+- Not yet run on GitHub: a reject, report-only, Start A through `workflow_call` (`demo-upload` starts the job with a dispatch).
+- AosCloud versions: proven on 6.1.97; on 6.2.31 only `discover` ran.
+- The watch handles one Service per repository.
+
+More on each below, in [the watch](#the-watch-timing-and-old-verification-batches). Where it ran: [How it works, Tested on AosCloud](how-it-works.md#tested-on-aoscloud).
 
 ## Before you start
 
@@ -21,7 +33,7 @@ The Service Provider, with the SP certificate.
 count, even if AosCloud still shows the new Service version active: that state is old. The Verification batch keeps waiting, with no time
 limit. Check that the
 Unit is online, in the Verification Set, and linked to the Service through the Subject
-([README, prerequisite B](../README.md#b-verification-configured-oem)). Then run the job again with
+([Setup, prerequisite B](setup.md#b-verification-configured-oem)). Then run the job again with
 `workflow_dispatch`, with the same Service version. The watch does not start a batch a second time.
 
 **Valid or Verified?**
@@ -40,7 +52,7 @@ it then goes on to the fleet through your normal rollout. A batch that waits is 
 
 **Can a person decide, and not the pipeline?**
 Yes: set `AOS_DECISION` to `report-only`. The job writes the report and sends nothing. See
-[Automatic decision](../README.md#automatic-decision).
+[Decision modes](how-it-works.md#decision-modes).
 
 ## The watch: timing and old Verification batches
 
@@ -171,10 +183,10 @@ secret and no key file. Delete local copies of the PEM (`.aos-verify/user.pem`) 
 **The certificate leaked.**
 Delete the CI user, not only the certificate. Six permissions cannot be removed from an SP user, among them
 `user_certificates_download` and `users_new_token`, so whoever holds the certificate may already hold another way in.
-Then create a new user with the permissions the job needs ([README, prerequisite A](../README.md#a-a-service-that-your-pipeline-already-deploys-sp)), and store its PEM as the secret. Look at the batches decided
+Then create a new user with the permissions the job needs ([Setup, prerequisite A](setup.md#a-a-service-that-your-pipeline-already-deploys-sp)), and store its PEM as the secret. Look at the batches decided
 since the leak in SP UI → Verification batches.
 
 **What to hide in screenshots and videos?**
 `aos-signer` prints your e-mail on upload (`Upload info: user=…`). That line is not from this example: mask it.
 
-**Next →** back to the start: [How to use this repository](../README.md#how-to-use-this-repository)
+**Next →** [Run it from a terminal](run-locally.md) · back to the [README](../README.md#read-more)

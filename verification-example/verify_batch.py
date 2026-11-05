@@ -222,7 +222,7 @@ def units_of_batch(batch_id: str, service_id: str, given: list[str]) -> tuple[li
     if bare or not units:
         return units, (f"Verification batch {short(batch_id)}: no Verification Set Unit for {', '.join(bare) or 'any architecture'}: the batch "
                        f'cannot be verified. Check the Verification Set and the Subject of the Service '
-                       f'(README, prerequisite B)')
+                       f'(docs/setup.md, prerequisite B)')
     return units, None
 
 
@@ -294,7 +294,7 @@ def check(args) -> int:
         online = 'online' if is_online(unit) else 'OFFLINE, what follows is old'
         print(f'Unit {short(unit)}: {online}; installed {installed or "nothing"}; instances: {states}')
     if not units:
-        print('no Unit has this Service yet: check the Subject of the Service (README, prerequisite B)')
+        print('no Unit has this Service yet: check the Subject of the Service (docs/setup.md, prerequisite B)')
     return 0
 
 
@@ -342,7 +342,7 @@ def status(args) -> int:
 
 
 def discover(args) -> int:
-    """Step 0: is there a new version to verify? Reads only. Writes GITHUB_OUTPUT unless --dry-run."""
+    """Step 4, Start B: is there a new version to verify? Reads only. Writes GITHUB_OUTPUT unless --dry-run."""
     if not args.service_id:
         raise Stop('no Service id: pass --service-id or export SERVICE_ID')
     given = checked_ids(args.unit)
