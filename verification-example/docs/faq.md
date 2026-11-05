@@ -45,7 +45,7 @@ Yes: set `AOS_DECISION` to `report-only`. The job writes the report and sends no
 ## The watch: timing and old Verification batches
 
 **Why every 5 minutes?**
-AosCloud does not notify a pipeline when a new Service version waits (no webhook), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub may start runs late or skip them; for a guaranteed start use Start A. Each run takes about 20 s and only reads. To change it, edit one line in `watch-batches.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-batch` right after your upload job (Start A, the chain), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
+AosCloud does not notify a pipeline when a new Service version waits (no webhook), so the watch asks every 5 minutes. 5 minutes is the shortest interval GitHub allows. GitHub may start runs late or skip them; for a guaranteed start use Start A. Each run takes about 20 s and only reads. To change it, edit one line in `watch-batches.yml`: `cron: "*/5 * * * *"` → `"*/10 * * * *"` (every 10 min), `"*/30 * * * *"`, `"0 * * * *"` (hourly). GitHub cannot read this from a variable. Faster than 5 min, or exact timing: start `verify-batch` right after your upload job (Start A), or use an external scheduler. A webhook from AosCloud would make it instant (feature request).
 
 The chain is in [`examples/release-caller.yml`](../examples/release-caller.yml).
 
@@ -80,10 +80,7 @@ asks during a chained run, the two queue, one after the other. The second finds 
 **Two pipelines on one Service: pause one.**
 Both would verify the same Verification batch, and each would send its decision. Set the repository variable `AOS_WATCH`
 to `off` in the repository you want to pause: its scheduled watch stops at once with `watch paused`, with no call to
-AosCloud. Not set or `on`, it runs. A run you start by hand still goes on. A fork does not need this: GitHub keeps
-schedules off in a fork until you turn them on.
-
-The scheduled watch is paused in this repository while the try-it kit is out; use demo-release.
+AosCloud. Not set or `on`, it runs. A run you start by hand still goes on.
 
 **Can a decision be overwritten?**
 AosCloud accepts a decision on a batch that is already decided, and the last one wins. The job reads the state right
@@ -174,7 +171,7 @@ secret and no key file. Delete local copies of the PEM (`.aos-verify/user.pem`) 
 **The certificate leaked.**
 Delete the CI user, not only the certificate. Six permissions cannot be removed from an SP user, among them
 `user_certificates_download` and `users_new_token`, so whoever holds the certificate may already hold another way in.
-Then create a new user with the permissions the job needs, and store its PEM as the secret. Look at the batches decided
+Then create a new user with the permissions the job needs ([README, Prerequisites 1](../README.md#1-a-service-that-your-pipeline-already-deploys-sp)), and store its PEM as the secret. Look at the batches decided
 since the leak in SP UI → Verification batches.
 
 **What to hide in screenshots and videos?**
