@@ -1,0 +1,147 @@
+# DEMO ONLY, to try the flow from a fork with one button (TRY_IT.md). A real pipeline uploads from its own build and
+# never picks a version like this.
+# Reads the highest Service version in AosCloud, builds the next one (patch + 1) of the demo Service, signs it, uploads
+# it, and starts verify-batch for it. The decision is made in that verify-batch run.
+name: demo-release (demo only)
+run-name: demo-release (demo only)
+
+on:
+  workflow_dispatch:
+
+# One at a time in this repository: a second press waits, and then takes the next free version.
+concurrency:
+  group: demo-release
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # In a fork the repository secrets are enough: GitHub creates this empty environment on the first run.
+    environment: aos-verification
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install requests and aos-signer
+        run: python -m pip install requests==2.32.3 aos-signer==2.0.2
+
+      - name: Check the secrets
+        env:
+          AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
+          AOS_SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
+          AOS_USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          AOS_ROOT_CA_PEM: ${{ secrets.AOS_ROOT_CA_PEM }}
+        run: |
+          missing=
+          for name in AOS_USER_PEM AOS_ROOT_CA_PEM AOS_SERVICE_ID AOS_API_URL; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing secrets:$missing. Add them in Settings, Secrets and variables, Actions (see TRY_IT.md)"
+            exit 1
+          fi
+
+      # The private key exists only while a step needs it: each step writes it and deletes it when it ends.
+      - name: 1. Read the next free Service version
+        id: next
+        env:
+          AOS_API_URL: ${{ secrets.AOS_API_URL || vars.AOS_API_URL }}
+          SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
+          USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          ROOT_CA: ${{ secrets.AOS_ROOT_CA_PEM }}
+        run: |
+          dir="$RUNNER_TEMP/aos" && mkdir -p "$dir" && chmod 700 "$dir"
+          trap 'rm -f "$dir/user.pem"' EXIT
+          (umask 077 && printf '%s\n' "$USER_PEM" > "$dir/user.pem" && printf '%s\n' "$ROOT_CA" > "$dir/aos-root-ca.crt")
+          export AOS_CERT="$dir/user.pem" AOS_CA="$dir/aos-root-ca.crt"
+          version=$(python verify_batch.py next-version --service-id "$SERVICE_ID")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # aos-signer prints the user name of the certificate, an e-mail address: its output never reaches the log as it is.
+      - name: 2. Build and sign the demo Service
+        env:
+          SERVICE_ID: ${{ secrets.AOS_SERVICE_ID }}
+          USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          VERSION: ${{ steps.next.outputs.version }}
+        run: |
+          dir="$RUNNER_TEMP/aos"
+          trap 'rm -f "$dir/user.pem" "$dir/user.p12"' EXIT
+          (umask 077 && printf '%s\n' "$USER_PEM" > "$dir/user.pem")
+          openssl pkcs12 -export -in "$dir/user.pem" -out "$dir/user.p12" -passout pass:
+          cp -R demo-service "$dir/bundle"
+          sed -i -e "s|__AOS_SERVICE_ID__|$SERVICE_ID|" -e "s|__DEMO_VERSION__|$VERSION|" "$dir/bundle/config.yaml"
+          sed -i -e "s|__DEMO_VERSION__|$VERSION|" -e 's|__DEMO_MODE__|good|' -e 's|__DEMO_FAIL_AFTER_S__|300|' \
+                 -e 's|__DEMO_GREEDY_MB__|64|' "$dir/bundle/verification-demo/src_any/app.py"
+          cd "$dir/bundle"
+          set +e
+          out=$(COLUMNS=500 aos-signer --skip-check-version sign -p "$dir/user.p12" 2>&1)
+          code=$?
+          set -e
+          sed -E -e $'s/\x1b\\[[0-9;]*m//g' -e 's/user=[^,]*/user=(hidden)/' -e 's/[^[:space:]]+@[^[:space:]]+/(hidden)/g' \
+                 -e 's/[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}/(hidden)/g' <<<"$out"
+          if [ "$code" -ne 0 ]; then echo "::error::aos-signer sign failed"; exit "$code"; fi
+          echo "built and signed Service version $VERSION"
+
+      - name: 3. Upload (this is the write that creates the Verification batch)
+        env:
+          USER_PEM: ${{ secrets.AOS_USER_PEM }}
+          VERSION: ${{ steps.next.outputs.version }}
+        run: |
+          dir="$RUNNER_TEMP/aos"
+          trap 'rm -f "$dir/user.pem" "$dir/user.p12"' EXIT
+          (umask 077 && printf '%s\n' "$USER_PEM" > "$dir/user.pem")
+          openssl pkcs12 -export -in "$dir/user.pem" -out "$dir/user.p12" -passout pass:
+          cd "$dir/bundle"
+          set +e
+          out=$(COLUMNS=500 aos-signer --skip-check-version upload -p "$dir/user.p12" 2>&1)
+          code=$?
+          set -e
+          sed -E -e $'s/\x1b\\[[0-9;]*m//g' -e 's/user=[^,]*/user=(hidden)/' -e 's/[^[:space:]]+@[^[:space:]]+/(hidden)/g' \
+                 -e 's/[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}/(hidden)/g' <<<"$out"
+          if [ "$code" -ne 0 ]; then
+            echo "::error::Upload of Service version $VERSION failed. The user of AOS_USER_PEM needs the permission deployment_bundles_create"
+            exit "$code"
+          fi
+          echo "uploaded Service version $VERSION"
+
+      # No key here. Start A with the version alone: verify-batch finds the Verification batch and the Units itself.
+      - name: 4. Start verify-batch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.next.outputs.version }}
+        run: |
+          gh workflow run verify-batch.yml --ref "$GITHUB_REF_NAME" -f version="$VERSION"
+          url=
+          for _ in 1 2 3 4 5 6 7 8 9 10; do
+            sleep 3
+            url=$(gh run list --workflow verify-batch.yml --event workflow_dispatch --limit 20 --json displayTitle,url |
+                  jq -r --arg title "verify-batch manual $VERSION" '[.[] | select(.displayTitle == $title) | .url] | first // empty')
+            if [ -n "$url" ]; then break; fi
+          done
+          {
+            echo "**Demo only:** a real pipeline uploads from its own build."
+            echo
+            echo "- Service version uploaded: $VERSION"
+            if [ -n "$url" ]; then
+              echo "- verify-batch run: $url"
+            else
+              echo "- verify-batch run: not listed yet, see the verify-batch workflow in the Actions tab"
+            fi
+            echo "- The decision is in that run."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "started verify-batch for Service version $VERSION: ${url:-not listed yet}"
+
+      - name: Remove the certificates
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/aos"

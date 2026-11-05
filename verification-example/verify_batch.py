@@ -4,13 +4,15 @@
 """Find the Verification batch of a new Service version, wait for it, then approve or reject it.
 
     python verify_batch.py discover [--service-id ID] [--unit UNIT_ID ...] [--dry-run]
+    python verify_batch.py next-version --service-id ID
     python verify_batch.py services
     python verify_batch.py check  [--service-id ID] [--unit UNIT_ID ...]
     python verify_batch.py wait   --service-id ID --version X.Y.Z [--unit UNIT_ID ...]
     python verify_batch.py status --service-id ID --version X.Y.Z --batch-id ID --unit UNIT_ID [--unit ...]
     python verify_batch.py decide --batch-id ID (--approve | --reject) [--arch ARCH ...] [--report-dir DIR]
 
-discover, services, check and status only read. services: the Services this certificate sees, one line each (id, codename,
+discover, next-version, services, check and status only read. next-version: the highest Service version in AosCloud, patch + 1
+(demo-release.yml uses it; a real pipeline takes the version from its own build). services: the Services this certificate sees, one line each (id, codename,
 title). discover: is there a new version to verify, and on which Units? It prints one
 JSON line {"batch_id", "version", "units"} when there is. check: the connection, the latest batch of the Service and what each Unit runs.
 status: the checks that wait already proved, read again, one tab-separated line each (code, name, PASS/FAIL, detail).
@@ -388,6 +390,22 @@ def discover(args) -> int:
     return 0
 
 
+def next_version(args) -> int:
+    """The highest Service version that has a Verification batch, patch + 1. Reads only. For the demo only."""
+    versions = [item.get('version') for batch in pages('verification-batch/', ordering='-created_at')
+                for item in complete(batch, args.service_id).get('update_items') or []
+                if item.get('identity_id') == args.service_id and semver(item.get('version'))]
+    if not versions:
+        tell('no Service version yet: starting at 1.0.0')
+        machine('1.0.0')
+        return 0
+    top = max(versions, key=semver)
+    major, minor, patch = semver(top)[:3]
+    tell(f'the highest Service version is {top}')
+    machine(f'{major}.{minor}.{patch + 1}')
+    return 0
+
+
 def checked_ids(values: list[str]) -> list[str]:
     """The non-empty values; an id goes into a URL, so anything else stops here."""
     ids = [value.strip() for value in values if value.strip()]
@@ -536,6 +554,8 @@ def main(argv: list[str] | None = None) -> int:
     c = commands.add_parser('check', help='read only: the connection, the latest Verification batch, what the Units run')
     c.add_argument('--service-id', default=os.environ.get('SERVICE_ID'))
     c.add_argument('--unit', action='append', default=[], help='a Verification Set Unit (repeat it); default: from AosCloud')
+    x = commands.add_parser('next-version', help='read only: the highest Service version, patch + 1 (demo only)')
+    x.add_argument('--service-id', required=True)
     commands.add_parser('services', help='read only: the Services this certificate sees')
     s = commands.add_parser('status', help='read only: the checks that wait proved, read again')
     s.add_argument('--service-id', required=True)
@@ -566,7 +586,7 @@ def main(argv: list[str] | None = None) -> int:
                'decide': 'nothing sent'}.get(args.command, 'nothing was changed')
     try:
         return {'discover': discover, 'services': services, 'check': check, 'status': status,
-                'service-name': service_name, 'wait': wait,
+                'service-name': service_name, 'next-version': next_version, 'wait': wait,
                 'decide': decide}[args.command](args)
     except (Stop, Unavailable) as e:
         tell(f'stopped, {outcome}: {e}')

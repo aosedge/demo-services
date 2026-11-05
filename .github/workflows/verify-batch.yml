@@ -1,4 +1,5 @@
 # Copy of verification-example/.github/workflows for the showcase. Difference: the job runs in verification-example/.
+# In a fork, GitHub lists these workflows only after Actions are enabled there: TRY_IT.md, step 3.
 # Verify a new Service version on the Verification Set, then approve or reject it in AosCloud.
 # Three ways in, one job: watch-batches.yml starts it for a batch it found (workflow_dispatch), your upload job
 # calls it right after the upload (workflow_call), or you start it by hand with the version alone (workflow_dispatch).

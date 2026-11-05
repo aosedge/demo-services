@@ -2,6 +2,15 @@
 
 A GitHub Actions job finds a new Service version waiting in AosCloud, checks it on the Verification Set Units, and approves or rejects it with one AosCloud API call.
 
+## How the job knows it is time
+
+| Question | Answer | Where it comes from |
+|---|---|---|
+| Which Service version? | Start A (chain, demo-release): the version the upload job passes. Watch: the highest Service version, if its Verification batch is Waiting verification. Older waiting batches are left alone | Start A: the input `version`. Watch: `AOS_SERVICE_ID`; `GET verification-batch/` |
+| Which Units? | AosCloud picks the Verification Set, not the job: the job reads its Unit ids from the batch statistics and keeps those linked to the Service by the Subject. A Unit has to be in both | `GET verification-batch/{id}/statistics/` ∩ `GET services/{id}/units/` |
+| Which tests? | The built-in checks, then the partner tests | `tests/run_tests.sh`, `tests/your_tests.sh` |
+| Did the deployment succeed? | Each Unit: online, Service version installed, instance active. One failed Unit rejects the Service version; a Unit offline or never updated ends in a timeout and no decision | `GET units/{id}/subjects-services/{service id}/` |
+
 ![Automatic verification of a new Service version. Step 1: the upload job, an existing step, uploads the Service version. Step 2: AosCloud creates a Verification batch, state Waiting verification, and installs the new Service version only on the Units of the Verification Set. Steps 3 and 4: the Service version is installed, and the Units report. Step 0: watch-batches.yml polls AosCloud every 5 minutes: is a new Service version waiting for verification? AosCloud sends no notification to a pipeline, so the job asks. 5 minutes is the shortest GitHub schedule; GitHub may start runs late or skip them; for a guaranteed start use Start A. Two starts: Start A, chain: the upload job starts verify-batch right after the upload. Start B, watch: watch-batches starts verify-batch when it finds a waiting batch. verify-batch.yml: 5 Wait until the Service version is active on every Verification Set Unit; a timeout or an offline Unit means no decision. 6 Test: built-in checks and partner tests, report.html and junit.xml. 7 Decide: auto, the default, the job approves or rejects; report-only, a person decides in the SP UI. Verified goes on to the normal rollout; Invalid: the rollout stops.](docs/img/flow.svg)
 
 ## Step by step
@@ -17,14 +26,8 @@ A GitHub Actions job finds a new Service version waiting in AosCloud, checks it 
 | ⑦ | Decide | `verify-batch.yml` | `auto`: the job. `report-only`: a person | Job log; report |
 | – | Result | AosCloud | Verified / Invalid | SP UI: Verification batches |
 
-## How the job knows it is time
-
-| Question | Answer | Where it comes from |
-|---|---|---|
-| Which Service version? | The highest Service version, if its Verification batch is Waiting verification. Older waiting batches are left alone | `AOS_SERVICE_ID`; `GET verification-batch/` |
-| Which Units? | The Verification Set Units linked to the Service by the Subject: a Unit has to be in both | `GET verification-batch/{id}/statistics/` ∩ `GET services/{id}/units/` |
-| Which tests? | The built-in checks, then the partner tests | `tests/run_tests.sh`, `tests/your_tests.sh` |
-| Did the deployment succeed? | Each Unit: online, Service version installed, instance active. One failed Unit rejects the Service version; a Unit offline or never updated ends in a timeout and no decision | `GET units/{id}/subjects-services/{service id}/` |
+**Try it yourself, in a browser:** fork the repository, add 4 secrets, press one button. See [Run it yourself in 5 steps](https://github.com/aosedge/demo-services/blob/main/verification-example/TRY_IT.md).
+The scheduled watch is paused in this repository while the try-it kit is out; use demo-release.
 
 > [!IMPORTANT]
 > **Defaults:** the job decides by itself (`AOS_DECISION=auto`). For a decision by a person, set `AOS_DECISION=report-only`: the job only checks and writes the report, and a person approves or rejects in the SP UI. Or `ask` (laptop only).
@@ -57,7 +60,9 @@ AosCloud does not notify a pipeline when a new Service version waits (no webhook
 1. **Copy the two workflow files into your repository**, with the code they run. From the folder of this example:
 
    ```bash
-   cp -R .github verify_batch.py tests /path/to/your-repo/
+   mkdir -p /path/to/your-repo/.github/workflows
+   cp .github/workflows/verify-batch.yml .github/workflows/watch-batches.yml /path/to/your-repo/.github/workflows/
+   cp -R verify_batch.py tests /path/to/your-repo/
    ```
 
 2. **Add the secrets.** One helper prints exactly what to paste. It makes the PEM from your `.p12`, finds the root CA and
@@ -105,7 +110,7 @@ Two automatic starts, no buttons:
 Both end in the same `verify-batch`, in one queue per Service version, and cannot double-decide: a second run waits for the first, finds the batch decided, and sends nothing.
 
 Note: `discover` ran read-only on production 6.1.97 and on staging 6.2.31 on 04.11.2026, and the upload-to-decision
-steps ran on production on 30.10.2026. Run on production on 05.11: watch-batches found Service version 4.11.0 and started verify-batch, which approved it in 1 min 23 s. Scheduled starts are being confirmed.
+steps ran on production on 30.10.2026. Run on production on 05.11: watch-batches, started by hand, found Service version 4.11.0 and started verify-batch, which approved it in 1 min 23 s. Scheduled starts are being confirmed.
 
 Tested end to end from a terminal on production AosCloud 6.1.97 on 30.10.2026, with the same three steps the job
 runs: upload → the Service version active on the test Unit in about 15 s → tests → approved → Verified.
@@ -118,6 +123,7 @@ Files: [`aos-verify`](aos-verify) (setup and one command, for a laptop), [`verif
 [`.github/workflows/watch-batches.yml`](.github/workflows/watch-batches.yml) (the watch),
 [`.github/workflows/verify-batch.yml`](.github/workflows/verify-batch.yml) (the job) and
 [`examples/release-caller.yml`](examples/release-caller.yml).
+Demo only, not for your repository: `.github/workflows/demo-release.yml`, `demo-service/`, `TRY_IT.md`.
 
 ## Prerequisites
 
@@ -312,7 +318,28 @@ permissions:
   contents: read
 
 jobs:
+  # The pause switch: the repository variable AOS_WATCH. Not set or on: the watch runs. off: a scheduled run stops here,
+  # with no secret and no call to AosCloud. A manual run always goes on, because a person asked for it. Use it when
+  # another pipeline verifies the same Service (FAQ, Two pipelines on one Service).
+  switch:
+    runs-on: ubuntu-latest
+    outputs:
+      paused: ${{ steps.switch.outputs.paused }}
+    steps:
+      - name: Is the watch paused
+        id: switch
+        env:
+          AOS_WATCH: ${{ vars.AOS_WATCH }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$AOS_WATCH" = off ] && [ "$EVENT" = schedule ]; then
+            echo "watch paused: the variable AOS_WATCH is off" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "paused=yes" >> "$GITHUB_OUTPUT"
+          fi
+
   watch:
+    needs: switch
+    if: needs.switch.outputs.paused != 'yes'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # the secrets live in this environment; required reviewers on it would stop every run of this job (see the FAQ)
