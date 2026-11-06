@@ -21,12 +21,17 @@ Tested on AosCloud 6.1.97, 05–06.11.2026: a Service version uploaded from GitH
 
 The calls: six GETs and one PATCH, see [API reference](docs/api.md) (plus an optional read of the Service name).
 
+## Try it in your browser
+
+Fork this repository, add the 4 secrets we send you (a demo Service and a demo Unit, not yours) and press one button: [Run it yourself in 5 steps](https://github.com/aosedge/demo-services/blob/main/verification-example/TRY_IT.md).
+
 ## Add it to your repository
 
 Before the first run some people have to act once (OEM: the Verification Set; SP: a CI user; GitHub owner: Actions enabled): [Setup](docs/setup.md). Then:
 
 1. **Copy the job into your repository**: `verify_batch.py`, `tests/` and `.github/workflows/verify-batch.yml`, and
-   `.github/workflows/watch-batches.yml` if you want the fallback start (the watch).
+   `.github/workflows/watch-batches.yml` if you want the fallback start (the watch). `your-repo`: your existing
+   repository that already uploads the Service with aos-signer.
 
    ```bash
    mkdir -p /path/to/your-repo/.github/workflows
@@ -50,10 +55,6 @@ Before the first run some people have to act once (OEM: the Verification Set; SP
    ```
 
    The job decides by itself; see [decision modes](docs/how-it-works.md#decision-modes).
-
-## Try it in your browser
-
-Fork this repository, add the 4 secrets we send you (a demo Service and a demo Unit, not yours) and press one button: [Run it yourself in 5 steps](https://github.com/aosedge/demo-services/blob/main/verification-example/TRY_IT.md).
 
 ## Read more
 

@@ -1583,7 +1583,11 @@ def test_the_run_page_shows_the_whole_report_after_the_decision(tmp_path):
     for row in ('| Service | …cdef |', f'| Service version | {NEW} |', '| Verification batch | …cdef |',
                 '| Verification Set Units | …cdef |', '| Report time | '):
         assert row in shown, row
-    assert shown.index('### Built-in checks') < shown.index('### Partner tests') < shown.index('### Scenarios covered')
+    assert shown.index('### Built-in checks') < shown.index('### Partner tests') < shown.index(
+        '\n<details><summary>Scenarios covered (15)</summary>\n\n| # | Scenario |')
+    folded = shown[shown.index('<details>'):]
+    assert '| C3 | Late failure |' in folded and folded.index('</details>') < folded.index('Full report.html')
+    assert '### Scenarios covered' not in shown and '| A1 | the batch |' not in folded
     assert '| A1 | the batch | **PASS** | ok |' in shown and '| C3 | Late failure | Checked now |' in shown
     assert shown.rstrip().splitlines()[-1] == 'Full report.html and junit.xml: Artifacts at the bottom of this page'
 
@@ -2009,8 +2013,8 @@ def test_try_it_has_the_five_steps_and_the_readme_links_it():
         assert name in page
     assert verify_batch.AN_UUID.search(page) is None and '@' not in page
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    assert readme.index('## Add it to your repository') < readme.index('## Try it in your browser') < readme.index('TRY_IT.md')
-    assert readme.index('TRY_IT.md') < readme.index('## Read more')
+    assert readme.index('## How the job knows') < readme.index('## Try it in your browser') < readme.index('TRY_IT.md')
+    assert readme.index('TRY_IT.md') < readme.index('## Add it to your repository') < readme.index('## Read more')
     assert readme.index('![Automatic verification') < readme.index('## How the job knows')
     assert '**Two pipelines on one Service: pause one.**' in (ROOT / 'docs' / 'faq.md').read_text(encoding='utf-8')
 
@@ -2037,8 +2041,8 @@ README_ORDER = ['# Automatic verification of a new Service version', 'Nothing re
                 'verification-example/docs/img/flow.svg)',
                 'Tested on AosCloud 6.1.97, 05–06.11.2026: a Service version uploaded from GitHub was Verified about '
                 '1.5 min later, with no step in between.',
-                '## How the job knows it is time', 'The calls: six GETs and one PATCH', '## Add it to your repository',
-                '## Try it in your browser', '## Read more', 'Maintained by the AosEdge team']
+                '## How the job knows it is time', 'The calls: six GETs and one PATCH', '## Try it in your browser',
+                '## Add it to your repository', '## Read more', 'Maintained by the AosEdge team']
 
 
 def test_the_readme_is_one_screen_in_and_short():
@@ -2046,7 +2050,7 @@ def test_the_readme_is_one_screen_in_and_short():
     assert len(readme.splitlines()) < 80
     assert [readme.index(part) for part in README_ORDER] == sorted(readme.index(part) for part in README_ORDER)
     assert [line for line in readme.splitlines() if line.startswith('## ')] == [
-        '## How the job knows it is time', '## Add it to your repository', '## Try it in your browser', '## Read more']
+        '## How the job knows it is time', '## Try it in your browser', '## Add it to your repository', '## Read more']
     assert readme.splitlines()[-1].startswith('Maintained by the AosEdge team')
     for gone in ('Defaults', '## Limits', 'It ran on production', '## Step by step', '## Prerequisites', '## Parameters',
                  '## Security', 'sequence.svg', 'Not yet run on GitHub'):

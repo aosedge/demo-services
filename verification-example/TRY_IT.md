@@ -78,7 +78,7 @@ version**, then **4 Start A: verify-batch / 5–7 Wait, test, decide**, which is
 - the Service version it uploaded: the highest in AosCloud, plus 1 in the last number;
 - "verify-batch runs next in this run (Start A); its report follows below."
 
-![demo-upload, both jobs green](docs/img/try-it-demo-upload.png)
+![The demo-upload run page: both jobs green, and the summary of the upload job with the Service version it uploaded](docs/img/try-it-run-page.png)
 
 ## 5. Follow the verify-batch job
 
@@ -91,15 +91,14 @@ Stay on the same run page. Click **4 Start A: verify-batch / 5–7 Wait, test, d
 | 6a, 6b. Test | The built-in checks pass; the partner tests are skipped, as the demo has none. A 60-second observation is part of it |
 | 7a. Decide | `7a. Approve` runs: `approved, now Verified (Valid)` |
 
-The whole report is on the run page, below the jobs: there is nothing to download. GitHub shows it to signed-in
-visitors only; logged out, the page shows the jobs, their steps and the artifact.
+The whole report is on the run page, below the jobs: there is nothing to download. You need to be signed in to GitHub to see it.
 
 - the verdict, in big: **PASS → approved, now Verified** (or FAIL → rejected; report-only: not sent; no decision);
 - Service, Service version, Verification batch, test Units, decision mode and time;
 - every built-in check with PASS, FAIL or SKIP, the partner tests, and the scenarios covered;
 - the last line: `Full report.html and junit.xml: Artifacts at the bottom of this page`.
 
-![The verify-batch job, green: steps 5, 6a, 6b and 7a ran, 7b was skipped](docs/img/try-it-verify-batch.png)
+![The report on the run page: PASS → approved, now Verified, the header table and the built-in checks](docs/img/try-it-report.png)
 
 If you also have a login: **SP UI → Verification batches** shows the new Service version as **Verified**.
 
