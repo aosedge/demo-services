@@ -2038,8 +2038,12 @@ def test_try_it_has_the_five_steps_and_the_readme_links_it():
     for name in ('AOS_USER_PEM', 'AOS_ROOT_CA_PEM', 'AOS_SERVICE_ID', 'AOS_API_URL', 'I understand my workflows', 'demo-upload',
                  'verify-batch', 'If something goes wrong'):
         assert name in page
-    assert verify_batch.AN_UUID.search(page) is None and '@' not in page
+    video = re.compile(r'\]\(https://github\.com/user-attachments/assets/[0-9a-f-]{36}\)')  # GitHub's id of the video
+    assert verify_batch.AN_UUID.search(video.sub('](video)', page)) is None and '@' not in page
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+    for text in (readme, page):  # the player under the title; the poster where no player shows
+        assert text.split('\n')[2] == 'Watch it run (5 min):' and video.search(text.split('\n')[4])
+        assert '(docs/img/video-poster.png)' in text.split('\n')[4]
     assert readme.index('## How the job knows') < readme.index('## Try it in your browser') < readme.index('TRY_IT.md')
     assert readme.index('TRY_IT.md') < readme.index('## Add it to your repository') < readme.index('## Read more')
     assert readme.index('![Automatic verification') < readme.index('## How the job knows')

@@ -1,5 +1,9 @@
 # Run it yourself in 5 steps
 
+Watch it run (5 min):
+
+[![Watch it run (5 min): a good Service version approved, a broken one rejected](docs/img/video-poster.png)](https://github.com/user-attachments/assets/6d330145-2851-476b-9cb5-bf2d769bc42c)
+
 You run the whole flow in your own GitHub, with only a browser: upload, wait, checks, decision. It takes about 2 minutes
 once the secrets are in. It uses a demo Service and a demo Unit, not yours.
 
