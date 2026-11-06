@@ -1927,10 +1927,22 @@ def test_demo_upload_is_manual_and_says_demo_only():
     text = DEMO.read_text(encoding='utf-8')
     assert re.search(r'^on:\n  workflow_dispatch:\n\n', text, re.M) and 'schedule' not in text and 'pull_request' not in text
     assert 'name: demo-upload (demo only)' in text and text.startswith('#') and 'DEMO ONLY' in text.splitlines()[0]
-    assert 'aos-signer==2.0.2' in text and 'gh workflow run verify-batch.yml --ref "$GITHUB_REF_NAME" -f version="$VERSION"' in text
-    assert 'batch_id' not in workflow_step('d. Start', DEMO) and 'secrets.' not in workflow_step('d. Start', DEMO)
-    assert 'The decision is in that run.' in workflow_step('d. Start', DEMO)
+    assert 'aos-signer==2.0.2' in text and 'gh workflow run' not in text and 'actions: write' not in text
+    assert 'batch_id' not in workflow_step('d. Say', DEMO) and 'secrets.' not in workflow_step('d. Say', DEMO)
+    assert '$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID' in workflow_step('d. Say', DEMO)
+    assert 'The decision is in that job' in workflow_step('d. Say', DEMO)
     assert ' approve' not in text.lower() and '--reject' not in text
+
+
+@needs_demo
+def test_demo_upload_starts_verify_batch_exactly_as_readme_step_3():
+    readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+    snippet = readme[readme.index('```yaml\n', readme.index('3. **Start it after your upload')) + 8:]
+    snippet = textwrap.dedent(snippet[:snippet.index('```')])
+    text = DEMO.read_text(encoding='utf-8')
+    job = textwrap.dedent(text[text.index('\n  verify:\n') + 1:])
+    assert job == snippet.lstrip()
+    assert 'outputs:\n      version: ${{ steps.next.outputs.version }}' in text
 
 
 def run_signer_step(name, signer_output, signer_code, tmp_path):

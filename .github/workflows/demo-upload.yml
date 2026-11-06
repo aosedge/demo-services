@@ -3,20 +3,21 @@
 # DEMO ONLY, to try the flow from a fork with one button (TRY_IT.md). A real pipeline uploads from its own build and
 # never picks a version like this.
 # Reads the highest Service version in AosCloud, builds the next one (patch + 1) of the demo Service, signs it, uploads
-# it, and starts verify-batch for it. The decision is made in that verify-batch run.
+# it, and then runs verify-batch in the same run, exactly as README step 3 shows it (Start A). The decision is made
+# in the job verify.
 name: demo-upload (demo only)
 run-name: demo-upload (demo only)
 
 on:
   workflow_dispatch:
 
-# One at a time in this repository: a second press waits, and then takes the next free version.
+# One at a time in this repository: a second press waits until this run, verify included, ends, and then takes the next
+# free version.
 concurrency:
   group: demo-upload
   cancel-in-progress: false
 
 permissions:
-  actions: write
   contents: read
 
 jobs:
@@ -25,6 +26,8 @@ jobs:
     timeout-minutes: 15
     # In a fork the repository secrets are enough: GitHub creates this empty environment on the first run.
     environment: aos-verification
+    outputs:
+      version: ${{ steps.next.outputs.version }}
     defaults:
       run:
         working-directory: verification-example
@@ -126,34 +129,30 @@ jobs:
           fi
           echo "uploaded Service version $VERSION"
 
-      # No key here. Start A with the version alone: verify-batch finds the Verification batch and the Units itself.
-      - name: d. Start verify-batch
+      # No key here. The job verify below gets the version alone: it finds the Verification batch and the Units itself.
+      - name: d. Say where the decision is
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
           VERSION: ${{ steps.next.outputs.version }}
         run: |
-          gh workflow run verify-batch.yml --ref "$GITHUB_REF_NAME" -f version="$VERSION"
-          url=
-          for _ in 1 2 3 4 5 6 7 8 9 10; do
-            sleep 3
-            url=$(gh run list --workflow verify-batch.yml --event workflow_dispatch --limit 20 --json displayTitle,url |
-                  jq -r --arg title "verify-batch manual $VERSION" '[.[] | select(.displayTitle == $title) | .url] | first // empty')
-            if [ -n "$url" ]; then break; fi
-          done
+          url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           {
             echo "**Demo only:** a real pipeline uploads from its own build."
             echo
             echo "- Service version uploaded: $VERSION"
-            if [ -n "$url" ]; then
-              echo "- verify-batch run: $url"
-            else
-              echo "- verify-batch run: not listed yet, see the verify-batch workflow in the Actions tab"
-            fi
-            echo "- The decision is in that run."
+            echo "- verify-batch runs next, as the job verify of this run (Start A): $url"
+            echo "- The decision is in that job; its report follows below on this page."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "started verify-batch for Service version $VERSION: ${url:-not listed yet}"
+          echo "uploaded Service version $VERSION: the job verify of this run decides"
 
       - name: Remove the certificates
         if: always()
         run: rm -rf "$RUNNER_TEMP/aos"
+
+  # Start A, exactly as README step 3 shows it: the upload job above gives the version, and verify-batch runs as a job
+  # of this run.
+  verify:
+    needs: upload
+    uses: ./.github/workflows/verify-batch.yml
+    with:
+      version: ${{ needs.upload.outputs.version }}
+    secrets: inherit
