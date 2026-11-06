@@ -74,6 +74,6 @@ pip install pytest requests
 python -m pytest -q
 ```
 
-From the zip you should see `364 passed, 9 skipped` (the 9 need the demo files, which are not in the zip). Without `bash` (plain Windows), the 42 tests that use `bash` are skipped too.
+From the zip you should see `364 passed, 10 skipped` (the 10 need the demo files, which are not in the zip). Without `bash` (plain Windows), the 42 tests that use `bash` are skipped too.
 
 **Next →** [Example checks](checks.md): 12 scenarios we ran on production, with the code
