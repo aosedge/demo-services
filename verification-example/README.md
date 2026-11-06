@@ -1,5 +1,9 @@
 # Automatic verification of a new Service version
 
+Watch it run (5 min):
+
+[![Watch it run (5 min): a good Service version approved, a broken one rejected](docs/img/video-poster.png)](https://github.com/user-attachments/assets/6d330145-2851-476b-9cb5-bf2d769bc42c)
+
 AosCloud installs a new Service version only on the Verification Set and then waits for an approval. It does not tell a pipeline that a version waits, so today a person has to notice and approve by hand. This example closes that step: a CI job learns that a Service version waits, checks that it runs on the test Units, runs your tests, and approves or rejects it in AosCloud, with a report for every release. Nothing reaches the fleet before the decision. When the job cannot be sure (a Unit offline, a timeout, an error) it decides nothing, and you can keep the decision for a person.
 
 GitHub Actions is the example; the logic is one Python file and one shell script, so it runs in any CI with Python 3.10 that reaches AosCloud (see [Run it from a terminal](docs/run-locally.md)).
