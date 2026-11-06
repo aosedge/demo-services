@@ -107,13 +107,19 @@ If you also have a login: **SP UI → Verification batches** shows the new Servi
 Press **Run workflow** again and pick **behaviour: crash-on-start**. demo-upload builds the next Service version so that
 it fails a start test and exits at once, and uploads it. The upload summary says a reject is expected.
 
-- `5. Wait` sees the instance fail on the Unit and stops waiting.
-- `6a` records the failure: **C2** (no crash on start) is **FAIL**, and **B1** too; the 60-second observation and the
-  partner tests are skipped, as there is nothing left to observe.
-- `7b. Reject` runs, and the run ends red on purpose.
+The run is red in under a minute (measured: 45 s), on purpose, with no timeout:
 
-The report on the run page starts with **FAIL → rejected, now Invalid**, and the checks table shows which check failed
-and why. **SP UI → Verification batches** shows the Service version as **Invalid**: it never goes to the fleet. The
+- `5. Wait` sees the instance fail on the Unit and stops waiting.
+- `6a` records the failure: **B1** is **FAIL** (active on 0 of 1 Units) and **C2** is **FAIL** (a failed instance on the
+  Unit); A1 passes. **C3/C4** and the partner tests are **SKIP**, as there is nothing left to observe.
+- `7b. Reject` runs.
+
+The report on the run page starts with **FAIL → rejected, now Invalid** (`1 passed, 1 skipped (C3/C4), 2 failed`), and
+the checks table shows which check failed and why.
+
+![The report of a rejected Service version: FAIL → rejected, now Invalid, 2 failed](docs/img/try-it-reject-verdict.png)
+
+If you also have a login: **SP UI → Verification batches** shows the Service version as **Invalid**: it never goes to the fleet. The
 next good Service version (press again with **good**) is Verified as before.
 
 ## If something goes wrong
