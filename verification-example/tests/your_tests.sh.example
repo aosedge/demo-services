@@ -22,7 +22,7 @@ check health_endpoint curl -fsS --max-time 10 "http://$UNIT_HOST:8080/health"
 check acceptance_suite python -m pytest -q acceptance/
 
 # 3. A request to the main feature, compared with the expected answer.
-# shellcheck disable=SC2317  # called through check
+# shellcheck disable=SC2317,SC2329  # called through check
 main_feature() { curl -fsS --max-time 10 "http://$UNIT_HOST:8080/api/status" | grep -q '"status": *"ok"'; }
 check main_feature main_feature
 

@@ -1,12 +1,13 @@
 # AosCloud API reference, with examples
 
 This page lists every AosCloud API call that the job and the prerequisites use, each with a `curl` example and a
-short sample response. Start with the [README](../README.md#add-it-to-your-pipeline) if you have not set up the job yet.
+short sample response. Start with the [README](../README.md#add-it-to-your-repository) if you have not set up the job yet.
 
 > **What the job needs from AosCloud.** Calls: `GET verification-batch/`, `GET verification-batch/{id}/`,
 > `GET verification-batch/{id}/statistics/`, `GET services/{id}/units/`, `GET units/{id}/`,
-> `GET units/{id}/subjects-services/{service id}/`, one `PATCH verification-batch/{id}/`. Permissions:
-> [Setup, prerequisite A](setup.md#a-a-service-that-your-pipeline-already-deploys-sp). Two gaps: no notification
+> `GET units/{id}/subjects-services/{service id}/`, one `PATCH verification-batch/{id}/`; optional `GET services/` for
+> the Service name in the report (left out if the user may not read it). Permissions:
+> [Setup, D](setup.md#d-a-ci-user-for-the-job-sp). Two gaps: no notification
 > when a batch waits, so the job polls; PATCH is accepted on a decided batch, so the last decision wins.
 
 > **Before you call the API**
@@ -22,7 +23,7 @@ short sample response. Start with the [README](../README.md#add-it-to-your-pipel
 >   `SERVICE_ID` in your terminal. By hand:
 > - One PEM file with the certificate, the intermediate certificates and the key, from your SP `.p12`, which
 >   `aos-keys` saves under `~/.aos/security/` (`find ~/.aos/security -name "*.p12"`; keep its path in `AOS_P12`,
->   as in [Run it from your terminal, appendix, step 3](run-locally.md#3-your-certificate)). `.p12` is a
+>   as in [Run it from a terminal, appendix, step 3](run-locally.md#3-your-certificate)). `.p12` is a
 >   password-protected bundle; Python `requests` and `curl` need PEM files (no `-clcerts`:
 >   without the intermediate certificates the server answers `unknown ca`). Press Enter if you are asked for a
 >   password:
@@ -88,7 +89,8 @@ curl -sS --cert "$AOS_CERT" --cacert "$AOS_CA" "$AOS_API_URL/verification-batch/
 ```
 
 `state` is one of `Waiting_validation` (UI: **Waiting verification**), `Valid` (UI: **Verified**), `Invalid`,
-`Partially_validated`. Error: 404 for an unknown id.
+`Partially_validated`. Error: 404 for an unknown id. On AosCloud 6.2 a Campaign can lock a batch (`"is_locked": true`):
+the job treats it as no longer waiting and decides nothing, since a decision would end in HTTP 405.
 
 ### The Units of the Verification Set
 
@@ -120,8 +122,8 @@ curl -sS --cert "$AOS_CERT" --cacert "$AOS_CA" "$AOS_API_URL/services/$SERVICE_I
 {"total": 1, "offset": 0, "items": [{"id": "<unit id>", "system_uid": "<system uid>", "subjects": ["<subject id>"]}]}
 ```
 
-The Units linked to your Service through a Subject, whether they are in the Set or not. An architecture of the Verification batch with no Unit in both lists stops
-the job with no decision: `no Verification Set Unit for arm64`.
+The Units linked to your Service through a Subject, whether they are in the Set or not. An architecture of the Verification batch with no Unit in both lists: the watch starts nothing, and `wait` keeps
+waiting (`no Verification Set Unit for arm64`) until its timeout, then decides nothing.
 
 ### Is the Unit online
 

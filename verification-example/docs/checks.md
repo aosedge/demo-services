@@ -95,7 +95,7 @@ and `wait` does not touch it.
 **What it checks.** You can show later what was checked and who approved.
 
 **How.** `tests/run_tests.sh` writes `report/report.html` and `report/junit.xml`; the job shows the whole report on the run
-page and keeps the files as the artifact **verification-report**. The job log holds the Verification batch id, the Unit states and the decision. The batch keeps its state
+page and keeps the files as the artifact **verification-report**. The job log holds the last 4 characters of the Verification batch id, the Unit states and the decision. The batch keeps its state
 in the UI (SP → Verification batches). GitHub deletes artifacts and logs after the retention period of your
 repository (Settings → Actions → General): keep a copy if you need it longer.
 
@@ -234,7 +234,7 @@ check config_loaded config_ok
 **What it checks.** The fix goes through the same gate as every other Service version.
 
 **How.** Upload the fix with a new Service version number (higher than the rejected one), and run `./aos-verify run`
-([Run it from your terminal](run-locally.md)). In GitHub the same job runs for it.
+([Run it from a terminal](run-locally.md)). In GitHub the same job runs for it.
 
 ```bash
 aos-signer upload

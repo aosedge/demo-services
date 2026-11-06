@@ -62,6 +62,10 @@ jobs:
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # The same queue on the job: when the upload job calls this file (Start A), the run belongs to the caller.
+    concurrency:
+      group: verify-batch-job-${{ inputs.service_id || 'service' }}-${{ inputs.version }}
+      cancel-in-progress: false
     # the secrets live in this environment; add required reviewers there if a person must confirm
     environment: aos-verification
     permissions:
@@ -77,6 +81,7 @@ jobs:
       # First, and from the event file: the header of a step prints its env before any mask can apply.
       - name: Hide the ids in this log
         run: |
+          set -f
           for id in $(jq -r '.inputs // {} | [.service_id, .batch_id, .units] | map(select(.)) | join(" ")' "$GITHUB_EVENT_PATH"); do
             echo "::add-mask::$id"
           done
@@ -105,6 +110,14 @@ jobs:
             echo "::error::Empty:$missing. Put them in the environment aos-verification (see docs/setup.md, Parameters)"
             exit 1
           fi
+          if [ -z "$(printf '%s' "$VERSION" | tr -d '[:space:]')" ] || [ "$VERSION" = null ]; then
+            echo "::error::The input version is empty: the upload job must give the uploaded Service version as its output"
+            exit 1
+          fi
+          case "$AOS_DECISION" in
+            auto | ask | report-only) ;;
+            *) echo "::error::AOS_DECISION must be auto, ask or report-only, not '$AOS_DECISION'" && exit 1 ;;
+          esac
           echo "::add-mask::$service_id"
           { echo "AOS_API_URL=$api_url"; echo "SERVICE_ID=$service_id"; } >> "$GITHUB_ENV"
           dir="$RUNNER_TEMP/aos" && mkdir -p "$dir" && chmod 700 "$dir"
@@ -116,7 +129,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install requests
-        run: python -m pip install requests==2.32.3
+        run: |
+          python -m pip install requests==2.32.3
+          if [ -f tests/requirements.txt ]; then python -m pip install -r tests/requirements.txt; fi
 
       # The private key exists only while steps 5, 6a and 7 run: each writes it and deletes it when it ends.
       # Step 6b, the partner tests, has no secret at all.

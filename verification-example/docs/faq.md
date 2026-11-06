@@ -17,11 +17,10 @@ More on each below, in [the watch](#the-watch-timing-and-old-verification-batche
 
 ## Before you start
 
-GitHub Actions must be enabled for the repository. Organisation owners can switch Actions off for a repository or allow only selected actions; a maintainer cannot see this setting. Workflows used: actions/checkout, actions/setup-python, actions/upload-artifact.
-
 **No run ever appears, no Actions tab.**
 Ask an organisation owner to enable Actions for the repository. After enabling, a push to `main` makes GitHub pick up
-the schedule.
+the schedule. Organisation owners can switch Actions off for a repository or allow only selected actions; a maintainer
+cannot see this setting ([Setup, Before you start](setup.md#before-you-start)).
 
 ## Decisions
 
@@ -62,8 +61,9 @@ AosCloud does not notify a pipeline when a new Service version waits (no webhook
 The chain is in [`examples/release-caller.yml`](../examples/release-caller.yml).
 
 What it costs: in a public repository, standard GitHub-hosted runners are free, but GitHub turns a schedule off after 60
-days without activity. In a private repository every run uses runner minutes: at 5 minutes, about 8,600 minutes a month if
-each run counts as one minute, so check your plan or use a longer interval.
+days without activity. In a private repository every run uses runner minutes: each run has two jobs (`switch` and `watch`), and GitHub bills
+each job as at least one minute, so at 5 minutes about 17,000 minutes a month (`AOS_WATCH=off` still bills `switch`).
+Check your plan or use a longer interval.
 
 **Why not instant?**
 AosCloud sends no notification to a pipeline, so the job has to ask. A webhook would make it instant: that
@@ -111,7 +111,8 @@ decide in the UI.
 ## Running it
 
 **Where do I see the Verification batch?**
-SP UI → Verification batches. The job prints the batch id in its log.
+SP UI → Verification batches. The job log shows the last 4 characters of the batch id (`…ba9b`); the whole id is in the
+run title when the watch started the run.
 
 **I uploaded the same Service version again, and no batch appeared.**
 A Service version can be uploaded only once. The bundle ends in **Error** ("Item Service version … already exists"), and no batch is
@@ -183,7 +184,7 @@ secret and no key file. Delete local copies of the PEM (`.aos-verify/user.pem`) 
 **The certificate leaked.**
 Delete the CI user, not only the certificate. Six permissions cannot be removed from an SP user, among them
 `user_certificates_download` and `users_new_token`, so whoever holds the certificate may already hold another way in.
-Then create a new user with the permissions the job needs ([Setup, prerequisite A](setup.md#a-a-service-that-your-pipeline-already-deploys-sp)), and store its PEM as the secret. Look at the batches decided
+Then create a new user with the permissions the job needs ([Setup, D](setup.md#d-a-ci-user-for-the-job-sp)), and store its PEM as the secret. Look at the batches decided
 since the leak in SP UI → Verification batches.
 
 **What to hide in screenshots and videos?**

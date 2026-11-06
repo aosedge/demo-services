@@ -1,7 +1,7 @@
 # Setup
 
 Everything that has to be in place before the first run, and the settings of the job. The short version is in the
-[README](../README.md#add-it-to-your-pipeline).
+[README](../README.md#add-it-to-your-repository).
 
 ## Before you start
 
@@ -14,25 +14,20 @@ Who has to act before the first run:
 | What | Who |
 |---|---|
 | Verification Set, test Units, Subject with your Service | OEM, once ([B](#b-verification-configured-oem)) |
-| A CI user with 9 permissions and its certificate | SP, once (a user who may create users) ([A](#a-a-service-that-your-pipeline-already-deploys-sp)) |
+| A CI user with 9 permissions and its certificate | SP, once (a user who may create users) ([D](#d-a-ci-user-for-the-job-sp)) |
 | Actions enabled; environment `aos-verification` | GitHub organisation owner; repository admin |
 | Two workflow files, `verify_batch.py`, `tests/`, four secrets | You |
 
 ## Prerequisites
 
-### A. A Service that your pipeline already deploys (SP)
+### A. Your Service in AosCloud (SP)
 
 1. The Service exists in AosCloud for your Service Provider (SP) account: SP UI → Services, or
    `POST services/ {title, codename, default_quotas}`
    ([services_create](https://api.aoscloud.io/api/v11/docs#/services/services_create)).
 2. Note its **Service id**. The job finds the Service version by this id. It is the `id` of the item with your `codename` in
    `GET services/?search=<codename>` ([find the Service id](api.md#find-the-service-id)).
-3. Your pipeline signs and uploads it with `aos-signer`, using the SP user certificate (`.p12`).
-4. **A CI user for the job**: an SP user of its own, so that its certificate can be revoked alone. It needs these
-   permissions: `verification_batch_list`, `verification_batch_read`, `verification_batch_statistics`,
-   `verification_batch_approval`, `services_units_list`, `units_read`, `units_subjects_services_read`, `users_me`,
-   `user_certificates_create`. Add `deployment_bundles_create` only if the same user uploads, as `demo-upload` does.
-   `POST users/` also gives it the group `sp_management`; take it away with `PATCH users/{id}/ {"permission_groups": []}`.
+3. Your upload job signs and uploads it with `aos-signer`, using the SP user certificate (`.p12`).
 
 ### B. Verification configured (OEM)
 
@@ -92,6 +87,17 @@ You do not need to give the job the ids of the test Units: with the SP certifica
 
    ![The waiting batch: its architecture amd64 is not decided yet](img/11-sp-batch-waiting-detail.png)
 
+### D. A CI user for the job (SP)
+
+An SP user of its own, so that its certificate can be revoked alone. It needs these permissions:
+`verification_batch_list`, `verification_batch_read`, `verification_batch_statistics`, `verification_batch_approval`,
+`services_units_list`, `units_read`, `units_subjects_services_read`, `users_me`, `user_certificates_create`.
+`users_me` and `user_certificates_create` are not used by the job: `aos-keys` needs them to issue the user's certificate.
+Add `deployment_bundles_create` only if the same user uploads, as `demo-upload` does.
+`POST users/` also gives it the group `sp_management`; take it away with `PATCH users/{id}/ {"permission_groups": []}`.
+The report shows the Service name only if this user may also read the Service (`GET services/`); without that the
+name is left out and nothing else changes. Which call needs which permission: [API reference](api.md).
+
 ## Copy the files
 
 From the folder of this example:
@@ -143,9 +149,10 @@ minutes, and how to change that: [How it works, the watch](how-it-works.md#the-w
 
 `./aos-verify secrets` prints the commands for the four required values: [Secrets](#secrets). By hand:
 create the environment `aos-verification`, put the secrets there, and, if you want a person to confirm, add required
-reviewers (repository Settings → Environments) or set `AOS_DECISION` to `report-only`. The variables go in Settings → Secrets and variables → Actions.
+reviewers (repository Settings → Environments; they would stop every run of the watch too: [FAQ](faq.md#the-watch-timing-and-old-verification-batches)) or set `AOS_DECISION` to `report-only`. The variables go in Settings → Secrets and variables → Actions → Variables
+(repository variables), or in the environment `aos-verification`; `AOS_WATCH` only as a repository variable.
 How to make the PEM from your `.p12` and where the root CA is:
-[Run it from your terminal, appendix, step 3](run-locally.md#3-your-certificate).
+[Run it from a terminal, appendix, step 3](run-locally.md#3-your-certificate).
 
 | Name | Kind | Value |
 |---|---|---|
@@ -153,7 +160,7 @@ How to make the PEM from your `.p12` and where the root CA is:
 | `AOS_USER_PEM` | secret | one PEM file with the SP user certificate, the intermediate certificates and the key (see below) |
 | `AOS_ROOT_CA_PEM` | secret | the AosEdge root CA file `aos-root-ca.crt` (from `aos-keys`, see below; it is not secret) |
 | `AOS_SERVICE_ID` | secret | your Service id; it is not secret, but GitHub masks a secret in the log |
-| `AOS_TEST_UNITS` | variable | optional: test only these Units of the Verification Set; ids separated by spaces. A Unit you leave out is not checked. The job stops if one is outside the Set, or if an architecture of the Verification batch has none |
+| `AOS_TEST_UNITS` | variable | optional: test only these Units of the Verification Set; ids separated by spaces. A Unit you leave out is not checked. If one is outside the Set, or an architecture of the batch has none, the watch starts nothing and `wait` keeps waiting until `AOS_WAIT_TIMEOUT`, then decides nothing |
 | `AOS_DECISION` | variable | `auto` (default), `ask` or `report-only`: [Decision modes](how-it-works.md#decision-modes) |
 | `AOS_WATCH` | repository variable (not in the environment) | `off` pauses the scheduled watch; not set or `on`: it runs. Not related to `AOS_WATCH_SECONDS` |
 | `AOS_WATCH_SECONDS` | variable (on a laptop: environment) | how long the built-in checks observe the Service version on the Verification Set Units; default `60`, `0` turns it off. See [Example checks](checks.md#c3-late-failure) |

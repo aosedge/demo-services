@@ -45,6 +45,9 @@ check acceptance python -m pytest -q acceptance/
 check health curl -fsS --max-time 10 "http://$UNIT_HOST:8080/health"
 ```
 
+Python packages your tests need (pytest, for example): list them in `tests/requirements.txt`; the job installs that file
+before the tests.
+
 The rule: print one line per test, `PASS <name>` or `FAIL <name>: <why>`, and exit 0 only when every test passed.
 `tests/run_tests.sh` puts these lines into the report, in their own section; until you add the file, an amber line there says so. Partner tests get `SERVICE_ID`, `VERSION`,
 `BATCH_ID` and `UNIT_ID` (or `AOS_TEST_UNITS`) in their environment, but not `AOS_CERT`; in the job they run in a step
@@ -71,6 +74,6 @@ pip install pytest requests
 python -m pytest -q
 ```
 
-From the zip you should see `355 passed, 9 skipped` (the 9 need the demo files, which are not in the zip). Without `bash` (plain Windows), the 42 tests that use `bash` are skipped too.
+From the zip you should see `364 passed, 10 skipped` (the 10 need the demo files, which are not in the zip). Without `bash` (plain Windows), the 42 tests that use `bash` are skipped too.
 
 **Next →** [Example checks](checks.md): 12 scenarios we ran on production, with the code

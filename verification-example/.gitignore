@@ -8,3 +8,5 @@ report/
 .venv/
 .aos-verify/
 .aos-verify.env
+# built into the zip only: tools/build_start_here.py
+START_HERE.html
