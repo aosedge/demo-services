@@ -34,7 +34,8 @@ SCENARIOS = [
 ]
 CHECKED, WAITING_LOGIC, NOT_RUN, NEEDS_62, NEXT = ('Checked now', 'Covered by the waiting logic', 'Not run',
                                                    'Needs AosCloud 6.2', 'Next Service version')
-STATUS_CLASS = {CHECKED: 'pass', WAITING_LOGIC: 'skip', NOT_RUN: 'amber', NEEDS_62: 'skip', NEXT: 'skip'}
+NOT_NEEDED = 'Not needed (Start A)'
+STATUS_CLASS = {CHECKED: 'pass', WAITING_LOGIC: 'skip', NOT_RUN: 'amber', NEEDS_62: 'skip', NEXT: 'skip', NOT_NEEDED: 'skip'}
 OBSERVATION_OFF = '60-second observation was off, AOS_WATCH_SECONDS=0'
 # What you can change for each scenario; a scenario that is not here has nothing to change.
 CHANGE_IT = {'B1': 'AOS_WAIT_TIMEOUT', 'B2': 'AOS_WAIT_TIMEOUT', 'C1': 'your_tests.sh', 'C3': 'AOS_WATCH_SECONDS',
@@ -74,7 +75,7 @@ def found_how(found_by: str) -> tuple[str, str]:
         return CHECKED, 'found by the watch in GitHub'
     if found_by == 'run':
         return CHECKED, 'found by ./aos-verify on this computer'
-    return NOT_RUN, 'not needed: started with the Service version'
+    return NOT_NEEDED, 'started with the Service version, so nothing had to find the Verification batch'
 
 
 def coverage(rows: list[dict], observe: int, found: tuple[str, str]) -> dict[str, tuple[str, str]]:

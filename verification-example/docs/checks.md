@@ -8,7 +8,7 @@ yet. Most are already built into `verify_batch.py` and `tests/run_tests.sh`; the
 
 `./aos-verify test` (`bash tests/run_tests.sh`, after `wait`) runs the built-in checks A1, B1, C2 and the observation (C3/C4, 60 s) with no setup, then
 partner tests if `tests/your_tests.sh` exists. Each check is one row in `report/report.html`; the report ends with a
-"Scenarios covered" table with a status for each scenario in that run (Checked now, Covered by the waiting logic, Not run, Next Service version, or Needs AosCloud 6.2) and what you can change for it. The commands below run as they are in
+"Scenarios covered" table with a status for each scenario in that run (Checked now, Covered by the waiting logic, Not run, Not needed (Start A), Next Service version, or Needs AosCloud 6.2) and what you can change for it. The commands below run as they are in
 the folder of the example, after `./aos-verify setup` and `./aos-verify discover`, once you have loaded the values
 (`SERVICE_ID`, `UNIT_ID`, `VERSION`, `BATCH`) into your terminal:
 

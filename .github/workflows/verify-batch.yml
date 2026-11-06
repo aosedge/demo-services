@@ -62,6 +62,8 @@ concurrency:
 
 jobs:
   verify:
+    # the steps 5-7 of the diagram (docs/img/flow.svg)
+    name: 5–7 Wait, test, decide
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     # The same queue on the job: when the upload job calls this file (Start A), the run belongs to the caller.

@@ -22,6 +22,8 @@ permissions:
 
 jobs:
   upload:
+    # the steps 1-3 of the diagram (docs/img/flow.svg)
+    name: 1–3 Upload a new demo Service version
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # In a fork the repository secrets are enough: GitHub creates this empty environment on the first run.
@@ -134,13 +136,11 @@ jobs:
         env:
           VERSION: ${{ steps.next.outputs.version }}
         run: |
-          url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           {
             echo "**Demo only:** a real pipeline uploads from its own build."
             echo
             echo "- Service version uploaded: $VERSION"
-            echo "- verify-batch runs next, as the job verify of this run (Start A): $url"
-            echo "- The decision is in that job; its report follows below on this page."
+            echo "- verify-batch runs next in this run (Start A); its report follows below."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "uploaded Service version $VERSION: the job verify of this run decides"
 
@@ -151,6 +151,7 @@ jobs:
   # Start A, exactly as README step 3 shows it: the upload job above gives the version, and verify-batch runs as a job
   # of this run.
   verify:
+    name: "4 Start A: verify-batch"
     needs: upload
     uses: ./.github/workflows/verify-batch.yml
     with:

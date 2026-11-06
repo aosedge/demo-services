@@ -70,20 +70,20 @@ start by hand works.
 **Actions → demo-upload (demo only)**. The green **Run workflow** button is at the top right of the workflow page. A small
 panel opens with **Branch: main**; leave it, and press the green **Run workflow** in that panel.
 
-The run has two jobs, one after the other: `upload`, then `verify`, which is `verify-batch` started exactly as
-[README step 3](README.md#add-it-to-your-repository) shows it (Start A). `upload` is green in about 30 seconds
-(measured: 29 s and 25 s). Its summary shows:
+The run has two jobs, one after the other, named with the numbers of the diagram: **1–3 Upload a new demo Service
+version**, then **4 Start A: verify-batch / 5–7 Wait, test, decide**, which is `verify-batch` started exactly as
+[README step 3](README.md#add-it-to-your-repository) shows it (Start A). The whole run takes about 2 minutes
+(measured: 1 min 53 s). The upload job is green in about 20 seconds; its summary shows:
 
 - the Service version it uploaded: the highest in AosCloud, plus 1 in the last number;
-- the link to this run: `verify` runs next, in the same run;
-- "The decision is in that job; its report follows below on this page."
+- "verify-batch runs next in this run (Start A); its report follows below."
 
-![demo-upload, green](docs/img/try-it-demo-upload.png)
+![demo-upload, both jobs green](docs/img/try-it-demo-upload.png)
 
-## 5. Follow the verify job
+## 5. Follow the verify-batch job
 
-Stay on the same run page: the graph shows `upload` → `verify`. Click `verify` to see its steps. It takes about
-1.5 minutes (measured: 1 min 22 s):
+Stay on the same run page. Click **4 Start A: verify-batch / 5–7 Wait, test, decide** to see its steps. It takes about
+1.5 minutes (measured: 1 min 25 s):
 
 | Step | What you see |
 |---|---|
@@ -91,14 +91,15 @@ Stay on the same run page: the graph shows `upload` → `verify`. Click `verify`
 | 6a, 6b. Test | The built-in checks pass; the partner tests are skipped, as the demo has none. A 60-second observation is part of it |
 | 7a. Decide | `7a. Approve` runs: `approved, now Verified (Valid)` |
 
-The whole report is on the run page, below the job: there is nothing to download.
+The whole report is on the run page, below the jobs: there is nothing to download. GitHub shows it to signed-in
+visitors only; logged out, the page shows the jobs, their steps and the artifact.
 
 - the verdict, in big: **PASS → approved, now Verified** (or FAIL → rejected; report-only: not sent; no decision);
 - Service, Service version, Verification batch, test Units, decision mode and time;
 - every built-in check with PASS, FAIL or SKIP, the partner tests, and the scenarios covered;
 - the last line: `Full report.html and junit.xml: Artifacts at the bottom of this page`.
 
-![verify-batch, green, the report on the run page](docs/img/try-it-verify-batch.png)
+![The verify-batch job, green: steps 5, 6a, 6b and 7a ran, 7b was skipped](docs/img/try-it-verify-batch.png)
 
 If you also have a login: **SP UI → Verification batches** shows the new Service version as **Verified**.
 
@@ -111,7 +112,7 @@ If you also have a login: **SP UI → Verification batches** shows the new Servi
 | `Missing secrets: ...` | Add the secrets it names: step 2. Check the spelling, and add them as secrets, not variables. |
 | `sed: unterminated` or another odd error right after you added the secrets | A value has an extra line or space. Open the secret (pencil), paste the value again, **Update secret**. The jobs trim the ends now, so this is rare. |
 | `The user of AOS_USER_PEM needs the permission deployment_bundles_create` | This certificate may not upload: tell the person who sent you the secrets. |
-| The job `upload` is green, but `verify` is red with `no longer Waiting_validation` | Someone pressed the button in another fork at the same moment and got the same Service version; AosCloud keeps the first upload. Run demo-upload again. |
+| The upload job is green, but the verify-batch job is red with `no longer Waiting_validation` | Someone pressed the button in another fork at the same moment and got the same Service version; AosCloud keeps the first upload. Run demo-upload again. |
 | `TLS error` or `HTTP 401` or `HTTP 403` | A secret has a wrong value, or the demo user was removed. Paste it again, or tell the person who sent you the secrets. |
 | `Unit ... is offline`: the run keeps waiting, up to 30 minutes, then ends red with no decision | The demo Unit is off, so the job rightly decides nothing. Tell the person who sent you the secrets. |
 | `no longer Waiting_validation`, red | Another pipeline decided first, or someone decided in the UI. No harm is done. |
