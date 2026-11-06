@@ -68,7 +68,7 @@ start by hand works.
 ## 4. Press the button
 
 **Actions → demo-upload (demo only)**. The green **Run workflow** button is at the top right of the workflow page. A small
-panel opens with **Branch: main**; leave it, and press the green **Run workflow** in that panel.
+panel opens with **Branch: main** and **behaviour: good**; leave both, and press the green **Run workflow** in that panel.
 
 The run has two jobs, one after the other, named with the numbers of the diagram: **1–3 Upload a new demo Service
 version**, then **4 Start A: verify-batch / 5–7 Wait, test, decide**, which is `verify-batch` started exactly as
@@ -101,6 +101,20 @@ The whole report is on the run page, below the jobs: there is nothing to downloa
 ![The report on the run page: PASS → approved, now Verified, the header table and the built-in checks](docs/img/try-it-report.png)
 
 If you also have a login: **SP UI → Verification batches** shows the new Service version as **Verified**.
+
+## 6. See a reject (optional)
+
+Press **Run workflow** again and pick **behaviour: crash-on-start**. demo-upload builds the next Service version so that
+it fails a start test and exits at once, and uploads it. The upload summary says a reject is expected.
+
+- `5. Wait` sees the instance fail on the Unit and stops waiting.
+- `6a` records the failure: **C2** (no crash on start) is **FAIL**, and **B1** too; the 60-second observation and the
+  partner tests are skipped, as there is nothing left to observe.
+- `7b. Reject` runs, and the run ends red on purpose.
+
+The report on the run page starts with **FAIL → rejected, now Invalid**, and the checks table shows which check failed
+and why. **SP UI → Verification batches** shows the Service version as **Invalid**: it never goes to the fleet. The
+next good Service version (press again with **good**) is Verified as before.
 
 ## If something goes wrong
 

@@ -6,10 +6,16 @@
 # it, and then runs verify-batch in the same run, exactly as README step 3 shows it (Start A). The decision is made
 # in the job verify.
 name: demo-upload (demo only)
-run-name: demo-upload (demo only)
+run-name: demo-upload (demo only) ${{ inputs.behaviour }}
 
 on:
   workflow_dispatch:
+    inputs:
+      behaviour:
+        description: "How the demo Service behaves on the Unit: good passes the checks; crash-on-start fails them"
+        type: choice
+        options: [good, crash-on-start]
+        default: good
 
 # One at a time in this repository: a second press waits until this run, verify included, ends, and then takes the next
 # free version.
@@ -85,6 +91,20 @@ jobs:
           version=$(python verify_batch.py next-version --service-id "$SERVICE_ID")
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      # The input picks a mode of demo-service/verification-demo/src_any/app.py: good, or broken (fails a start test and
+      # exits, so the instance fails at once).
+      - name: Choose the behaviour
+        env:
+          BEHAVIOUR: ${{ inputs.behaviour }}
+        run: |
+          case "${BEHAVIOUR:-good}" in
+            good) mode=good after=300 ;;
+            crash-on-start) mode=broken after=300 ;;
+            *) echo "::error::behaviour must be good or crash-on-start, not '$BEHAVIOUR'" && exit 1 ;;
+          esac
+          { echo "DEMO_MODE=$mode"; echo "DEMO_FAIL_AFTER_S=$after"; echo "BEHAVIOUR=${BEHAVIOUR:-good}"; } >> "$GITHUB_ENV"
+          echo "behaviour ${BEHAVIOUR:-good}: demo mode $mode"
+
       # aos-signer prints the user name of the certificate, an e-mail address: its output never reaches the log as it is.
       - name: b. Build and sign the demo Service
         env:
@@ -97,7 +117,7 @@ jobs:
           openssl pkcs12 -export -in "$dir/user.pem" -out "$dir/user.p12" -passout pass:
           cp -R demo-service "$dir/bundle"
           sed -i -e "s|__AOS_SERVICE_ID__|$SERVICE_ID|" -e "s|__DEMO_VERSION__|$VERSION|" "$dir/bundle/config.yaml"
-          sed -i -e "s|__DEMO_VERSION__|$VERSION|" -e 's|__DEMO_MODE__|good|' -e 's|__DEMO_FAIL_AFTER_S__|300|' \
+          sed -i -e "s|__DEMO_VERSION__|$VERSION|" -e "s|__DEMO_MODE__|$DEMO_MODE|" -e "s|__DEMO_FAIL_AFTER_S__|$DEMO_FAIL_AFTER_S|" \
                  -e 's|__DEMO_GREEDY_MB__|64|' "$dir/bundle/verification-demo/src_any/app.py"
           cd "$dir/bundle"
           set +e
@@ -139,7 +159,8 @@ jobs:
           {
             echo "**Demo only:** a real pipeline uploads from its own build."
             echo
-            echo "- Service version uploaded: $VERSION"
+            echo "- Service version uploaded: $VERSION, behaviour $BEHAVIOUR"
+            if [ "$BEHAVIOUR" != good ]; then echo "- This Service version is meant to fail: expect a reject, and Invalid."; fi
             echo "- verify-batch runs next in this run (Start A); its report follows below."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "uploaded Service version $VERSION: the job verify of this run decides"

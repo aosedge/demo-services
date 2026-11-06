@@ -1932,13 +1932,40 @@ def test_the_paused_watch_has_no_secret_and_skips_the_job_that_has():
 @needs_demo
 def test_demo_upload_is_manual_and_says_demo_only():
     text = DEMO.read_text(encoding='utf-8')
-    assert re.search(r'^on:\n  workflow_dispatch:\n\n', text, re.M) and 'schedule' not in text and 'pull_request' not in text
+    assert re.search(r'^on:\n  workflow_dispatch:\n    inputs:\n      behaviour:\n', text, re.M)
+    assert 'schedule' not in text and 'pull_request' not in text
     assert 'name: demo-upload (demo only)' in text and text.startswith('#') and 'DEMO ONLY' in text.splitlines()[0]
     assert 'aos-signer==2.0.2' in text and 'gh workflow run' not in text and 'actions: write' not in text
     assert 'batch_id' not in workflow_step('d. Say', DEMO) and 'secrets.' not in workflow_step('d. Say', DEMO)
     assert 'actions/runs' not in workflow_step('d. Say', DEMO)
     assert 'verify-batch runs next in this run (Start A); its report follows below.' in workflow_step('d. Say', DEMO)
     assert ' approve' not in text.lower() and '--reject' not in text
+
+
+@needs_demo
+@pytest.mark.parametrize('behaviour, mode, after', [
+    ('', 'good', '300'), ('good', 'good', '300'), ('crash-on-start', 'broken', '300')])
+def test_the_demo_behaviour_picks_a_mode_of_the_demo_service(tmp_path, behaviour, mode, after):
+    genv = tmp_path / 'github_env'
+    genv.write_text('')
+    done = subprocess.run(['bash', '-e', '-c', step('Choose the behaviour', DEMO)], capture_output=True, text=True, check=False,
+                          env={'PATH': os.environ['PATH'], 'GITHUB_ENV': str(genv), 'BEHAVIOUR': behaviour})
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert genv.read_text().splitlines() == [f'DEMO_MODE={mode}', f'DEMO_FAIL_AFTER_S={after}', f'BEHAVIOUR={behaviour or "good"}']
+    app = (ROOT / 'demo-service' / 'verification-demo' / 'src_any' / 'app.py').read_text(encoding='utf-8')
+    assert f"'{mode}'" in app and '__DEMO_MODE__' in app and '__DEMO_FAIL_AFTER_S__' in app
+
+
+@needs_demo
+def test_an_unknown_demo_behaviour_stops_before_the_upload(tmp_path):
+    genv = tmp_path / 'github_env'
+    genv.write_text('')
+    done = subprocess.run(['bash', '-e', '-c', step('Choose the behaviour', DEMO)], capture_output=True, text=True, check=False,
+                          env={'PATH': os.environ['PATH'], 'GITHUB_ENV': str(genv), 'BEHAVIOUR': 'fails-after-30s'})
+    assert done.returncode == 1 and "not 'fails-after-30s'" in done.stdout and genv.read_text() == ''
+    # a late failure is not a demo option: the Unit restarts the instance, and one read a minute may miss it
+    options = re.search(r'options: \[(.*)\]', DEMO.read_text(encoding='utf-8'))[1]
+    assert options == 'good, crash-on-start'
 
 
 @needs_demo

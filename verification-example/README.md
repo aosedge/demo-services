@@ -23,7 +23,7 @@ The calls: six GETs and one PATCH, see [API reference](docs/api.md) (plus an opt
 
 ## Try it in your browser
 
-Fork this repository, add the 4 secrets we send you (a demo Service and a demo Unit, not yours) and press one button: [Run it yourself in 5 steps](https://github.com/aosedge/demo-services/blob/main/verification-example/TRY_IT.md).
+Fork this repository, add the 4 secrets we send you (a demo Service and a demo Unit, not yours) and press one button: a good Service version is approved and Verified; pick crash-on-start and a broken one is rejected and Invalid. [Run it yourself in 5 steps](https://github.com/aosedge/demo-services/blob/main/verification-example/TRY_IT.md).
 
 ## Add it to your repository
 
