@@ -1081,11 +1081,13 @@ esac
 
 
 def run_tests_sh(tmp_path, observe='60', status=0, wait_code=0, yours=None, batch='batch-1234567890', part='all',
-                 extra=None):
+                 extra=None, broken_report=False):
     tests = tmp_path / 'repo' / 'tests'
     tests.mkdir(parents=True, exist_ok=True)
     for name in ('run_tests.sh', 'report.py'):
         shutil.copy(ROOT / 'tests' / name, tests / name)
+    if broken_report:
+        (tests / 'report.py').write_text('import sys\nsys.exit("report.py: error")\n')
     if yours is not None:
         (tests / 'your_tests.sh').write_text(yours)
     fake = tmp_path / 'python'
@@ -1114,6 +1116,20 @@ def test_our_checks_and_the_watch_run_by_default_and_write_the_report(tmp_path):
     assert 'service-abcdef123456' not in report and 'unit-abcdef123456' not in report and '…3456' in report
     junit = (tmp_path / 'report' / 'junit.xml').read_text()
     assert 'tests="5"' in junit and 'failures="0"' in junit and 'skipped="1"' in junit
+
+
+@needs_bash
+@pytest.mark.parametrize('observe', ['60s', '1 min', ' 60', '-1'])
+def test_a_watch_time_that_is_not_a_number_decides_nothing(tmp_path, observe):
+    run, calls, report = run_tests_sh(tmp_path, observe=observe, extra={'WATCH_SECONDS': observe, 'AOS_WATCH_SECONDS': observe})
+    assert run.returncode == 2 and 'must be a whole number of seconds' in run.stdout and not calls and not report
+
+
+@needs_bash
+def test_a_report_that_cannot_be_written_decides_nothing_and_never_rejects(tmp_path):
+    run, _, _ = run_tests_sh(tmp_path, broken_report=True)
+    assert run.returncode == 2 and 'the report could not be written: decide nothing' in run.stdout
+    assert 'reject' not in run.stdout
 
 
 @needs_bash
@@ -1466,8 +1482,21 @@ def plain(text: str) -> str:
     return html.unescape(re.sub(r'<[^>]+>', '', text.replace('`', '').replace('**', '')))
 
 
+def start_here_text() -> str | None:
+    """START_HERE.html is built into the zip only: the zip has the file, the source repo has the builder."""
+    if (ROOT / 'tools' / 'build_start_here.py').exists():
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import build_start_here  # pylint: disable=import-outside-toplevel
+        return build_start_here.build()
+    if (ROOT / 'START_HERE.html').exists():
+        return (ROOT / 'START_HERE.html').read_text(encoding='utf-8')
+    return None
+
+
 def start_here_page(page_id: str) -> str:
-    page = (ROOT / 'START_HERE.html').read_text(encoding='utf-8')
+    page = start_here_text()
+    if page is None:
+        return ''
     section = page[page.index(f'<section class="page" id="{page_id}">'):]
     return section[:section.index('</section>')]
 
@@ -1478,7 +1507,8 @@ def test_the_defaults_are_in_decision_modes_and_start_here():
     box = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', box)  # a link reads as its words
     for line in BOX:
         assert line in plain(box), line
-        assert line in plain(start_here_page('how-it-works')), line
+        if start_here_text() is not None:
+            assert line in plain(start_here_page('how-it-works')), line
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
     assert 'Defaults:' not in readme and '[!IMPORTANT]' not in readme
     assert '](docs/how-it-works.md#decision-modes)' in readme
@@ -1497,7 +1527,10 @@ def test_why_every_5_minutes_says_the_same_everywhere():
 @pytest.mark.parametrize('name', ['README.md', 'START_HERE.html', 'docs/faq.md', 'docs/run-locally.md', 'docs/setup.md',
                                   'docs/how-it-works.md', 'docs/img/sequence.svg'])
 def test_every_5_minutes_is_the_default_in_the_docs(name):
-    text = re.sub(r'\s*\n\s*#?\s*', ' ', plain((ROOT / name).read_text(encoding='utf-8')))
+    source = start_here_text() if name == 'START_HERE.html' else (ROOT / name).read_text(encoding='utf-8')
+    if source is None:
+        pytest.skip('START_HERE.html is built into the zip only')
+    text = re.sub(r'\s*\n\s*#?\s*', ' ', plain(source))
     # the only 10 left is the example of how to change it
     text = text.replace('"*/10 * * * *" (every 10 min)', '')
     assert not re.search(r'\*/10|(every|why|about) 10 min', text, re.I)
@@ -1595,13 +1628,30 @@ PASTED_CA = '\n  -----BEGIN CERTIFICATE-----\r\nAAAA\r\n-----END CERTIFICATE----
 CLEAN_CA = '-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n'
 
 
-def run_trim_step(tmp_path, workflow, url='https://api.example:10000/api/v11 ', service='service-abcdef\n', pem='KEY', ca=PASTED_CA):
+def run_trim_step(tmp_path, workflow, url='https://api.example:10000/api/v11 ', service='service-abcdef\n', pem='KEY', ca=PASTED_CA,
+                  version='4.6.0', decision='auto'):
     genv, temp = tmp_path / 'github_env', tmp_path / 'temp'
     genv.write_text(''), temp.mkdir(exist_ok=True)
     done = subprocess.run(['bash', '-e', '-c', step('Check and trim the secrets', workflow)], capture_output=True, text=True,
                           env={'PATH': os.environ['PATH'], 'GITHUB_ENV': str(genv), 'RUNNER_TEMP': str(temp), 'PASTED_URL': url,
-                               'PASTED_SERVICE_ID': service, 'USER_PEM': pem, 'ROOT_CA': ca}, check=False)
+                               'PASTED_SERVICE_ID': service, 'USER_PEM': pem, 'ROOT_CA': ca, 'VERSION': version,
+                               'AOS_DECISION': decision}, check=False)
     return done, genv.read_text()
+
+
+@pytest.mark.parametrize('version, decision, error', [
+    ('', 'auto', 'The input version is empty'), ('null', 'auto', 'The input version is empty'),
+    ('4.6.0', 'Auto', "AOS_DECISION must be auto, ask or report-only, not 'Auto'")])
+def test_an_empty_version_or_a_mistyped_decision_mode_stops_before_any_call(tmp_path, version, decision, error):
+    done, _ = run_trim_step(tmp_path, WORKFLOW, version=version, decision=decision)
+    assert done.returncode == 1 and error in done.stdout
+
+
+def test_the_job_queue_holds_for_a_called_run_too():
+    text = WORKFLOW.read_text(encoding='utf-8')
+    job = text[text.index('\n  verify:\n'):text.index('    steps:')]
+    assert "group: verify-batch-job-${{ inputs.service_id || 'service' }}-${{ inputs.version }}" in job
+    assert 'cancel-in-progress: false' in job
 
 
 ALL_THREE = [WORKFLOW, WATCH, pytest.param(ROOT / '.github' / 'workflows' / 'demo-upload.yml', marks=needs_demo)]
@@ -1668,7 +1718,7 @@ def test_the_demo_build_takes_the_trimmed_service_id(tmp_path):
 def test_the_watch_says_why_in_its_summary(tmp_path):
     assert plain(summary_of(WATCH, 'Say why it asks on a schedule', tmp_path)[0]) == f'Why every 5 minutes? {WHY}'
     text = WATCH.read_text(encoding='utf-8')
-    # after the checkout: the showcase copy of this file runs in a folder that exists only then
+    # after the checkout: the root copy of this file (demo-services) runs in a folder that exists only then
     assert text.index('actions/checkout') < text.index('Say why it asks on a schedule')
 
 
@@ -1935,7 +1985,7 @@ def test_try_it_has_the_five_steps_and_the_readme_links_it():
         assert name in page
     assert verify_batch.AN_UUID.search(page) is None and '@' not in page
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    assert readme.index('## Add it to your pipeline') < readme.index('## Try it in your browser') < readme.index('TRY_IT.md')
+    assert readme.index('## Add it to your repository') < readme.index('## Try it in your browser') < readme.index('TRY_IT.md')
     assert readme.index('TRY_IT.md') < readme.index('## Read more')
     assert readme.index('![Automatic verification') < readme.index('## How the job knows')
     assert '**Two pipelines on one Service: pause one.**' in (ROOT / 'docs' / 'faq.md').read_text(encoding='utf-8')
@@ -1963,7 +2013,7 @@ README_ORDER = ['# Automatic verification of a new Service version', 'Nothing re
                 'verification-example/docs/img/flow.svg)',
                 'Tested on AosCloud 6.1.97, 05–06.11.2026: a Service version uploaded from GitHub was Verified about '
                 '1.5 min later, with no step in between.',
-                '## How the job knows it is time', 'The calls: six GETs and one PATCH', '## Add it to your pipeline',
+                '## How the job knows it is time', 'The calls: six GETs and one PATCH', '## Add it to your repository',
                 '## Try it in your browser', '## Read more', 'Maintained by the AosEdge team']
 
 
@@ -1972,7 +2022,7 @@ def test_the_readme_is_one_screen_in_and_short():
     assert len(readme.splitlines()) < 80
     assert [readme.index(part) for part in README_ORDER] == sorted(readme.index(part) for part in README_ORDER)
     assert [line for line in readme.splitlines() if line.startswith('## ')] == [
-        '## How the job knows it is time', '## Add it to your pipeline', '## Try it in your browser', '## Read more']
+        '## How the job knows it is time', '## Add it to your repository', '## Try it in your browser', '## Read more']
     assert readme.splitlines()[-1].startswith('Maintained by the AosEdge team')
     for gone in ('Defaults', '## Limits', 'It ran on production', '## Step by step', '## Prerequisites', '## Parameters',
                  '## Security', 'sequence.svg', 'Not yet run on GitHub'):

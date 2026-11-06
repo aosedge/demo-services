@@ -10,9 +10,10 @@
 # Writes report/report.html and report/junit.xml (REPORT_DIR changes the folder).
 # RUN_PART: all (default), or builtin and then yours: the job runs them in two steps, so your tests have no key at all.
 # VERSION_FAILED=yes: wait already saw the version fail on a Unit. Only the report: no observation, and not your tests.
-# Exit 0 = every check passed: approve. 1 = a check failed: reject. 2 = a setting is missing.
+# Exit 0 = every check passed: approve. 1 = a check failed: reject. 2 = a setting is missing or wrong, or the report
+# could not be written: decide nothing.
 # 3 = AosCloud could not be read, or a test Unit is offline: decide nothing, neither says anything about the version.
-# builtin always exits 0.
+# builtin exits 0, or 2 for a wrong setting.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 python=${PYTHON:-python}
@@ -22,6 +23,9 @@ observe=${WATCH_SECONDS:-${AOS_WATCH_SECONDS:-60}}
 out=${REPORT_DIR:-report}
 part=${RUN_PART:-all}
 version_failed=${VERSION_FAILED:-}
+case "$observe" in
+  '' | *[!0-9]*) echo "AOS_WATCH_SECONDS must be a whole number of seconds, not '$observe': decide nothing"; exit 2 ;;
+esac
 if [ -n "$version_failed" ]; then observe=0; fi
 
 if [ -z "${SERVICE_ID:-}" ] || [ -z "${VERSION:-}" ]; then echo "SERVICE_ID or VERSION is empty: export them first"; exit 2; fi
@@ -142,7 +146,8 @@ fi
 "$python" "$here/report.py" --results "$results" --out "$out" --service-id "$SERVICE_ID" --version "$VERSION" \
   --batch-id "$batch" --units "$units" --observe "$observe" \
   --found-by "${FOUND_BY:-version}" --units-from "${UNITS_FROM:-the values you gave}" --decision-mode "${AOS_DECISION:-}" \
-  --service-name "${SERVICE_NAME:-$(cat "$out/service_name" 2> /dev/null)}" || failed=1
+  --service-name "${SERVICE_NAME:-$(cat "$out/service_name" 2> /dev/null)}" ||
+  { echo "the report could not be written: decide nothing"; exit 2; }
 if [ $failed -eq 1 ]; then echo "a check failed: reject"; exit 1; fi
 if [ $unread -eq 1 ]; then echo "AosCloud could not be read, or a Unit is offline: decide nothing, and run it again"; exit 3; fi
 echo "all checks passed: approve"

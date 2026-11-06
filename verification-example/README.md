@@ -14,14 +14,16 @@ Tested on AosCloud 6.1.97, 05–06.11.2026: a Service version uploaded from GitH
 
 | Question | Answer |
 |---|---|
-| Which Service version? | The one the upload job just uploaded: it passes `version` (Start A). Fallback: the watch asks for the highest Service version that is Waiting verification (Start B) |
-| Which Units? | AosCloud picks the Verification Set. The job reads its Units from the batch and keeps those that have the Service: the test Units |
-| Which tests? | The built-in checks, then the partner tests |
+| Which Service version? | The one the upload job just uploaded: it passes `version` (Start A). Fallback: the watch takes the highest Service version of the Service and starts the job only if it is Waiting verification (Start B) |
+| Which Units? | The OEM's Verification Set (a Unit Set with Verification set = YES). The job reads its Units from the batch and keeps those that have the Service through a Subject: the test Units |
+| Which tests? | The built-in checks (this batch, installed and active on every test Unit, no crash, still running after 60 s), then your tests in `tests/your_tests.sh` |
 | Did the deployment succeed? | Each test Unit: online, Service version installed, instance active. One failed Unit rejects the Service version; a Unit offline or never updated ends in a timeout and no decision |
 
-The calls: six GETs and one PATCH, see [API reference](docs/api.md).
+The calls: six GETs and one PATCH, see [API reference](docs/api.md) (plus an optional read of the Service name).
 
-## Add it to your pipeline
+## Add it to your repository
+
+Before the first run some people have to act once (OEM: the Verification Set; SP: a CI user; GitHub owner: Actions enabled): [Setup](docs/setup.md). Then:
 
 1. **Copy the job into your repository**: `verify_batch.py`, `tests/` and `.github/workflows/verify-batch.yml`, and
    `.github/workflows/watch-batches.yml` if you want the fallback start (the watch).
@@ -49,11 +51,9 @@ The calls: six GETs and one PATCH, see [API reference](docs/api.md).
 
    The job decides by itself; see [decision modes](docs/how-it-works.md#decision-modes).
 
-Before the first run some people have to act once (OEM: the Verification Set; SP: a CI user; GitHub owner: Actions enabled): [Setup](docs/setup.md).
-
 ## Try it in your browser
 
-Fork this repository, add 4 secrets and press one button: [Run it yourself in 5 steps](https://github.com/aosedge/demo-services/blob/main/verification-example/TRY_IT.md).
+Fork this repository, add the 4 secrets we send you (a demo Service and a demo Unit, not yours) and press one button: [Run it yourself in 5 steps](https://github.com/aosedge/demo-services/blob/main/verification-example/TRY_IT.md).
 
 ## Read more
 

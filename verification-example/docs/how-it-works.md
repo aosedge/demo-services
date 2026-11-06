@@ -82,7 +82,7 @@ One setting, `AOS_DECISION`, says what happens after the checks:
 |---|---|---|
 | `auto` | all checks pass: approve; a check fails: reject. The default in GitHub | you trust the checks, and nobody has to press anything |
 | `ask` | it asks before it sends the decision. The default on a laptop; in GitHub there is no terminal to ask in, so it sends nothing | you run it by hand, and want to read the report first |
-| `report-only` | the report and `junit.xml` only, no decision sent; a person decides in SP UI → Verification batches | you do not want the pipeline to release by itself. GitHub required reviewers are not on every plan; this works on all of them |
+| `report-only` | the report and `junit.xml` only, no decision sent; a person decides in SP UI → Verification batches → the batch → **Update approval** | you do not want the pipeline to release by itself. GitHub required reviewers are not on every plan; this works on all of them |
 
 Reject is automatic too: with `auto`, a Service version that fails is rejected with no person involved.
 

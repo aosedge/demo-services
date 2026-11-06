@@ -24,8 +24,9 @@ SERVICE, OTHER, UNIT = 'aaaaaaaa-0000-4000-8000-00000000ec65', 'aaaaaaaa-0000-40
 OLD_BATCH, NEW_BATCH = 'cccccccc-0000-4000-8000-00000000ef77', 'dddddddd-0000-4000-8000-00000000a410'
 PERSON = 'Some.Person+1@example.com'
 
-pytestmark = pytest.mark.skipif(not all(shutil.which(tool) for tool in ('bash', 'openssl', 'jq', 'curl')),
-                                reason='needs bash, openssl, jq and curl')
+pytestmark = pytest.mark.skipif(not all(shutil.which(tool) for tool in ('bash', 'openssl', 'jq', 'curl'))
+                                or not (ROOT / 'aos-verify').exists(),
+                                reason='needs bash, openssl, jq, curl and aos-verify (not copied with the job)')
 
 
 def run(*command, **kwargs):

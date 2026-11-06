@@ -84,9 +84,9 @@ Follow the link, or open **Actions → verify-batch**. The title is `verify-batc
 
 | Step | What you see |
 |---|---|
-| ⑤ Wait | The Verification batch appears, the Unit installs the new Service version, and the instance is active |
-| ⑥ Test | The built-in checks pass; the partner tests are skipped, as the demo has none. A 60-second observation is part of it |
-| ⑦ Decide | `7a. Approve` runs: `approved, now Verified (Valid)` |
+| 5. Wait | The Verification batch appears, the Unit installs the new Service version, and the instance is active |
+| 6a, 6b. Test | The built-in checks pass; the partner tests are skipped, as the demo has none. A 60-second observation is part of it |
+| 7a. Decide | `7a. Approve` runs: `approved, now Verified (Valid)` |
 
 The whole report is on the run page, below the job: there is nothing to download.
 

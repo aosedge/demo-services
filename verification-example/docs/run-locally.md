@@ -1,12 +1,12 @@
-# Run it from your terminal
+# Run it from a terminal
 
-To try it, or to find out why the job failed. In GitHub you need none of this: [Add it to your pipeline](../README.md#add-it-to-your-pipeline).
+To try it, or to find out why the job failed. In GitHub you need none of this: [Add it to your repository](../README.md#add-it-to-your-repository).
 Three blocks, in this order: setup, upload, run. If you start `run` first, it waits up to 2 min for your upload. It needs bash: Terminal on macOS and Linux, Git Bash on Windows (not tested on Windows yet).
 
 ## 1. Clone and set up
 
 ```bash
-git clone -b verification-example https://github.com/aosedge/demo-services && cd demo-services/verification-example && ./aos-verify setup
+git clone https://github.com/aosedge/demo-services && cd demo-services/verification-example && ./aos-verify setup
 ```
 
 It checks the tools, creates `.venv`, finds your SP certificate under `~/.aos/security` and makes the PEM file from it,
