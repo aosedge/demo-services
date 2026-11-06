@@ -9,7 +9,7 @@ calls, see the [API reference](api.md).
 - GitHub runs schedules on a best-effort basis; it has not yet started the watch in this repository. Use Start A as the main start.
 - AosCloud accepts a second decision on a decided batch. The job reads the state right before its one call; two pipelines on one Service are not locked against each other.
 - A test Unit that is offline means no decision: a person has to look.
-- Not yet run on GitHub: a reject, report-only. Start A through `workflow_call` ran on GitHub on 06.11.2026 (`demo-upload`).
+- Not yet run on GitHub: report-only. Start A through `workflow_call` ran on GitHub on 06.11.2026 (`demo-upload`).
 - AosCloud versions: proven on 6.1.97; on 6.2.31 only `discover` ran.
 - The watch handles one Service per repository.
 
