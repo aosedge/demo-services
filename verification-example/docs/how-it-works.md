@@ -141,8 +141,9 @@ first, finds the batch decided, and sends nothing. Two repositories on one Servi
 
 | Date | Where | What ran | Result |
 |---|---|---|---|
-| 06.11.2026 | GitHub | A fresh fork, only a browser: `demo-upload`, pressed once, uploaded 4.11.2 and started `verify-batch` | Verified, the `verify-batch` run took 1 min 22 s |
-| 05.11.2026 | GitHub | `demo-upload`, pressed once: it uploaded 4.11.1 and started `verify-batch` (Start A) | Verified about 1.5 min after the upload, with no further step |
+| 06.11.2026 | GitHub | Start A through `workflow_call`, in a fork: `demo-upload`, pressed once, uploaded 4.11.3, and its job `verify` ran `verify-batch` | Verified, the whole run took 1 min 53 s |
+| 06.11.2026 | GitHub | A fresh fork, only a browser: `demo-upload`, pressed once, uploaded 4.11.2 and started `verify-batch` with a dispatch | Verified, the `verify-batch` run took 1 min 22 s |
+| 05.11.2026 | GitHub | `demo-upload`, pressed once: it uploaded 4.11.1 and started `verify-batch` with a dispatch | Verified about 1.5 min after the upload, with no further step |
 | 05.11.2026 | GitHub | Start B: the watch, started by hand, found 4.11.0 | Verified in 1 min 23 s |
 | 30.10.2026 | Terminal | The same three steps | Active on the test Unit in about 15 s, Verified |
 

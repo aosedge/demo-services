@@ -1318,11 +1318,14 @@ def test_the_status_column_has_only_the_four_values(tmp_path):
 @pytest.mark.parametrize('found_by, says, status', [
     ('watch', 'found by the watch in GitHub', 'Checked now'),
     ('run', 'found by ./aos-verify on this computer', 'Checked now'),
-    ('version', 'not needed: started with the Service version', 'Not run')])
+    ('version', 'started with the Service version, so nothing had to find the Verification batch',
+     'Not needed \\(Start A\\)')])
 def test_the_report_says_who_found_the_batch(tmp_path, found_by, says, status):
     write_report(tmp_path, found_by=found_by)
     page = (tmp_path / 'r/report.html').read_text(encoding='utf-8')
     assert says in page and re.search(f'<td>Found automatically \\(discover\\)</td><td><span[^>]*>{status}</span>', page)
+    if found_by == 'version':
+        assert '<span class="s skip">Not needed (Start A)</span>' in page
 
 
 @pytest.mark.parametrize('decision, more, says', [
@@ -1929,8 +1932,8 @@ def test_demo_upload_is_manual_and_says_demo_only():
     assert 'name: demo-upload (demo only)' in text and text.startswith('#') and 'DEMO ONLY' in text.splitlines()[0]
     assert 'aos-signer==2.0.2' in text and 'gh workflow run' not in text and 'actions: write' not in text
     assert 'batch_id' not in workflow_step('d. Say', DEMO) and 'secrets.' not in workflow_step('d. Say', DEMO)
-    assert '$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID' in workflow_step('d. Say', DEMO)
-    assert 'The decision is in that job' in workflow_step('d. Say', DEMO)
+    assert 'actions/runs' not in workflow_step('d. Say', DEMO)
+    assert 'verify-batch runs next in this run (Start A); its report follows below.' in workflow_step('d. Say', DEMO)
     assert ' approve' not in text.lower() and '--reject' not in text
 
 
@@ -1941,8 +1944,17 @@ def test_demo_upload_starts_verify_batch_exactly_as_readme_step_3():
     snippet = textwrap.dedent(snippet[:snippet.index('```')])
     text = DEMO.read_text(encoding='utf-8')
     job = textwrap.dedent(text[text.index('\n  verify:\n') + 1:])
-    assert job == snippet.lstrip()
+    # only a name added, so that the graph reads with the diagram numbers
+    assert job.replace('  name: "4 Start A: verify-batch"\n', '') == snippet.lstrip()
     assert 'outputs:\n      version: ${{ steps.next.outputs.version }}' in text
+
+
+def test_the_job_names_read_with_the_diagram_numbers():
+    names = re.findall(r'^    name: (.+)$', WORKFLOW.read_text(encoding='utf-8'), re.M)
+    assert names == ['5–7 Wait, test, decide']
+    if DEMO.exists():
+        assert re.findall(r'^    name: (.+)$', DEMO.read_text(encoding='utf-8'), re.M) == [
+            '1–3 Upload a new demo Service version', '"4 Start A: verify-batch"']
 
 
 def run_signer_step(name, signer_output, signer_code, tmp_path):
