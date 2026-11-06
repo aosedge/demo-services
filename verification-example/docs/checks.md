@@ -197,6 +197,11 @@ step of the built-in checks has the certificate; partner tests run in another st
 **The decision.** A failure in any round rejects the Service version. If AosCloud cannot be reached or a Unit goes offline,
 nothing is decided.
 
+**Not in the Try it demo.** C3 was seen on production on 29.10 (the table above). demo-upload offers no late failure: the
+Unit restarts a Service that exits, and the observation reads the Units once a minute, so a short observation can read it as running again between
+two failures. For a Service that may fail late, observe longer (`AOS_WATCH_SECONDS`) and add a restart check to
+`tests/your_tests.sh` (C4).
+
 ## C4. Restarts
 
 **What it checks.** The Service version does not keep crashing. Memory is not measured: the report says so.

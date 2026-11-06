@@ -233,9 +233,12 @@ def render_md(args, rows: list[dict], when: str, decided: dict | None = None) ->
     else:
         lines += table_md('yours', False)
     cover = cover_of(args, rows)
-    lines += ['', '### Scenarios covered', '', '| # | Scenario | Status | In this run | You can change it |', '|---|---|---|---|---|']
+    # Folded on the run page: the verdict, the header table and the checks stay open. GitHub needs the blank lines.
+    lines += ['', f'<details><summary>Scenarios covered ({len(SCENARIOS)})</summary>', '',
+              '| # | Scenario | Status | In this run | You can change it |', '|---|---|---|---|---|']
     lines += [f'| {code} | {md(name)} | {md(cover[code][0])} | {md(cover[code][1])} | {md(CHANGE_IT.get(code, "—"))} |'
               for code, name in SCENARIOS]
+    lines += ['', '</details>']
     return '\n'.join(lines + ['', ARTIFACTS, ''])
 
 

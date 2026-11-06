@@ -1583,7 +1583,11 @@ def test_the_run_page_shows_the_whole_report_after_the_decision(tmp_path):
     for row in ('| Service | …cdef |', f'| Service version | {NEW} |', '| Verification batch | …cdef |',
                 '| Verification Set Units | …cdef |', '| Report time | '):
         assert row in shown, row
-    assert shown.index('### Built-in checks') < shown.index('### Partner tests') < shown.index('### Scenarios covered')
+    assert shown.index('### Built-in checks') < shown.index('### Partner tests') < shown.index(
+        '\n<details><summary>Scenarios covered (15)</summary>\n\n| # | Scenario |')
+    folded = shown[shown.index('<details>'):]
+    assert '| C3 | Late failure |' in folded and folded.index('</details>') < folded.index('Full report.html')
+    assert '### Scenarios covered' not in shown and '| A1 | the batch |' not in folded
     assert '| A1 | the batch | **PASS** | ok |' in shown and '| C3 | Late failure | Checked now |' in shown
     assert shown.rstrip().splitlines()[-1] == 'Full report.html and junit.xml: Artifacts at the bottom of this page'
 
@@ -1928,13 +1932,40 @@ def test_the_paused_watch_has_no_secret_and_skips_the_job_that_has():
 @needs_demo
 def test_demo_upload_is_manual_and_says_demo_only():
     text = DEMO.read_text(encoding='utf-8')
-    assert re.search(r'^on:\n  workflow_dispatch:\n\n', text, re.M) and 'schedule' not in text and 'pull_request' not in text
+    assert re.search(r'^on:\n  workflow_dispatch:\n    inputs:\n      behaviour:\n', text, re.M)
+    assert 'schedule' not in text and 'pull_request' not in text
     assert 'name: demo-upload (demo only)' in text and text.startswith('#') and 'DEMO ONLY' in text.splitlines()[0]
     assert 'aos-signer==2.0.2' in text and 'gh workflow run' not in text and 'actions: write' not in text
     assert 'batch_id' not in workflow_step('d. Say', DEMO) and 'secrets.' not in workflow_step('d. Say', DEMO)
     assert 'actions/runs' not in workflow_step('d. Say', DEMO)
     assert 'verify-batch runs next in this run (Start A); its report follows below.' in workflow_step('d. Say', DEMO)
     assert ' approve' not in text.lower() and '--reject' not in text
+
+
+@needs_demo
+@pytest.mark.parametrize('behaviour, mode, after', [
+    ('', 'good', '300'), ('good', 'good', '300'), ('crash-on-start', 'broken', '300')])
+def test_the_demo_behaviour_picks_a_mode_of_the_demo_service(tmp_path, behaviour, mode, after):
+    genv = tmp_path / 'github_env'
+    genv.write_text('')
+    done = subprocess.run(['bash', '-e', '-c', step('Choose the behaviour', DEMO)], capture_output=True, text=True, check=False,
+                          env={'PATH': os.environ['PATH'], 'GITHUB_ENV': str(genv), 'BEHAVIOUR': behaviour})
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert genv.read_text().splitlines() == [f'DEMO_MODE={mode}', f'DEMO_FAIL_AFTER_S={after}', f'BEHAVIOUR={behaviour or "good"}']
+    app = (ROOT / 'demo-service' / 'verification-demo' / 'src_any' / 'app.py').read_text(encoding='utf-8')
+    assert f"'{mode}'" in app and '__DEMO_MODE__' in app and '__DEMO_FAIL_AFTER_S__' in app
+
+
+@needs_demo
+def test_an_unknown_demo_behaviour_stops_before_the_upload(tmp_path):
+    genv = tmp_path / 'github_env'
+    genv.write_text('')
+    done = subprocess.run(['bash', '-e', '-c', step('Choose the behaviour', DEMO)], capture_output=True, text=True, check=False,
+                          env={'PATH': os.environ['PATH'], 'GITHUB_ENV': str(genv), 'BEHAVIOUR': 'fails-after-30s'})
+    assert done.returncode == 1 and "not 'fails-after-30s'" in done.stdout and genv.read_text() == ''
+    # a late failure is not a demo option: the Unit restarts the instance, and one read a minute may miss it
+    options = re.search(r'options: \[(.*)\]', DEMO.read_text(encoding='utf-8'))[1]
+    assert options == 'good, crash-on-start'
 
 
 @needs_demo
@@ -2009,8 +2040,8 @@ def test_try_it_has_the_five_steps_and_the_readme_links_it():
         assert name in page
     assert verify_batch.AN_UUID.search(page) is None and '@' not in page
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    assert readme.index('## Add it to your repository') < readme.index('## Try it in your browser') < readme.index('TRY_IT.md')
-    assert readme.index('TRY_IT.md') < readme.index('## Read more')
+    assert readme.index('## How the job knows') < readme.index('## Try it in your browser') < readme.index('TRY_IT.md')
+    assert readme.index('TRY_IT.md') < readme.index('## Add it to your repository') < readme.index('## Read more')
     assert readme.index('![Automatic verification') < readme.index('## How the job knows')
     assert '**Two pipelines on one Service: pause one.**' in (ROOT / 'docs' / 'faq.md').read_text(encoding='utf-8')
 
@@ -2037,8 +2068,8 @@ README_ORDER = ['# Automatic verification of a new Service version', 'Nothing re
                 'verification-example/docs/img/flow.svg)',
                 'Tested on AosCloud 6.1.97, 05–06.11.2026: a Service version uploaded from GitHub was Verified about '
                 '1.5 min later, with no step in between.',
-                '## How the job knows it is time', 'The calls: six GETs and one PATCH', '## Add it to your repository',
-                '## Try it in your browser', '## Read more', 'Maintained by the AosEdge team']
+                '## How the job knows it is time', 'The calls: six GETs and one PATCH', '## Try it in your browser',
+                '## Add it to your repository', '## Read more', 'Maintained by the AosEdge team']
 
 
 def test_the_readme_is_one_screen_in_and_short():
@@ -2046,7 +2077,7 @@ def test_the_readme_is_one_screen_in_and_short():
     assert len(readme.splitlines()) < 80
     assert [readme.index(part) for part in README_ORDER] == sorted(readme.index(part) for part in README_ORDER)
     assert [line for line in readme.splitlines() if line.startswith('## ')] == [
-        '## How the job knows it is time', '## Add it to your repository', '## Try it in your browser', '## Read more']
+        '## How the job knows it is time', '## Try it in your browser', '## Add it to your repository', '## Read more']
     assert readme.splitlines()[-1].startswith('Maintained by the AosEdge team')
     for gone in ('Defaults', '## Limits', 'It ran on production', '## Step by step', '## Prerequisites', '## Parameters',
                  '## Security', 'sequence.svg', 'Not yet run on GitHub'):
